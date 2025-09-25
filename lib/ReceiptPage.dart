@@ -1,11 +1,15 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 
 // PDF/Print
-import 'package:barcode/barcode.dart' as bc;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
+// QR Code Service
+import 'QRCodeService.dart';
 
 /// ───────────────────────────────── DATA MODELS ─────────────────────────────────
 
@@ -362,20 +366,36 @@ class ReceiptPage extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 14),
-                      Container(
-                        width: 120,
-                        height: 120,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade400),
-                          borderRadius: BorderRadius.circular(8),
-                          color: Colors.white,
+                      GestureDetector(
+                        onTap: () {
+                          if (d.verificationCode.isNotEmpty) {
+                            QRCodeService.showQRDialog(
+                              context: context,
+                              receiptId: d.verificationCode,
+                              title: 'Receipt QR Code',
+                            );
+                          }
+                        },
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          child: d.verificationCode.isNotEmpty
+                              ? QRCodeService.generateReceiptQR(
+                                  receiptId: d.verificationCode,
+                                  size: 120,
+                                )
+                              : d.qr != null
+                              ? Image(image: d.qr!, fit: BoxFit.cover)
+                              : const Center(
+                                  child: Icon(Icons.qr_code, size: 72),
+                                ),
                         ),
-                        child: d.qr != null
-                            ? Image(image: d.qr!, fit: BoxFit.cover)
-                            : const Center(
-                                child: Icon(Icons.qr_code, size: 72),
-                              ),
                       ),
                     ],
                   ),
@@ -476,7 +496,7 @@ class ReceiptPage extends StatelessWidget {
   ReceiptData _sampleData() => const ReceiptData(
     company: CompanyInfo(
       name: 'LIDOX ENTERPRISES',
-      addressLine: '1416',
+      addressLine: 'TABORA CBD',
       mobile: '0655 900595',
       tin: '140716405',
       vrn: 'NOT REGISTERED',
@@ -497,14 +517,12 @@ class ReceiptPage extends StatelessWidget {
       receiptDate: '08-20-2025',
       receiptTime: '15:56 :58',
     ),
-    items: [
-      LineItem(description: 'medical services', qty: 1, amount: 270000.00),
-    ],
+    items: [LineItem(description: 'PRINTING', qty: 1, amount: 300000.00)],
     totalExclTax: 300000.00,
     tax: 0.00,
     totalInclTax: 300000.00,
     verificationCode: '56BE8A245',
-    qr: null, // e.g. AssetImage('assets/qr.png')
+    qr: AssetImage('assets/frame.png'),
   );
 }
 
@@ -529,6 +547,20 @@ class _Cell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// ───────────────────────────────── HELPER FUNCTIONS ─────────────────────────────────
+
+/// Get receipt URL for QR code generation
+String _getReceiptUrl(String receiptId) {
+  // Get the current base URL dynamically
+  final baseUrl = Uri.base.toString();
+  final cleanBaseUrl = baseUrl.endsWith('/')
+      ? baseUrl.substring(0, baseUrl.length - 1)
+      : baseUrl;
+
+  // Flutter web uses hash routing, so include the #
+  return '$cleanBaseUrl/#/receipt/$receiptId';
 }
 
 /// ───────────────────────────────── PDF BUILDER ─────────────────────────────────
@@ -556,13 +588,41 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
     ),
   );
 
-  // Vector QR from verification code (looks crisp in PDF)
-  final qr = pw.BarcodeWidget(
-    barcode: bc.Barcode.qrCode(),
-    data: d.verificationCode,
-    width: 120,
-    height: 120,
-  );
+  // Generate QR code for receipt URL
+  pw.Widget qr;
+  if (d.verificationCode.isNotEmpty) {
+    // Generate QR code with receipt URL
+    final receiptUrl = _getReceiptUrl(d.verificationCode);
+    qr = pw.BarcodeWidget(
+      barcode: pw.Barcode.qrCode(),
+      data: receiptUrl,
+      width: 120,
+      height: 120,
+    );
+  } else {
+    // Fallback to asset image
+    try {
+      final qrImageBytes = await rootBundle.load('assets/frame.png');
+      final qrImage = pw.MemoryImage(qrImageBytes.buffer.asUint8List());
+      qr = pw.Container(
+        width: 120,
+        height: 120,
+        child: pw.Image(qrImage, fit: pw.BoxFit.contain),
+      );
+    } catch (e) {
+      // If asset loading fails, create a placeholder
+      qr = pw.Container(
+        width: 120,
+        height: 120,
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey),
+        ),
+        child: pw.Center(
+          child: pw.Text('QR Code', style: pw.TextStyle(color: PdfColors.grey)),
+        ),
+      );
+    }
+  }
 
   pw.Widget kv(String k, String v) => pw.Padding(
     padding: const pw.EdgeInsets.symmetric(vertical: 2),

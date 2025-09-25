@@ -53,13 +53,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAFlNM4vwXZqEhdYiz0JBW9n5CpBrYk0sQ',
-    appId: '1:951518521484:web:8fdb2abc35244cac95b3a9',
-    messagingSenderId: '951518521484',
-    projectId: 'mbokashopping',
-    authDomain: 'mbokashopping.firebaseapp.com',
-    storageBucket: 'mbokashopping.firebasestorage.app',
-    measurementId: 'G-D5RT5ZZ1K1',
+    apiKey: 'AIzaSyAHfS7iNK-tNEesHkbE_79cfdEEbLX1x6A',
+    appId: '1:903048450592:web:f9d6d50a3955d20c876245',
+    messagingSenderId: '903048450592',
+    projectId: 'tra-verify',
+    authDomain: 'tra-verify.firebaseapp.com',
+    storageBucket: 'tra-verify.firebasestorage.app',
   );
 
 }

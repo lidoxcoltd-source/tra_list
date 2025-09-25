@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:tra_list/ReceiptPage.dart';
+import 'package:get/get.dart';
+import 'package:tra_list/routes.dart';
 
 import 'firebase_options.dart';
 
@@ -15,14 +16,17 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Legal Receipt',
+      title: 'TRA Receipt Verification',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const ReceiptPage(),
+      initialRoute: AppRoutes.home,
+      getPages: AppRoutes.routes,
+      defaultTransition: Transition.rightToLeft,
+      transitionDuration: const Duration(milliseconds: 300),
     );
   }
 }
