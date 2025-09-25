@@ -169,7 +169,8 @@ class ReceiptViewPage extends StatelessWidget {
   final controller = Get.put(ReceiptViewController());
 
   void _showQRDialog(BuildContext context, String receiptId) {
-    final receiptUrl = 'http://localhost:8080/receipt/$receiptId';
+    // Use QRCodeService to get the proper URL
+    final receiptUrl = QRCodeService.getReceiptUrl(receiptId);
 
     showDialog(
       context: context,
@@ -215,7 +216,7 @@ class ReceiptViewPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
+      /* appBar: AppBar(
         title: Text('Receipt ${Get.parameters['id'] ?? ''}'),
         backgroundColor: const Color(0xFFFFE500),
         foregroundColor: Colors.black87,
@@ -296,7 +297,7 @@ class ReceiptViewPage extends StatelessWidget {
             ],
           ),
         ],
-      ),
+      ), */
       body: Obx(() {
         if (controller.isLoading.value) {
           return const Center(

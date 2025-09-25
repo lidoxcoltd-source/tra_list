@@ -555,9 +555,14 @@ class _Cell extends StatelessWidget {
 String _getReceiptUrl(String receiptId) {
   // Get the current base URL dynamically
   final baseUrl = Uri.base.toString();
-  final cleanBaseUrl = baseUrl.endsWith('/')
+  String cleanBaseUrl = baseUrl.endsWith('/')
       ? baseUrl.substring(0, baseUrl.length - 1)
       : baseUrl;
+
+  // Remove any existing hash fragments to avoid duplication
+  if (cleanBaseUrl.contains('#')) {
+    cleanBaseUrl = cleanBaseUrl.split('#')[0];
+  }
 
   // Flutter web uses hash routing, so include the #
   return '$cleanBaseUrl/#/receipt/$receiptId';

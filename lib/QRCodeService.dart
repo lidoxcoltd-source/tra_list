@@ -20,7 +20,7 @@ class QRCodeService {
       backgroundColor: backgroundColor,
       errorCorrectionLevel: QrErrorCorrectLevel.M,
       gapless: false,
-      embeddedImage: const AssetImage('assets/tra-logo.png'),
+
       embeddedImageStyle: const QrEmbeddedImageStyle(size: Size(40, 40)),
     );
   }
@@ -49,14 +49,24 @@ class QRCodeService {
   }
 
   /// Get full receipt URL with proper Flutter web hash routing
-  static String _getReceiptUrl(String receiptId) {
+  static String getReceiptUrl(String receiptId) {
     final baseUrl = Uri.base.toString();
-    final cleanBaseUrl = baseUrl.endsWith('/')
+    String cleanBaseUrl = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
 
+    // Remove any existing hash fragments to avoid duplication
+    if (cleanBaseUrl.contains('#')) {
+      cleanBaseUrl = cleanBaseUrl.split('#')[0];
+    }
+
     // Flutter web uses hash routing, so we need to include the #
     return '$cleanBaseUrl/#/receipt/$receiptId';
+  }
+
+  /// Private method wrapper for backward compatibility
+  static String _getReceiptUrl(String receiptId) {
+    return getReceiptUrl(receiptId);
   }
 
   /// Get current receipt URL from route parameters
