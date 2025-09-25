@@ -1,0 +1,32 @@
+name: tra_list
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  barcode: ^2.2.6
+  cupertino_icons: ^1.0.8
+  firebase_core: ^2.24.2
+
+  flutter:
+    sdk: flutter
+  pdf: ^3.10.7
+  printing: ^5.12.0
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  # Optional: add real images if you want to show them in the UI
+  assets:
+    - assets/logo.png
+    - assets/qr.png
+    - assets/tra-logo.png
