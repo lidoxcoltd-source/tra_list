@@ -13,7 +13,7 @@
   },
   "hosting": {
     "site": "tra-verify-system",
-    "public": "build/web",
+    "public": "build/web_verify",
     "ignore": [
       "firebase.json",
       "**/.*",

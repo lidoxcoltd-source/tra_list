@@ -28,10 +28,7 @@ class VerifyApp extends StatelessWidget {
       defaultTransition: Transition.fadeIn,
       transitionDuration: const Duration(milliseconds: 300),
       // Handle unknown routes - redirect to home
-      unknownRoute: GetPage(
-        name: '/404',
-        page: () => const VerificationHomePage(),
-      ),
+      unknownRoute: GetPage(name: '/404', page: () => VerificationHomePage()),
     );
   }
 }

@@ -1,0 +1,168 @@
+{{{{
+
+    "version": "0.2.0",
+
+    "configurations": [    // Use IntelliSense to learn about possible attributes.
+
+        {
+
+            "name": "tra_list",    // Hover to view descriptions of existing attributes.    // Use IntelliSense to learn about possible attributes.       "configurations": [
+
+            "request": "launch",
+
+            "type": "dart"    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+
+        },
+
+        {    "version": "0.2.0",    // Hover to view descriptions of existing attributes.        {
+
+            "name": "tra_list (web)",
+
+            "request": "launch",    "configurations": [
+
+            "type": "dart",
+
+            "deviceId": "web-server",        {    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387            "name": "tra_list",
+
+            "args": [
+
+                "--web-port=8080"            "name": "tra_list",
+
+            ]
+
+        },            "request": "launch",    "version": "0.2.0",            "request": "launch",
+
+        {
+
+            "name": "tra_list (verify app)",            "type": "dart"
+
+            "request": "launch",
+
+            "type": "dart",        },    "configurations": [
+
+            "program": "lib/main_verify.dart",
+
+            "deviceId": "web-server",        {        
+
+            "args": [
+
+                "--web-port=8081"            "name": "tra_list (web)",                    "type": "dart"
+
+            ]
+
+        },            "request": "launch",
+
+        {
+
+            "name": "tra_list (profile mode)",            "type": "dart",        {        },
+
+            "request": "launch",
+
+            "type": "dart",            "deviceId": "web-server",
+
+            "flutterMode": "profile"
+
+        },            "args": [            "name": "tra_list",        {
+
+        {
+
+            "name": "tra_list (release mode)",                "--web-port=8080"
+
+            "request": "launch",
+
+            "type": "dart",            ]            "request": "launch",            "name": "tra_list (web)",
+
+            "flutterMode": "release"
+
+        }        },
+
+    ]
+
+}        {            "type": "dart"            "request": "launch",
+
+            "name": "tra_list (verify app)",
+
+            "request": "launch",        },            "type": "dart",
+
+            "type": "dart",
+
+            "program": "lib/main_verify.dart",        {            "deviceId": "web-server",
+
+            "deviceId": "web-server",
+
+            "args": [            "name": "tra_list (web)",            "args": [
+
+                "--web-port=8081"
+
+            ]            "request": "launch",                "--web-port=8080"
+
+        },
+
+        {            "type": "dart",            ]
+
+            "name": "tra_list (profile mode)",
+
+            "request": "launch",            "deviceId": "web-server",        },
+
+            "type": "dart",
+
+            "flutterMode": "profile"            "args": [        {
+
+        },
+
+        {                "--web-port=8080"            "name": "tra_list (verify app)",
+
+            "name": "tra_list (release mode)",
+
+            "request": "launch",            ]            "request": "launch",
+
+            "type": "dart",
+
+            "flutterMode": "release"        },            "type": "dart",
+
+        }
+
+    ]        {            "program": "lib/main_verify.dart",
+
+}
+            "name": "tra_list (verify app)",            "deviceId": "web-server",
+
+            "request": "launch",            "args": [
+
+            "type": "dart",                "--web-port=8081"
+
+            "program": "lib/main_verify.dart",            ]
+
+            "deviceId": "web-server",        },
+
+            "args": [        {
+
+                "--web-port=8081"            "name": "tra_list (profile mode)",
+
+            ]            "request": "launch",
+
+        },            "type": "dart",
+
+        {            "flutterMode": "profile"
+
+            "name": "tra_list (profile mode)",        },
+
+            "request": "launch",        {
+
+            "type": "dart",            "name": "tra_list (release mode)",
+
+            "flutterMode": "profile"            "request": "launch",
+
+        },            "type": "dart",
+
+        {            "flutterMode": "release"
+
+            "name": "tra_list (release mode)",        }
+
+            "request": "launch",    ]
+
+            "type": "dart",}
+            "flutterMode": "release"
+        }
+    ]
+}
