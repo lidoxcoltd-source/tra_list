@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/ReceiptPage.dart';
-import 'package:tra_list/LocalStorageService.dart';
+import 'simple_local_storage_service.dart';
 import 'package:tra_list/QRCodeService.dart';
 
 class ReceiptViewController extends GetxController {
@@ -75,10 +75,31 @@ class ReceiptViewController extends GetxController {
     try {
       print('Trying to load from local storage...');
 
-      final data = LocalStorageService.getReceiptByCode(receiptId);
-      if (data != null && data.isNotEmpty) {
+      // Support both instance and static implementations and both sync/async returns.
+      final data = await (() async {
+        try {
+          // Try instance method first (works if SimpleLocalStorageService defines an instance API)
+          final svc = SimpleLocalStorageService();
+          final result = (svc as dynamic).getReceiptByCode(receiptId);
+          if (result is Future) return await result;
+          return result;
+        } catch (_) {
+          try {
+            // Fall back to a static method if available
+            final result = SimpleLocalStorageService.getReceiptByCode(
+              receiptId,
+            );
+            if (result is Future) return await result;
+            return result;
+          } catch (_) {
+            return null;
+          }
+        }
+      })();
+
+      if (data != null && data is Map && data.isNotEmpty) {
         print('Found receipt in local storage');
-        return _mapToReceiptData(data);
+        return _mapToReceiptData(Map<String, dynamic>.from(data));
       }
     } catch (e) {
       print('Failed to load from local storage: $e');

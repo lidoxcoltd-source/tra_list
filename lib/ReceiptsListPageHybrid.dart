@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'ReceiptPage.dart';
-import 'LocalStorageService.dart';
+import 'simple_local_storage_service.dart';
 import 'routes.dart';
 
 class ReceiptsListPage extends StatefulWidget {
@@ -24,7 +24,7 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
 
   void _loadLocalReceipts() {
     setState(() {
-      _localReceipts = LocalStorageService.getReceipts();
+      _localReceipts = SimpleLocalStorageService.getReceipts();
     });
   }
 
@@ -340,7 +340,7 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              await LocalStorageService.clearAllReceipts();
+              await SimpleLocalStorageService.clearAllReceipts();
               _loadLocalReceipts();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(

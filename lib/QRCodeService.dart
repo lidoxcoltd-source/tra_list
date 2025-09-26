@@ -20,7 +20,7 @@ class QRCodeService {
       backgroundColor: backgroundColor,
       errorCorrectionLevel: QrErrorCorrectLevel.M,
       gapless: false,
-      embeddedImage: const AssetImage('assets/tra-logo.png'),
+      // embeddedImage: const AssetImage('assets/tra-logo.png'),
       embeddedImageStyle: const QrEmbeddedImageStyle(size: Size(40, 40)),
     );
   }
