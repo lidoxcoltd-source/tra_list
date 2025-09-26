@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/ReceiptPage.dart';
-import 'package:tra_list/LocalStorageService.dart';
+import 'package:tra_list/platform_local_storage_service.dart';
 import 'package:tra_list/QRCodeService.dart';
 
 class ReceiptViewController extends GetxController {
@@ -75,7 +75,7 @@ class ReceiptViewController extends GetxController {
     try {
       print('Trying to load from local storage...');
 
-      final data = LocalStorageService.getReceiptByCode(receiptId);
+      final data = await PlatformLocalStorageService.getReceiptByCode(receiptId);
       if (data != null && data.isNotEmpty) {
         print('Found receipt in local storage');
         return _mapToReceiptData(data);
