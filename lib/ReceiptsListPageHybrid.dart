@@ -1,10 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
+// Remove url_launcher import
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'routes.dart';
+
+// Add conditional import for web
+import 'dart:html' as html show window;
 
 class ReceiptsListPage extends StatefulWidget {
   const ReceiptsListPage({super.key});
@@ -274,19 +279,14 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
       final url =
           'https://tra-verify-system.web.app/#/receipt/$verificationCode';
 
-      // Only try to open in external browser - no fallbacks
+      // Use different approach based on platform
       try {
-        final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (kIsWeb) {
+          // For web platform, use dart:html
+          html.window.open(url, '_blank');
         } else {
-          Get.snackbar(
-            'Error',
-            'Cannot open receipt in browser',
-            backgroundColor: Colors.orange,
-            colorText: Colors.white,
-            snackPosition: SnackPosition.BOTTOM,
-          );
+          // For mobile platforms, show URL for manual opening
+          _showUrlDialog(url);
         }
       } catch (e) {
         Get.snackbar(
@@ -306,6 +306,66 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
         snackPosition: SnackPosition.BOTTOM,
       );
     }
+  }
+
+  void _showUrlDialog(String url) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Receipt URL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Copy this URL to view the receipt in your browser:'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: SelectableText(
+                url,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Copy to clipboard
+              try {
+                // This will work on most platforms
+                Clipboard.setData(ClipboardData(text: url));
+                Navigator.pop(context);
+                Get.snackbar(
+                  'Success',
+                  'URL copied to clipboard',
+                  backgroundColor: Colors.green,
+                  colorText: Colors.white,
+                  snackPosition: SnackPosition.BOTTOM,
+                );
+              } catch (e) {
+                Get.snackbar(
+                  'Error',
+                  'Failed to copy URL',
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                  snackPosition: SnackPosition.BOTTOM,
+                );
+              }
+            },
+            child: const Text('Copy URL'),
+          ),
+        ],
+      ),
+    );
   }
 
   ReceiptData _mapToReceiptData(Map<String, dynamic> data) {

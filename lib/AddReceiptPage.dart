@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:math'; // Add this import
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'dart:math';
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
+import 'dart:html' as html show window;
 
 class AddReceiptPage extends StatefulWidget {
   const AddReceiptPage({super.key});
@@ -799,20 +801,21 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
             onPressed: () async {
               Navigator.of(context).pop();
 
-              // Only try to open in external browser - no fallbacks
-              final webUrl =
-                  'https://tra-verify-system.web.app/#/receipt/$receiptId';
+              // Use web-compatible approach
               try {
-                final uri = Uri.parse(webUrl);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (kIsWeb) {
+                  // For web platform, use dart:html
+                  html.window.open(receiptUrl, '_blank');
                 } else {
+                  // For mobile platforms, just copy URL and show message
+                  Clipboard.setData(ClipboardData(text: receiptUrl));
                   Get.snackbar(
-                    'Error',
-                    'Cannot open receipt in browser',
-                    backgroundColor: Colors.orange,
+                    'URL Copied',
+                    'Receipt URL copied to clipboard. Open in browser to view.',
+                    backgroundColor: Colors.green,
                     colorText: Colors.white,
                     snackPosition: SnackPosition.BOTTOM,
+                    duration: const Duration(seconds: 4),
                   );
                 }
               } catch (e) {
