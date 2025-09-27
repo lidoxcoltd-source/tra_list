@@ -148,11 +148,19 @@ class ReceiptPage extends StatelessWidget {
 
   Widget _dottedDivider() => LayoutBuilder(
     builder: (context, c) {
-      final dots = (c.maxWidth / 6).floor();
-      return Text(
-        List.filled(dots, '·').join(' '),
-        style: TextStyle(color: Colors.grey.shade400, letterSpacing: 1),
-        textAlign: TextAlign.center,
+      final dots = (c.maxWidth / 7).floor();
+      final text = List.filled(dots > 0 ? dots : 1, '·').join(' ');
+      return Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            text,
+            style: TextStyle(color: Colors.grey.shade400),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.clip,
+          ),
+        ),
       );
     },
   );
@@ -167,7 +175,44 @@ class ReceiptPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Legal Receipt'), centerTitle: true),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFE500), // TRA yellow color
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                offset: Offset(0, 2),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'TAXPAYER RECEIPT VERIFICATION PORTAL',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 860),
@@ -187,13 +232,17 @@ class ReceiptPage extends StatelessWidget {
                 // Header with logo/info
                 Column(
                   children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: d.company.logo,
-                      child: d.company.logo == null
-                          ? const Icon(Icons.approval, size: 28)
-                          : null,
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: d.company.logo != null
+                          ? Image(image: d.company.logo!, fit: BoxFit.contain)
+                          : const Icon(Icons.approval, size: 28),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -403,7 +452,10 @@ class ReceiptPage extends StatelessWidget {
 
                 const SizedBox(height: 12),
                 Center(
-                  child: Text('*** END OF LEGAL RECEIPT ***', style: textMuted),
+                  child: Text(
+                    '*** END OF LEGAL RECEIPT ***',
+                    style: textMuted.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -422,6 +474,23 @@ class ReceiptPage extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFFE500),
                       foregroundColor: Colors.black87,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Copyright footer
+                Center(
+                  child: Text(
+                    '© 2025 - TRA Receipt Verification Portal',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -787,6 +856,17 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
           child: pw.Text(
             '*** END OF LEGAL RECEIPT ***',
             style: pw.TextStyle(color: PdfColors.grey600, fontSize: 9),
+          ),
+        ),
+        pw.SizedBox(height: 5),
+        pw.Center(
+          child: pw.Text(
+            '© ${DateTime.now().year} - TRA Receipt Verification Portal',
+            style: pw.TextStyle(
+              color: PdfColors.grey,
+              fontSize: 20,
+              fontWeight: pw.FontWeight.normal,
+            ),
           ),
         ),
       ],
