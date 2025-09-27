@@ -799,24 +799,30 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
             onPressed: () async {
               Navigator.of(context).pop();
 
-              // Try to open in external browser first
+              // Only try to open in external browser - no fallbacks
               final webUrl =
                   'https://tra-verify-system.web.app/#/receipt/$receiptId';
               try {
                 final uri = Uri.parse(webUrl);
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  return;
+                } else {
+                  Get.snackbar(
+                    'Error',
+                    'Cannot open receipt in browser',
+                    backgroundColor: Colors.orange,
+                    colorText: Colors.white,
+                    snackPosition: SnackPosition.BOTTOM,
+                  );
                 }
-              } catch (_) {
-                // ignore and fall back
-              }
-
-              // Fallback: navigate to internal receipt page
-              try {
-                Get.toNamed('/receipt/$receiptId');
-              } catch (_) {
-                _previewReceipt();
+              } catch (e) {
+                Get.snackbar(
+                  'Error',
+                  'Failed to open receipt: $e',
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                  snackPosition: SnackPosition.BOTTOM,
+                );
               }
             },
             icon: const Icon(Icons.open_in_browser),

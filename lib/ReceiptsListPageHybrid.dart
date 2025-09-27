@@ -274,31 +274,37 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
       final url =
           'https://tra-verify-system.web.app/#/receipt/$verificationCode';
 
-      // Prefer opening in external browser. Requires url_launcher:
-      // add this import at top of the file:
-      // import 'package:url_launcher/url_launcher.dart';
+      // Only try to open in external browser - no fallbacks
       try {
         final uri = Uri.parse(url);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-          return;
+        } else {
+          Get.snackbar(
+            'Error',
+            'Cannot open receipt in browser',
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+            snackPosition: SnackPosition.BOTTOM,
+          );
         }
-      } catch (_) {
-        // ignore and fall back
-      }
-
-      // Fallback: navigate to an internal route that mirrors the URL (if you have one),
-      // or open the receipt page within the app.
-      try {
-        Get.toNamed('/receipt/$verificationCode');
-        return;
-      } catch (_) {
-        final receiptData = _mapToReceiptData(data);
-        Get.to(() => ReceiptPage(data: receiptData));
+      } catch (e) {
+        Get.snackbar(
+          'Error',
+          'Failed to open receipt: $e',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
       }
     } else {
-      final receiptData = _mapToReceiptData(data);
-      Get.to(() => ReceiptPage(data: receiptData));
+      Get.snackbar(
+        'Error',
+        'No verification code found for this receipt',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
