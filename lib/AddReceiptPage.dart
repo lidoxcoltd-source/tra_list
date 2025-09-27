@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math'; // Add this import
 import 'ReceiptPage.dart';
-import 'LocalStorageService.dart';
+import 'platform_local_storage_service.dart';
 import 'UrlHelper.dart';
 
 class AddReceiptPage extends StatefulWidget {
@@ -188,7 +188,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
         // If Firestore fails, save to local storage using original receiptData
         // (which still has the ISO string timestamp)
-        await LocalStorageService.saveReceipt(receiptData);
+        await PlatformLocalStorageService.saveReceipt(receiptData);
         print('Saved to local storage as fallback');
       }
 
