@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter/services.dart';
 
 class UrlHelper {
   static String getReceiptUrl(String receiptId) {
-    final baseUrl = Uri.base.toString();
-
-    // Remove any trailing slash from base URL
-    final cleanBaseUrl = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
-
-    return '$cleanBaseUrl/receipt/$receiptId';
+    // Use the deployed web app URL instead of local
+    return 'https://tra-verify-system.web.app/#/receipt/$receiptId';
   }
 
   static void shareReceiptUrl(String receiptId) {
@@ -25,7 +20,7 @@ class UrlHelper {
 
   static void copyReceiptUrl(String receiptId) {
     final url = getReceiptUrl(receiptId);
-    // In a real app, you'd use clipboard package
+    Clipboard.setData(ClipboardData(text: url));
     print('Receipt URL copied: $url');
     Get.snackbar(
       'URL Copied',

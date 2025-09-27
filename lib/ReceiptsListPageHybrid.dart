@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'routes.dart';
@@ -267,13 +268,35 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
     );
   }
 
-  void _viewReceipt(Map<String, dynamic> data) {
-    final verificationCode = data['verificationCode'] ?? '';
+  void _viewReceipt(Map<String, dynamic> data) async {
+    final verificationCode = (data['verificationCode'] ?? '').toString();
     if (verificationCode.isNotEmpty) {
-      // Navigate using receipt ID in the URL
-      Get.toNamed('/receipt/$verificationCode');
+      final url =
+          'https://tra-verify-system.web.app/#/receipt/$verificationCode';
+
+      // Prefer opening in external browser. Requires url_launcher:
+      // add this import at top of the file:
+      // import 'package:url_launcher/url_launcher.dart';
+      try {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+      } catch (_) {
+        // ignore and fall back
+      }
+
+      // Fallback: navigate to an internal route that mirrors the URL (if you have one),
+      // or open the receipt page within the app.
+      try {
+        Get.toNamed('/receipt/$verificationCode');
+        return;
+      } catch (_) {
+        final receiptData = _mapToReceiptData(data);
+        Get.to(() => ReceiptPage(data: receiptData));
+      }
     } else {
-      // Fallback to direct receipt page navigation
       final receiptData = _mapToReceiptData(data);
       Get.to(() => ReceiptPage(data: receiptData));
     }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:math'; // Add this import
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
@@ -79,13 +81,28 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   }
 
   void _generateVerificationCode() {
-    final chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = DateTime.now().millisecondsSinceEpoch;
+    final numbers = '0123456789';
+    final letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    final random = Random();
+
     String code = '';
-    for (int i = 0; i < 9; i++) {
-      code += chars[(random + i) % chars.length];
+
+    // Generate 6-7 numbers first
+    for (int i = 0; i < 6 + random.nextInt(2); i++) {
+      code += numbers[random.nextInt(numbers.length)];
     }
-    _verificationCodeController.text = code;
+
+    // Add 2-3 letters
+    final letterCount = 2 + random.nextInt(2); // 2 or 3 letters
+    for (int i = 0; i < letterCount; i++) {
+      code += letters[random.nextInt(letters.length)];
+    }
+
+    // Shuffle the code to mix numbers and letters
+    List<String> codeList = code.split('');
+    codeList.shuffle(random);
+
+    _verificationCodeController.text = codeList.join();
   }
 
   void _calculateTotals() {
@@ -377,7 +394,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     _receiptNoController,
                     'Receipt No',
                     Icons.receipt,
-                    readOnly: true,
+                    readOnly: false,
                   ),
                   _buildTextField(
                     _zNumberController,
@@ -385,17 +402,131 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     Icons.tag,
                     required: true,
                   ),
-                  _buildTextField(
-                    _receiptDateController,
-                    'Receipt Date',
-                    Icons.calendar_today,
-                    readOnly: true,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TextFormField(
+                      controller: _receiptDateController,
+                      readOnly: true,
+                      onTap: () async {
+                        // Try to parse existing controller value (expected dd-MM-yyyy)
+                        DateTime initialDate = DateTime.now();
+                        try {
+                          final parts = _receiptDateController.text.split('-');
+                          if (parts.length == 3) {
+                            final day = int.parse(parts[0]);
+                            final month = int.parse(parts[1]);
+                            final year = int.parse(parts[2]);
+                            initialDate = DateTime(year, month, day);
+                          }
+                        } catch (_) {
+                          initialDate = DateTime.now();
+                        }
+
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: initialDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+
+                        if (picked != null) {
+                          setState(() {
+                            _receiptDateController.text =
+                                '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+                          });
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Receipt Date',
+                        prefixIcon: Icon(
+                          Icons.calendar_today,
+                          color: Colors.grey.shade600,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFFFE500),
+                            width: 2,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                      ),
+                    ),
                   ),
-                  _buildTextField(
-                    _receiptTimeController,
-                    'Receipt Time',
-                    Icons.access_time,
-                    readOnly: true,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TextFormField(
+                      controller: _receiptTimeController,
+                      readOnly: true,
+                      onTap: () async {
+                        // Parse existing controller value (expected HH:mm:ss)
+                        final now = DateTime.now();
+                        int initHour = now.hour;
+                        int initMinute = now.minute;
+                        int seconds = now.second;
+
+                        try {
+                          final parts = _receiptTimeController.text.split(':');
+                          if (parts.length >= 2) {
+                            initHour = int.parse(parts[0]);
+                            initMinute = int.parse(parts[1]);
+                            if (parts.length >= 3) {
+                              seconds = int.parse(parts[2]);
+                            }
+                          }
+                        } catch (_) {
+                          // ignore parsing errors and use current time
+                        }
+
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(
+                            hour: initHour,
+                            minute: initMinute,
+                          ),
+                        );
+
+                        if (picked != null) {
+                          // Keep seconds from previous value (or current seconds)
+                          final secStr = seconds.toString().padLeft(2, '0');
+                          setState(() {
+                            _receiptTimeController.text =
+                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}:$secStr';
+                          });
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Receipt Time',
+                        prefixIcon: Icon(
+                          Icons.access_time,
+                          color: Colors.grey.shade600,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFFFE500),
+                            width: 2,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                      ),
+                    ),
                   ),
                   _buildTextField(
                     _verificationCodeController,
@@ -665,11 +796,30 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
             label: const Text('Copy URL'),
           ),
           ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              _previewReceipt();
+
+              // Try to open in external browser first
+              final webUrl =
+                  'https://tra-verify-system.web.app/#/receipt/$receiptId';
+              try {
+                final uri = Uri.parse(webUrl);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  return;
+                }
+              } catch (_) {
+                // ignore and fall back
+              }
+
+              // Fallback: navigate to internal receipt page
+              try {
+                Get.toNamed('/receipt/$receiptId');
+              } catch (_) {
+                _previewReceipt();
+              }
             },
-            icon: const Icon(Icons.preview),
+            icon: const Icon(Icons.open_in_browser),
             label: const Text('View Receipt'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,

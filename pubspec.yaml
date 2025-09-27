@@ -1,6 +1,6 @@
 name: tra_list
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -9,16 +9,18 @@ environment:
 
 dependencies:
   barcode: ^2.2.6
-  cupertino_icons: ^1.0.8
-  firebase_core: ^4.1.1
   cloud_firestore: ^6.0.2
+  cupertino_icons: ^1.0.8
   firebase_auth: ^6.1.0
+  firebase_core: ^4.1.1
   flutter:
     sdk: flutter
   get: ^4.6.6
   pdf: ^3.10.7
   printing: ^5.12.0
   qr_flutter: ^4.1.0
+  shared_preferences: ^2.5.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_lints: ^5.0.0
@@ -31,6 +33,6 @@ flutter:
   # Optional: add real images if you want to show them in the UI
   assets:
     - assets/logo.png
-    - assets/qr.png  
+    - assets/qr.png
     - assets/tra-logo.png
     - assets/frame.png

@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/routes.dart';
@@ -16,6 +17,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check if user is already logged in to determine initial route
+    final String initialRoute = FirebaseAuth.instance.currentUser != null
+        ? AppRoutes.home
+        : AppRoutes.login;
+
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TRA Receipt Verification',
@@ -23,7 +29,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      initialRoute: AppRoutes.home,
+      initialRoute: initialRoute,
       getPages: AppRoutes.routes,
       defaultTransition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
