@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'routes.dart';
+import 'PDFService.dart'; // Use PDFService for printing
 
 // Add conditional import for web
 import 'dart:html' as html show window;
@@ -267,10 +268,35 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
               ),
           ],
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Print',
+              icon: const Icon(Icons.print),
+              onPressed: () => _printReceipt(data),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16),
+          ],
+        ),
         onTap: () => _viewReceipt(data),
       ),
     );
+  }
+
+  void _printReceipt(Map<String, dynamic> data) async {
+    try {
+      await PDFService.generatePDF(data);
+      // PDFService shows success; no extra snackbar here to avoid duplicates.
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to print receipt: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   void _viewReceipt(Map<String, dynamic> data) async {
