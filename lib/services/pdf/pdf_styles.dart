@@ -12,7 +12,7 @@ class PdfTheme {
   PdfTheme({
     required this.regular,
     required this.bold,
-    this.fontScale = 0.8, // was 1.1
+    this.fontScale = 1.1, // was 1.1
     PdfColor? textColor,
     PdfColor? textColorBold,
     this.letterSpacing = 0.0, // was 0.1

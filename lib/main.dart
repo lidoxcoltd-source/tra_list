@@ -17,7 +17,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if user is already logged in to determine initial route
     final String initialRoute = FirebaseAuth.instance.currentUser != null
         ? AppRoutes.home
         : AppRoutes.login;
@@ -30,7 +29,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       initialRoute: initialRoute,
-      getPages: AppRoutes.routes,
+      getPages: AppRoutes.pages, // <-- wire routes
       defaultTransition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     );

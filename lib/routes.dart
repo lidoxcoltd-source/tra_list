@@ -9,6 +9,8 @@ import 'package:tra_list/FirebaseTestPage.dart';
 import 'package:tra_list/ReceiptViewPage.dart';
 import 'package:tra_list/RouteTestPage.dart';
 import 'package:tra_list/LoginPage.dart';
+import 'invoice/InvoicePage.dart';
+import 'invoice/InvoicesPage.dart';
 
 class AuthMiddleware extends GetMiddleware {
   @override
@@ -38,11 +40,13 @@ class AppRoutes {
   static const String firebaseTest = '/firebase-test';
   static const String routeTest = '/route-test';
   static const String viewReceipt = '/receipt/:id';
+  static const String invoice = '/invoice';
+  static const String invoicesList = '/invoices';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
 
-  static List<GetPage> routes = [
+  static final pages = <GetPage>[
     GetPage(name: login, page: () => LoginPage()),
     GetPage(
       name: home,
@@ -83,5 +87,7 @@ class AppRoutes {
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),
+    GetPage(name: invoice, page: () => const InvoicePage()),
+    GetPage(name: invoicesList, page: () => const InvoicesPage()),
   ];
 }

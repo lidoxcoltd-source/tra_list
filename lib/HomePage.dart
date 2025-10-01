@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/routes.dart';
 import 'LoginPage.dart';
+import 'invoice/InvoicePage.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -127,39 +128,25 @@ class HomePage extends StatelessWidget {
                       },
                     ),
 
-                    // Sample Receipt
+                    // View Invoices
                     _buildMenuCard(
                       context,
-                      icon: Icons.preview,
-                      title: 'Sample Receipt',
-                      subtitle: 'View a sample receipt with demo data',
-                      color: const Color(0xFFFF9800),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.sampleReceipt);
-                      },
+                      icon: Icons.receipt_long,
+                      title: 'View Invoices',
+                      subtitle: 'Browse invoices you have saved',
+                      color: const Color(0xFF3F51B5),
+                      onTap: () => Get.toNamed(AppRoutes.invoicesList),
                     ),
 
-                    // Firebase Test
+                    // Generate Invoice
                     _buildMenuCard(
                       context,
-                      icon: Icons.cloud_sync,
-                      title: 'Firebase Connection Test',
-                      subtitle: 'Test Firebase/Firestore connectivity',
-                      color: const Color(0xFFF44336),
+                      icon: Icons.receipt,
+                      title: 'Generate Invoice',
+                      subtitle: 'Create and print a professional invoice',
+                      color: const Color(0xFF8D6E63),
                       onTap: () {
-                        Get.toNamed(AppRoutes.firebaseTest);
-                      },
-                    ),
-
-                    // Route Test
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.route,
-                      title: 'Route Test',
-                      subtitle: 'Test GetX routing with receipt IDs',
-                      color: const Color(0xFF607D8B),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.routeTest);
+                        Get.toNamed(AppRoutes.invoice); // use named route
                       },
                     ),
 

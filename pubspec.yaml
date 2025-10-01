@@ -16,6 +16,7 @@ dependencies:
   flutter:
     sdk: flutter
   get: ^4.6.6
+  path_provider: ^2.1.5
   pdf: ^3.10.4
   printing: ^5.11.0
   qr: ^3.0.1
