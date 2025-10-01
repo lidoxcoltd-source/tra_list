@@ -65,172 +65,196 @@ class InvoicePdf {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        footer: (ctx) => _footerBar(t, company), // NEW: footer on every page
+        margin: const pw.EdgeInsets.only(top: 36, bottom: 0, left: 0, right: 0),
+        footer: (ctx) => _footer(t, company, ctx), // CHANGED: combined footer
         build: (ctx) => [
-          // Header
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              if (logo != null)
-                pw.Container(
-                  width: 120,
-                  height: 60,
-                  alignment: pw.Alignment.centerLeft,
-                  child: pw.Image(logo!, fit: pw.BoxFit.contain),
-                ),
-              pw.Spacer(),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text('INVOICE', style: t.h1),
-                  pw.SizedBox(height: 6),
-                  pw.Text(company['name']?.toString() ?? '', style: t.h2),
-                  pw.Text(
-                    company['address']?.toString() ?? '',
-                    style: t.small,
-                    textAlign: pw.TextAlign.right,
-                  ),
-                  if (company['taxId'] != null)
-                    pw.Text('Tax Id: ${company['taxId']}', style: t.small),
-                  if (company['email'] != null)
-                    pw.Text(company['email'].toString(), style: t.small),
-                  if (company['phone'] != null)
-                    pw.Text('Otc Tel: ${company['phone']}', style: t.small),
-                ],
-              ),
-            ],
-          ),
-
-          pw.SizedBox(height: 24),
-
-          // Bill to + meta
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 36),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Row(
+                    if (logo != null)
+                      pw.Container(
+                        width: 120,
+                        height: 60,
+                        alignment: pw.Alignment.centerLeft,
+                        child: pw.Image(logo!, fit: pw.BoxFit.contain),
+                      ),
+                    pw.Spacer(),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.Text('To  ', style: t.redBold),
-                        pw.Container(
-                          padding: const pw.EdgeInsets.only(bottom: 2),
-                          decoration: const pw.BoxDecoration(
-                            border: pw.Border(
-                              bottom: pw.BorderSide(
-                                width: 1,
-                                color: PdfColors.black,
+                        pw.Text('INVOICE', style: t.h1),
+                        pw.SizedBox(height: 6),
+                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
+                        pw.Text(
+                          company['address']?.toString() ?? '',
+                          style: t.small,
+                          textAlign: pw.TextAlign.right,
+                        ),
+                        if (company['taxId'] != null)
+                          pw.Text(
+                            'Tax Id: ${company['taxId']}',
+                            style: t.small,
+                          ),
+                        if (company['email'] != null)
+                          pw.Text(company['email'].toString(), style: t.small),
+                        if (company['phone'] != null)
+                          pw.Text(
+                            'Otc Tel: ${company['phone']}',
+                            style: t.small,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                pw.SizedBox(height: 24),
+
+                // Bill to + meta
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Row(
+                            children: [
+                              pw.Text('To  ', style: t.redBold),
+                              pw.Container(
+                                padding: const pw.EdgeInsets.only(bottom: 2),
+                                decoration: const pw.BoxDecoration(
+                                  border: pw.Border(
+                                    bottom: pw.BorderSide(
+                                      width: 1,
+                                      color: PdfColors.black,
+                                    ),
+                                  ),
+                                ),
+                                child: pw.Text(
+                                  client['name']?.toString() ?? '',
+                                  style: t.medium,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          child: pw.Text(
-                            client['name']?.toString() ?? '',
-                            style: t.medium,
-                          ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(width: 16),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        _kv(
+                          'Invoice No :',
+                          invoice['number']?.toString() ?? '',
+                          t.small,
+                        ),
+                        _kv(
+                          'Issue date :',
+                          invoice['issueDate']?.toString() ?? '',
+                          t.smallBold,
+                        ),
+                        _kv(
+                          'Due date:',
+                          invoice['dueDate']?.toString() ?? '',
+                          t.smallBold,
+                        ),
+                        _kv(
+                          'Payment method:',
+                          (invoice['paymentMethod'] ?? '').toString(),
+                          t.smallBold,
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-              pw.SizedBox(width: 16),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _kv(
-                    'Invoice No :',
-                    invoice['number']?.toString() ?? '',
-                    t.small,
-                  ),
-                  _kv(
-                    'Issue date :',
-                    invoice['issueDate']?.toString() ?? '',
-                    t.smallBold,
-                  ),
-                  _kv(
-                    'Due date:',
-                    invoice['dueDate']?.toString() ?? '',
-                    t.smallBold,
-                  ),
-                  _kv(
-                    'Payment method:',
-                    (invoice['paymentMethod'] ?? '').toString(),
-                    t.smallBold,
-                  ),
-                ],
-              ),
-            ],
-          ),
 
-          pw.SizedBox(height: 18),
+                pw.SizedBox(height: 18),
 
-          // Table header + rows
-          _tableHeader(t),
-          ...items.map((it) {
-            final qty = (it['qty'] as num?)?.toDouble() ?? 0;
-            final unit = (it['unit'] as num?)?.toDouble() ?? 0;
-            final amount = (it['amount'] as num?)?.toDouble() ?? qty * unit;
-            return _row(
-              t,
-              it['description']?.toString() ?? '',
-              qty,
-              unit,
-              amount,
-              dense: false,
-            );
-          }),
+                // Table header + rows
+                _tableHeader(t),
+                ...items.map((it) {
+                  final qty = (it['qty'] as num?)?.toDouble() ?? 0;
+                  final unit = (it['unit'] as num?)?.toDouble() ?? 0;
+                  final amount =
+                      (it['amount'] as num?)?.toDouble() ?? qty * unit;
+                  return _row(
+                    t,
+                    it['description']?.toString() ?? '',
+                    qty,
+                    unit,
+                    amount,
+                    dense: false,
+                  );
+                }),
 
-          pw.SizedBox(height: 12),
+                pw.SizedBox(height: 12),
 
-          // Footer: note + total + payment details (content area)
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
+                // Footer: note + total + payment details (content area)
+                pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(
-                      'This is computer generated document.',
-                      style: t.smallGrey,
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'This is computer generated document.',
+                            style: t.smallGrey,
+                          ),
+                          pw.SizedBox(height: 10),
+                          pw.Text('PAYMENT DETAILS', style: t.h3Bold),
+                          if (company['beneficiary'] != null)
+                            pw.Text(
+                              'Beneficiary: ${company['beneficiary']}',
+                              style: t.smallBold,
+                            ),
+                          if (company['bank'] != null)
+                            pw.Text(
+                              'Bank: ${company['bank']}',
+                              style: t.smallBold,
+                            ),
+                          if (company['account'] != null)
+                            pw.Text(
+                              'Account Number: ${company['account']}',
+                              style: t.smallBold,
+                            ),
+                          if (company['swift'] != null)
+                            pw.Text(
+                              'Swift code: ${company['swift']}',
+                              style: t.smallBold,
+                            ),
+                        ],
+                      ),
                     ),
-                    pw.SizedBox(height: 10),
-                    pw.Text('PAYMENT DETAILS', style: t.h3Bold),
-                    if (company['beneficiary'] != null)
-                      pw.Text(
-                        'Beneficiary: ${company['beneficiary']}',
-                        style: t.smallBold,
+                    pw.SizedBox(width: 16),
+                    pw.Container(
+                      width: 240,
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text(
+                            'TOTAL (TSH):(TAX INCLUDED)',
+                            style: t.smallBold,
+                          ),
+                          pw.SizedBox(width: 12),
+                          pw.Text('Tsh ${money(total)}', style: t.h3Bold),
+                        ],
                       ),
-                    if (company['bank'] != null)
-                      pw.Text('Bank: ${company['bank']}', style: t.smallBold),
-                    if (company['account'] != null)
-                      pw.Text(
-                        'Account Number: ${company['account']}',
-                        style: t.smallBold,
-                      ),
-                    if (company['swift'] != null)
-                      pw.Text(
-                        'Swift code: ${company['swift']}',
-                        style: t.smallBold,
-                      ),
+                    ),
                   ],
                 ),
-              ),
-              pw.SizedBox(width: 16),
-              pw.Container(
-                width: 240,
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('TOTAL (TSH):(TAX INCLUDED)', style: t.smallBold),
-                    pw.SizedBox(width: 12),
-                    pw.Text('Tsh ${money(total)}', style: t.h3Bold),
-                  ],
-                ),
-              ),
-            ],
+                // REMOVE these two lines (they won’t float to bottom reliably):
+                // pw.SizedBox(height: 14),
+                // _noteAndDelivery(t),
+              ],
+            ),
           ),
         ],
       ),
@@ -334,14 +358,94 @@ class InvoicePdf {
     );
   }
 
-  // NEW: dark footer bar with handle and website
+  // NEW: Note + Delivery Time section shown before footer
+  static pw.Widget _noteAndDelivery(_Theme t) {
+    const note =
+        'We kindly request that the remaining balance to be settled upon the project\'s completion.\n'
+        'This will help ensure that everything runs smoothly and\n'
+        'allows us to maintain the highest quality of service.';
+
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // Left note with green accent bar
+        pw.Expanded(
+          child: pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                left: pw.BorderSide(color: PdfColors.green, width: 3),
+              ),
+            ),
+            child: pw.Text(note, style: t.smallGrey),
+          ),
+        ),
+        pw.SizedBox(width: 18),
+        // Right “Delivery Time” panel with black vertical bar and red text
+        pw.Container(
+          width: 220,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              left: pw.BorderSide(color: PdfColors.black, width: 3),
+            ),
+          ),
+          child: pw.RichText(
+            text: pw.TextSpan(
+              style: t.smallRed,
+              children: [
+                pw.TextSpan(text: 'Delivery Time  '),
+                pw.TextSpan(text: 'Max '),
+                pw.TextSpan(
+                  text: '7 Days ',
+                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.TextSpan(text: 'Min '),
+                pw.TextSpan(
+                  text: '5 Days\n',
+                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.TextSpan(
+                  text: 'From Payment Day',
+                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // NEW: footer that places the note block at the bottom, above the bar.
+  // Shown only on the last page.
+  static pw.Widget _footer(
+    _Theme t,
+    Map<String, dynamic> company,
+    pw.Context ctx,
+  ) {
+    return pw.Column(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        if (ctx.pageNumber == ctx.pagesCount)
+          pw.Padding(
+            padding: const pw.EdgeInsets.fromLTRB(36, 0, 36, 8),
+            child: _noteAndDelivery(t),
+          ),
+        _footerBar(t, company), // full-width dark bar
+      ],
+    );
+  }
+
+  // Full-width dark footer bar (no FullPage here)
   static pw.Widget _footerBar(_Theme t, Map<String, dynamic> company) {
     final handle = (company['handle'] ?? '').toString();
     final website = (company['website'] ?? '').toString();
 
     return pw.Container(
+      width: double.infinity,
       color: PdfColors.grey800,
-      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 18),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
@@ -403,7 +507,9 @@ class _Theme {
     color: PdfColors.red,
   );
   pw.TextStyle get smallWhite =>
-      pw.TextStyle(fontSize: 9, color: PdfColors.white); // NEW
+      pw.TextStyle(fontSize: 9, color: PdfColors.white);
+  pw.TextStyle get smallRed =>
+      pw.TextStyle(fontSize: 9, color: PdfColors.red); // NEW
 
   static String money(num v) {
     final s = v.toStringAsFixed(0);
