@@ -2,11 +2,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/pdf/invoice_pdf.dart';
+import 'package:tra_list/services/pdf/proforma_pdf.dart';
+import 'package:tra_list/services/pdf/delivery_note_pdf.dart';
+import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// // ignore: avoid_web_libraries_in_flutter
-// import 'dart:html' as html; // NEW: for web download
+import 'package:tra_list/services/profile_service.dart';
 
 class InvoicePage extends StatefulWidget {
   const InvoicePage({super.key});
@@ -17,27 +19,10 @@ class InvoicePage extends StatefulWidget {
 
 class _InvoicePageState extends State<InvoicePage> {
   final _formKey = GlobalKey<FormState>();
-  bool _busy = false; // track saving/generating state
+  bool _busy = false;
 
-  final _company = {
-    // Branding for the left header block
-    'name': 'Lidox Enterprises',
-    'brand': 'Lidox Signs',
-    'tagline': 'Where Ideas Turn to Innovation',
-    // Social/footer
-    'handle': '@lidoxinc',
-    'website': 'www.lidoxcoltd.com',
-    // Address & legal
-    'address': 'TABORA - TOWN\nP O BOX 1807\nTABORA , TANZANIA',
-    'taxId': '1:53-540-657',
-    'email': 'lidoxctd@gmail.com',
-    'phone': '0655 900 595',
-    'paymentMethod': 'CASH',
-    'beneficiary': 'EDGAR JOSEPH NYAMBO',
-    'bank': 'CRDB Bank, Tabora Branch',
-    'account': '0152955448900',
-    'swift': 'CORUTZTZ',
-  };
+  // Company profile loaded from Firestore
+  Map<String, dynamic> _company = {};
 
   final _clientController = TextEditingController(text: 'RAZIA AUTO WORKS');
   final _invoiceNoController = TextEditingController(text: '234');
@@ -60,6 +45,12 @@ class _InvoicePageState extends State<InvoicePage> {
   static String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
   @override
+  void initState() {
+    super.initState();
+    _loadCompany(); // fetch profile from Firestore
+  }
+
+  @override
   void dispose() {
     _clientController.dispose();
     _invoiceNoController.dispose();
@@ -77,10 +68,38 @@ class _InvoicePageState extends State<InvoicePage> {
       .toStringAsFixed(0)
       .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
 
+  Future<void> _loadCompany() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        debugPrint('InvoicePage: no signed-in user; skip company load');
+        Get.snackbar(
+          'Not signed in',
+          'Sign in to load company profile',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+      final profile = await ProfileService.loadOrCreate();
+      if (!mounted) return;
+      setState(() => _company = profile ?? {});
+      debugPrint(
+        'InvoicePage: loaded company: ${_company['name'] ?? '(none)'}',
+      );
+    } catch (e) {
+      debugPrint('InvoicePage: failed to load company: $e');
+      if (!mounted) return;
+      Get.snackbar(
+        'Profile',
+        'Failed to load company details',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = const Color(0xFF1976D2);
-    final accent = const Color(0xFF42A5F5);
 
     return Scaffold(
       appBar: AppBar(
@@ -133,6 +152,23 @@ class _InvoicePageState extends State<InvoicePage> {
                   ],
                 ),
               ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primary,
+                  side: BorderSide(color: primary),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: _busy ? null : _chooseDocTypeAndPreview,
+                icon: const Icon(Icons.preview_outlined),
+                label: const Text('Preview'),
+              ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primary,
@@ -145,7 +181,7 @@ class _InvoicePageState extends State<InvoicePage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                onPressed: _busy ? null : _generate,
+                onPressed: _busy ? null : _chooseDocTypeAndSave,
                 icon: _busy
                     ? const SizedBox(
                         width: 18,
@@ -175,9 +211,9 @@ class _InvoicePageState extends State<InvoicePage> {
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: primary, width: 1.6),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              borderSide: BorderSide(color: Color(0xFF1976D2), width: 1.6),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -520,6 +556,7 @@ class _InvoicePageState extends State<InvoicePage> {
   // Try saving to Firestore; return docRef or null if permission denied.
   Future<DocumentReference<Map<String, dynamic>>?> _trySaveToFirestore(
     Map<String, dynamic> data,
+    String kind,
   ) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -537,6 +574,7 @@ class _InvoicePageState extends State<InvoicePage> {
       debugPrint('Saving to ${docRef.path}');
       await docRef.set({
         ...data,
+        'kind': kind, // invoice | proforma | delivery | reminder
         'id': docRef.id,
         'uid': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
@@ -557,10 +595,9 @@ class _InvoicePageState extends State<InvoicePage> {
     }
   }
 
-  Future<void> _generate() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final data = {
+  Map<String, dynamic> _buildData() {
+    return {
+      // Include loaded company; PDFs also auto-fetch if empty
       'company': _company,
       'client': {'name': _clientController.text.trim()},
       'invoice': {
@@ -581,29 +618,131 @@ class _InvoicePageState extends State<InvoicePage> {
           .toList(),
       'total': _total,
     };
+  }
 
+  Future<void> _chooseDocTypeAndSave() async {
+    if (!_formKey.currentState!.validate()) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text('Invoice'),
+              onTap: () => _saveDoc('invoice'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.request_quote_outlined),
+              title: const Text('Proforma'),
+              onTap: () => _saveDoc('proforma'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: const Text('Delivery Note'),
+              onTap: () => _saveDoc('delivery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.alarm_on_outlined),
+              title: const Text('Payment Reminder'),
+              onTap: () => _saveDoc('reminder'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _chooseDocTypeAndPreview() async {
+    if (!_formKey.currentState!.validate()) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text('Invoice'),
+              onTap: () => _previewDoc('invoice'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.request_quote_outlined),
+              title: const Text('Proforma'),
+              onTap: () => _previewDoc('proforma'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: const Text('Delivery Note'),
+              onTap: () => _previewDoc('delivery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.alarm_on_outlined),
+              title: const Text('Payment Reminder'),
+              onTap: () => _previewDoc('reminder'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _previewDoc(String kind) async {
+    Navigator.pop(context);
     setState(() => _busy = true);
     try {
-      final docRef = await _trySaveToFirestore(data);
-      final savedData = {
-        ...data,
-        if (docRef != null) 'id': docRef.id,
-        'createdAt': DateTime.now().toIso8601String(),
-      };
-      if (docRef != null) {
-        Get.snackbar(
-          'Saved',
-          'Invoice saved to cloud',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      final data = _buildData();
 
-      // Generate and save via invoice_pdf.dart
-      final pathOrName = await InvoicePdf.generateAndSave(
-        savedData,
-        fileName:
-            'invoice_${_invoiceNoController.text.trim().isEmpty ? DateTime.now().millisecondsSinceEpoch : _invoiceNoController.text.trim()}.pdf',
+      await ({
+        'invoice': () => InvoicePdf.generate(data),
+        'proforma': () => ProformaPdf.generate(data),
+        'delivery': () => DeliveryNotePdf.generate(data),
+        'reminder': () => PaymentReminderPdf.generate(data),
+      }[kind]!).call();
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to generate preview: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveDoc(String kind) async {
+    Navigator.pop(context);
+    setState(() => _busy = true);
+    try {
+      final data = _buildData();
+
+      // Save a record to Firestore before generating the PDF
+      await _trySaveToFirestore(data, kind);
+
+      final invNo = (_invoiceNoController.text.trim().isEmpty)
+          ? DateTime.now().millisecondsSinceEpoch.toString()
+          : _invoiceNoController.text.trim();
+
+      final fileNameBase = kind == 'invoice'
+          ? 'invoice_$invNo'
+          : kind == 'proforma'
+          ? 'proforma_$invNo'
+          : kind == 'delivery'
+          ? 'delivery_note_$invNo'
+          : 'payment_reminder_$invNo';
+      final fileName = '$fileNameBase.pdf';
+
+      final pathOrName = await ({
+        'invoice': () => InvoicePdf.generateAndSave(data, fileName: fileName),
+        'proforma': () => ProformaPdf.generateAndSave(data, fileName: fileName),
+        'delivery': () =>
+            DeliveryNotePdf.generateAndSave(data, fileName: fileName),
+        'reminder': () =>
+            PaymentReminderPdf.generateAndSave(data, fileName: fileName),
+      }[kind]!).call();
 
       Get.snackbar(
         kIsWeb ? 'PDF downloaded' : 'PDF saved',
@@ -611,18 +750,10 @@ class _InvoicePageState extends State<InvoicePage> {
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 6),
       );
-    } on FirebaseException catch (e) {
-      Get.snackbar(
-        'Error',
-        'Cloud error: ${e.message}',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
     } catch (e) {
       Get.snackbar(
         'Error',
-        'Failed to save/generate: $e',
+        'Failed to save PDF: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

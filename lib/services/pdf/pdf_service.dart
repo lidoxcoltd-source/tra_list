@@ -164,7 +164,7 @@ class PDFService {
                     pw.Text((meta['receiptNo'] ?? '').toString(), style: t12()),
                   ],
                 ),
-                pw.SizedBox(height: 5),
+                pw.SizedBox(height: 5, width: 0),
                 pw.Row(
                   children: [
                     pw.Text('ZNo', style: t12()),

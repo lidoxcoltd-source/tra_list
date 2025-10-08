@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:tra_list/services/pdf/delivery_note_pdf.dart';
+import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
+import 'package:tra_list/services/pdf/proforma_pdf.dart';
 
 import 'InvoicePage.dart';
 import '../services/pdf/invoice_pdf.dart';
@@ -34,7 +37,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
     if (user == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('My Invoices'),
+          title: const Text('My Documents'),
           elevation: 0,
           foregroundColor: Colors.white,
           flexibleSpace: Container(
@@ -70,11 +73,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
-        title: const Text('My Invoices'),
+        title: const Text('My Documents'),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            tooltip: 'New invoice',
+            tooltip: 'New Document',
             onPressed: () {
               Navigator.of(
                 context,
@@ -100,6 +103,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
               controller: _searchC,
               onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
               decoration: InputDecoration(
+                // Search hint is generic now
                 hintText: 'Search by invoice no. or client name',
                 filled: true,
                 fillColor: Colors.white.withOpacity(0.15),
@@ -166,9 +170,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
             );
           }
 
-          final totalSum = filtered.fold<num>(
+          // Only sum the totals for actual invoices
+          final invoiceTotalSum = filtered.fold<num>(
             0,
-            (sum, d) => sum + ((d.data()['total'] as num?) ?? 0),
+            (sum, d) => (d.data()['kind'] == 'invoice')
+                ? sum + ((d.data()['total'] as num?) ?? 0)
+                : sum,
           );
 
           return Column(
@@ -181,15 +188,16 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 child: Row(
                   children: [
                     _StatChip(
-                      label: 'Invoices',
+                      label: 'Documents',
                       value: '${filtered.length}',
                       icon: Icons.receipt_long,
                       color: primary,
                     ),
                     const SizedBox(width: 10),
                     _StatChip(
-                      label: 'Total (TSH)',
-                      value: _money(totalSum),
+                      // This chip now only shows invoice totals
+                      label: 'Invoice Total (TSH)',
+                      value: _money(invoiceTotalSum),
                       icon: Icons.summarize_outlined,
                       color: accent,
                     ),
@@ -209,6 +217,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     final doc = filtered[i];
                     final data = doc.data();
                     final invoice = (data['invoice'] as Map?) ?? {};
+                    final kind = (data['kind']?.toString() ?? 'invoice');
                     final client = (data['client'] as Map?) ?? {};
                     final created = _asDate(data['createdAt']);
                     final total = (data['total'] as num?) ?? 0;
@@ -235,7 +244,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(14),
-                          onTap: () => _savePdf(data),
+                          onTap: () => _previewPdf(data, kind),
                           onLongPress: () => _showActions(context, doc),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
@@ -243,14 +252,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
+                                  // Dynamic icon based on document kind
                                   height: 44,
                                   width: 44,
                                   decoration: BoxDecoration(
                                     color: primary.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Icon(
-                                    Icons.receipt_long,
+                                  child: Icon(
+                                    _getIconForKind(kind),
                                     color: primary,
                                   ),
                                 ),
@@ -264,64 +274,127 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              'Invoice #${invoice['number'] ?? doc.id}',
+                                              '${_getTitleForKind(kind)} #${invoice['number'] ?? doc.id}',
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w700,
                                                 fontSize: 16,
                                               ),
                                             ),
                                           ),
-                                          PopupMenuButton<String>(
-                                            tooltip: 'Actions',
-                                            onSelected: (v) async {
-                                              if (v == 'save') {
-                                                _savePdf(data);
-                                              } else if (v == 'preview') {
-                                                _previewPdf(data);
-                                              } else if (v == 'delete') {
-                                                final ok =
-                                                    await _confirmDismiss(
-                                                      context,
-                                                    );
-                                                if (ok == true) {
-                                                  await doc.reference.delete();
-                                                  Get.snackbar(
-                                                    'Deleted',
-                                                    'Invoice removed',
-                                                    snackPosition:
-                                                        SnackPosition.BOTTOM,
+                                          // Updated PopupMenuButton with more options
+                                          MenuAnchor(
+                                            builder:
+                                                (context, controller, child) {
+                                                  return IconButton(
+                                                    tooltip: 'Actions',
+                                                    onPressed: () {
+                                                      if (controller.isOpen) {
+                                                        controller.close();
+                                                      } else {
+                                                        controller.open();
+                                                      }
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.more_vert,
+                                                    ),
                                                   );
-                                                }
-                                              }
-                                            },
-                                            itemBuilder: (_) => const [
-                                              PopupMenuItem(
-                                                value: 'preview',
-                                                child: ListTile(
-                                                  leading: Icon(
-                                                    Icons.picture_as_pdf,
+                                                },
+                                            menuChildren: [
+                                              MenuItemButton(
+                                                leadingIcon: const Icon(
+                                                  Icons.visibility_outlined,
+                                                ),
+                                                child: Text(
+                                                  'Preview ${_getTitleForKind(kind)}',
+                                                ),
+                                                onPressed: () =>
+                                                    _previewPdf(data, kind),
+                                              ),
+                                              MenuItemButton(
+                                                leadingIcon: const Icon(
+                                                  Icons.download_outlined,
+                                                ),
+                                                child: Text(
+                                                  'Download ${_getTitleForKind(kind)}',
+                                                ),
+                                                onPressed: () =>
+                                                    _savePdf(data, kind),
+                                              ),
+                                              const Divider(),
+                                              SubmenuButton(
+                                                leadingIcon: const Icon(
+                                                  Icons.file_copy_outlined,
+                                                ),
+                                                menuChildren: [
+                                                  MenuItemButton(
+                                                    child: const Text(
+                                                      'Invoice',
+                                                    ),
+                                                    onPressed: () => _savePdf(
+                                                      data,
+                                                      'invoice',
+                                                    ),
                                                   ),
-                                                  title: Text('Preview PDF'),
+                                                  MenuItemButton(
+                                                    child: const Text(
+                                                      'Proforma',
+                                                    ),
+                                                    onPressed: () => _savePdf(
+                                                      data,
+                                                      'proforma',
+                                                    ),
+                                                  ),
+                                                  MenuItemButton(
+                                                    child: const Text(
+                                                      'Delivery Note',
+                                                    ),
+                                                    onPressed: () => _savePdf(
+                                                      data,
+                                                      'delivery',
+                                                    ),
+                                                  ),
+                                                  MenuItemButton(
+                                                    child: const Text(
+                                                      'Payment Reminder',
+                                                    ),
+                                                    onPressed: () => _savePdf(
+                                                      data,
+                                                      'reminder',
+                                                    ),
+                                                  ),
+                                                ],
+                                                child: const Text(
+                                                  'Generate As...',
                                                 ),
                                               ),
-                                              PopupMenuItem(
-                                                value: 'save',
-                                                child: ListTile(
-                                                  leading: Icon(
-                                                    Icons.download_outlined,
-                                                  ),
-                                                  title: Text('Save PDF'),
+                                              const Divider(),
+                                              MenuItemButton(
+                                                leadingIcon: const Icon(
+                                                  Icons.delete_outline,
+                                                  color: Colors.red,
                                                 ),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                child: ListTile(
-                                                  leading: Icon(
-                                                    Icons.delete,
+                                                child: const Text(
+                                                  'Delete',
+                                                  style: TextStyle(
                                                     color: Colors.red,
                                                   ),
-                                                  title: Text('Delete'),
                                                 ),
+                                                onPressed: () async {
+                                                  final ok =
+                                                      await _confirmDismiss(
+                                                        context,
+                                                      );
+                                                  if (ok == true) {
+                                                    await doc.reference
+                                                        .delete();
+                                                    Get.snackbar(
+                                                      'Deleted',
+                                                      'Document removed',
+                                                      snackPosition:
+                                                          SnackPosition.BOTTOM,
+                                                    );
+                                                  }
+                                                },
                                               ),
                                             ],
                                           ),
@@ -417,24 +490,77 @@ class _InvoicesPageState extends State<InvoicesPage> {
     return '${d.day}/${d.month}/${d.year}';
   }
 
+  Widget _swipeBg(Alignment alignment) {
+    return Container(
+      color: Colors.red.shade600,
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: const Icon(Icons.delete, color: Colors.white),
+    );
+  }
+
+  Future<bool?> _confirmDismiss(BuildContext context) async {
+    return await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Delete Document?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   static String _money(num v) => v
       .toStringAsFixed(0)
       .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
 
-  void _savePdf(Map<String, dynamic> data) async {
+  IconData _getIconForKind(String kind) {
+    return switch (kind) {
+      'proforma' => Icons.request_quote_outlined,
+      'delivery' => Icons.local_shipping_outlined,
+      'reminder' => Icons.alarm_on_outlined,
+      _ => Icons.receipt_long, // invoice
+    };
+  }
+
+  String _getTitleForKind(String kind) {
+    return switch (kind) {
+      'proforma' => 'Proforma',
+      'delivery' => 'Delivery Note',
+      'reminder' => 'Reminder',
+      _ => 'Invoice',
+    };
+  }
+
+  void _savePdf(Map<String, dynamic> data, String kind) async {
     try {
       final clean = Map<String, dynamic>.from(data);
       final ts = clean['createdAt'];
       if (ts is Timestamp) clean['createdAt'] = ts.toDate().toIso8601String();
 
       final no = (clean['invoice'] as Map?)?['number']?.toString();
-      final fileName =
-          'invoice_${(no == null || no.isEmpty) ? DateTime.now().millisecondsSinceEpoch : no}.pdf';
+      final fileNameBase = (no == null || no.isEmpty)
+          ? DateTime.now().millisecondsSinceEpoch.toString()
+          : no;
+      final fileName = '${kind}_$fileNameBase.pdf';
 
-      final pathOrName = await InvoicePdf.generateAndSave(
-        clean,
-        fileName: fileName,
-      );
+      final pathOrName = await ({
+        'invoice': () => InvoicePdf.generateAndSave(clean, fileName: fileName),
+        'proforma': () =>
+            ProformaPdf.generateAndSave(clean, fileName: fileName),
+        'delivery': () =>
+            DeliveryNotePdf.generateAndSave(clean, fileName: fileName),
+        'reminder': () =>
+            PaymentReminderPdf.generateAndSave(clean, fileName: fileName),
+      }[kind]!).call();
 
       Get.snackbar(
         kIsWeb ? 'PDF downloaded' : 'PDF saved',
@@ -453,9 +579,23 @@ class _InvoicesPageState extends State<InvoicesPage> {
     }
   }
 
-  void _previewPdf(Map<String, dynamic> data) {
-    // Fallback to saving if preview not available
-    _savePdf(data);
+  void _previewPdf(Map<String, dynamic> data, String kind) async {
+    try {
+      await ({
+        'invoice': () => InvoicePdf.generate(data),
+        'proforma': () => ProformaPdf.generate(data),
+        'delivery': () => DeliveryNotePdf.generate(data),
+        'reminder': () => PaymentReminderPdf.generate(data),
+      }[kind]!).call();
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to generate preview: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   void _showActions(
@@ -472,15 +612,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
               title: const Text('Preview PDF'),
               onTap: () {
                 Navigator.pop(context);
-                _previewPdf(doc.data());
+                _previewPdf(doc.data(), doc.data()['kind'] ?? 'invoice');
               },
             ),
             ListTile(
               leading: const Icon(Icons.download),
-              title: const Text('Save PDF'),
+              title: const Text('Download PDF'),
               onTap: () {
                 Navigator.pop(context);
-                _savePdf(doc.data());
+                _savePdf(doc.data(), doc.data()['kind'] ?? 'invoice');
               },
             ),
             ListTile(
@@ -488,6 +628,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
               title: const Text('Delete'),
               onTap: () async {
                 Navigator.pop(context);
+                final ok = await _confirmDismiss(context);
+                if (ok != true) return;
+
                 await doc.reference.delete();
                 Get.snackbar(
                   'Deleted',
@@ -501,47 +644,42 @@ class _InvoicesPageState extends State<InvoicesPage> {
       ),
     );
   }
+}
 
-  // Swipe helpers
-  Future<bool?> _confirmDismiss(BuildContext context) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete invoice?'),
-        content: const Text('This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 80,
+            color: Colors.grey.shade400,
           ),
+          const SizedBox(height: 16),
+          Text(
+            'No documents yet',
+            style: TextStyle(fontSize: 20, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 8),
           ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.delete),
-            label: const Text('Delete'),
+            onPressed: onCreate,
+            icon: const Icon(Icons.add),
+            label: const Text('Create New Document'),
           ),
         ],
       ),
     );
   }
-
-  Widget _swipeBg(Alignment align) {
-    return Container(
-      alignment: align,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade600,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Icon(Icons.delete, color: Colors.white),
-    );
-  }
 }
 
 class _StatChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
   const _StatChip({
     required this.label,
     required this.value,
@@ -549,70 +687,33 @@ class _StatChip extends StatelessWidget {
     required this.color,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onCreate;
-  const _EmptyState({required this.onCreate});
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
           children: [
-            Icon(Icons.receipt_long, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            const Text(
-              'No invoices yet',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Create your first invoice to get started.',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add),
-              label: const Text('New Invoice'),
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: color, fontSize: 12)),
+                Text(
+                  value,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ],
         ),

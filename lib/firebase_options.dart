@@ -60,5 +60,4 @@ class DefaultFirebaseOptions {
     authDomain: 'tra-verify.firebaseapp.com',
     storageBucket: 'tra-verify.firebasestorage.app',
   );
-
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tra_list/invoice/transactions_page.dart';
 import 'package:tra_list/routes.dart';
+import 'package:tra_list/services/pages/ProfilePage.dart';
 import 'LoginPage.dart';
 import 'invoice/InvoicePage.dart';
 
@@ -18,6 +20,11 @@ class HomePage extends StatelessWidget {
         backgroundColor: const Color(0xFF1976D2),
         elevation: 4,
         actions: [
+          IconButton(
+            tooltip: 'Profile',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => Get.to(() => const ProfilePage()),
+          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'logout') {
@@ -97,8 +104,8 @@ class HomePage extends StatelessWidget {
               // Menu Options
               Expanded(
                 child: GridView.count(
-                  crossAxisCount: MediaQuery.of(context).size.width > 600
-                      ? 2
+                  crossAxisCount: MediaQuery.of(context).size.width > 800
+                      ? 3
                       : 1,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
@@ -148,6 +155,16 @@ class HomePage extends StatelessWidget {
                       onTap: () {
                         Get.toNamed(AppRoutes.invoice); // use named route
                       },
+                    ),
+
+                    // Expense & Income Tracker
+                    _buildMenuCard(
+                      context,
+                      icon: Icons.track_changes,
+                      title: 'Expense & Income',
+                      subtitle: 'Track your business finances',
+                      color: const Color(0xFFFFA000),
+                      onTap: () => Get.toNamed(AppRoutes.transactions),
                     ),
 
                     // Settings/Info
