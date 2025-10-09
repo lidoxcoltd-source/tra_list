@@ -5,6 +5,7 @@ import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/pdf/proforma_pdf.dart';
 import 'package:tra_list/services/pdf/delivery_note_pdf.dart';
 import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
+import 'package:tra_list/services/pdf/payment_details_pdf.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -648,6 +649,11 @@ class _InvoicePageState extends State<InvoicePage> {
               title: const Text('Payment Reminder'),
               onTap: () => _saveDoc('reminder'),
             ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_outlined),
+              title: const Text('Payment Details'),
+              onTap: () => _saveDoc('payment_details'),
+            ),
           ],
         ),
       ),
@@ -682,6 +688,11 @@ class _InvoicePageState extends State<InvoicePage> {
               title: const Text('Payment Reminder'),
               onTap: () => _previewDoc('reminder'),
             ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_outlined),
+              title: const Text('Payment Details'),
+              onTap: () => _previewDoc('payment_details'),
+            ),
           ],
         ),
       ),
@@ -699,6 +710,7 @@ class _InvoicePageState extends State<InvoicePage> {
         'proforma': () => ProformaPdf.generate(data),
         'delivery': () => DeliveryNotePdf.generate(data),
         'reminder': () => PaymentReminderPdf.generate(data),
+        'payment_details': () => PaymentDetailsPdf.generate(data),
       }[kind]!).call();
     } catch (e) {
       Get.snackbar(
@@ -732,7 +744,9 @@ class _InvoicePageState extends State<InvoicePage> {
           ? 'proforma_$invNo'
           : kind == 'delivery'
           ? 'delivery_note_$invNo'
-          : 'payment_reminder_$invNo';
+          : kind == 'reminder'
+          ? 'payment_reminder_$invNo'
+          : 'payment_details_$invNo';
       final fileName = '$fileNameBase.pdf';
 
       final pathOrName = await ({
@@ -742,6 +756,8 @@ class _InvoicePageState extends State<InvoicePage> {
             DeliveryNotePdf.generateAndSave(data, fileName: fileName),
         'reminder': () =>
             PaymentReminderPdf.generateAndSave(data, fileName: fileName),
+        'payment_details': () =>
+            PaymentDetailsPdf.generateAndSave(data, fileName: fileName),
       }[kind]!).call();
 
       Get.snackbar(

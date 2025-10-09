@@ -206,269 +206,276 @@ class _InvoicesPageState extends State<InvoicesPage> {
               ),
               const Divider(height: 0),
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final doc = filtered[i];
-                    final data = doc.data();
-                    final invoice = (data['invoice'] as Map?) ?? {};
-                    final kind = (data['kind']?.toString() ?? 'invoice');
-                    final client = (data['client'] as Map?) ?? {};
-                    final created = _asDate(data['createdAt']);
-                    final total = (data['total'] as num?) ?? 0;
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    // The stream will be rebuilt, providing a refresh.
+                    setState(() {});
+                  },
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, i) {
+                      final doc = filtered[i];
+                      final data = doc.data();
+                      final invoice = (data['invoice'] as Map?) ?? {};
+                      final kind = (data['kind']?.toString() ?? 'invoice');
+                      final client = (data['client'] as Map?) ?? {};
+                      final created = _asDate(data['createdAt']);
+                      final total = (data['total'] as num?) ?? 0;
 
-                    return Dismissible(
-                      key: ValueKey(doc.id),
-                      direction: DismissDirection.horizontal,
-                      background: _swipeBg(Alignment.centerLeft),
-                      secondaryBackground: _swipeBg(Alignment.centerRight),
-                      confirmDismiss: (dir) => _confirmDismiss(context),
-                      onDismissed: (_) async {
-                        await doc.reference.delete();
-                        Get.snackbar(
-                          'Deleted',
-                          'Invoice removed',
-                          snackPosition: SnackPosition.BOTTOM,
-                        );
-                      },
-                      child: Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => _previewPdf(data, kind),
-                          onLongPress: () => _showActions(context, doc),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  // Dynamic icon based on document kind
-                                  height: 44,
-                                  width: 44,
-                                  decoration: BoxDecoration(
-                                    color: primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(10),
+                      return Dismissible(
+                        key: ValueKey(doc.id),
+                        direction: DismissDirection.horizontal,
+                        background: _swipeBg(Alignment.centerLeft),
+                        secondaryBackground: _swipeBg(Alignment.centerRight),
+                        confirmDismiss: (dir) => _confirmDismiss(context),
+                        onDismissed: (_) async {
+                          await doc.reference.delete();
+                          Get.snackbar(
+                            'Deleted',
+                            'Invoice removed',
+                            snackPosition: SnackPosition.BOTTOM,
+                          );
+                        },
+                        child: Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => _previewPdf(data, kind),
+                            onLongPress: () => _showActions(context, doc),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    // Dynamic icon based on document kind
+                                    height: 44,
+                                    width: 44,
+                                    decoration: BoxDecoration(
+                                      color: primary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      _getIconForKind(kind),
+                                      color: primary,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    _getIconForKind(kind),
-                                    color: primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              '${_getTitleForKind(kind)} #${invoice['number'] ?? doc.id}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 16,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                '${_getTitleForKind(kind)} #${invoice['number'] ?? doc.id}',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 16,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          // Updated PopupMenuButton with more options
-                                          MenuAnchor(
-                                            builder:
-                                                (context, controller, child) {
-                                                  return IconButton(
-                                                    tooltip: 'Actions',
-                                                    onPressed: () {
-                                                      if (controller.isOpen) {
-                                                        controller.close();
-                                                      } else {
-                                                        controller.open();
-                                                      }
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons.more_vert,
-                                                    ),
-                                                  );
-                                                },
-                                            menuChildren: [
-                                              MenuItemButton(
-                                                leadingIcon: const Icon(
-                                                  Icons.visibility_outlined,
-                                                ),
-                                                child: Text(
-                                                  'Preview ${_getTitleForKind(kind)}',
-                                                ),
-                                                onPressed: () =>
-                                                    _previewPdf(data, kind),
-                                              ),
-                                              MenuItemButton(
-                                                leadingIcon: const Icon(
-                                                  Icons.download_outlined,
-                                                ),
-                                                child: Text(
-                                                  'Download ${_getTitleForKind(kind)}',
-                                                ),
-                                                onPressed: () =>
-                                                    _savePdf(data, kind),
-                                              ),
-                                              const Divider(),
-                                              SubmenuButton(
-                                                leadingIcon: const Icon(
-                                                  Icons.file_copy_outlined,
-                                                ),
-                                                menuChildren: [
-                                                  MenuItemButton(
-                                                    child: const Text(
-                                                      'Invoice',
-                                                    ),
-                                                    onPressed: () => _savePdf(
-                                                      data,
-                                                      'invoice',
-                                                    ),
+                                            // Updated PopupMenuButton with more options
+                                            MenuAnchor(
+                                              builder:
+                                                  (context, controller, child) {
+                                                    return IconButton(
+                                                      tooltip: 'Actions',
+                                                      onPressed: () {
+                                                        if (controller.isOpen) {
+                                                          controller.close();
+                                                        } else {
+                                                          controller.open();
+                                                        }
+                                                      },
+                                                      icon: const Icon(
+                                                        Icons.more_vert,
+                                                      ),
+                                                    );
+                                                  },
+                                              menuChildren: [
+                                                MenuItemButton(
+                                                  leadingIcon: const Icon(
+                                                    Icons.visibility_outlined,
                                                   ),
-                                                  MenuItemButton(
-                                                    child: const Text(
-                                                      'Proforma',
-                                                    ),
-                                                    onPressed: () => _savePdf(
-                                                      data,
-                                                      'proforma',
-                                                    ),
+                                                  child: Text(
+                                                    'Preview ${_getTitleForKind(kind)}',
                                                   ),
-                                                  MenuItemButton(
-                                                    child: const Text(
-                                                      'Delivery Note',
-                                                    ),
-                                                    onPressed: () => _savePdf(
-                                                      data,
-                                                      'delivery',
-                                                    ),
-                                                  ),
-                                                  MenuItemButton(
-                                                    child: const Text(
-                                                      'Payment Reminder',
-                                                    ),
-                                                    onPressed: () => _savePdf(
-                                                      data,
-                                                      'reminder',
-                                                    ),
-                                                  ),
-                                                ],
-                                                child: const Text(
-                                                  'Generate As...',
+                                                  onPressed: () =>
+                                                      _previewPdf(data, kind),
                                                 ),
-                                              ),
-                                              const Divider(),
-                                              MenuItemButton(
-                                                leadingIcon: const Icon(
-                                                  Icons.delete_outline,
-                                                  color: Colors.red,
+                                                MenuItemButton(
+                                                  leadingIcon: const Icon(
+                                                    Icons.download_outlined,
+                                                  ),
+                                                  child: Text(
+                                                    'Download ${_getTitleForKind(kind)}',
+                                                  ),
+                                                  onPressed: () =>
+                                                      _savePdf(data, kind),
                                                 ),
-                                                child: const Text(
-                                                  'Delete',
-                                                  style: TextStyle(
+                                                const Divider(),
+                                                SubmenuButton(
+                                                  leadingIcon: const Icon(
+                                                    Icons.file_copy_outlined,
+                                                  ),
+                                                  menuChildren: [
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Invoice',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'invoice',
+                                                      ),
+                                                    ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Proforma',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'proforma',
+                                                      ),
+                                                    ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Delivery Note',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'delivery',
+                                                      ),
+                                                    ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Payment Reminder',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'reminder',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                  child: const Text(
+                                                    'Generate As...',
+                                                  ),
+                                                ),
+                                                const Divider(),
+                                                MenuItemButton(
+                                                  leadingIcon: const Icon(
+                                                    Icons.delete_outline,
                                                     color: Colors.red,
                                                   ),
-                                                ),
-                                                onPressed: () async {
-                                                  final ok =
-                                                      await _confirmDismiss(
-                                                        context,
+                                                  child: const Text(
+                                                    'Delete',
+                                                    style: TextStyle(
+                                                      color: Colors.red,
+                                                    ),
+                                                  ),
+                                                  onPressed: () async {
+                                                    final ok =
+                                                        await _confirmDismiss(
+                                                          context,
+                                                        );
+                                                    if (ok == true) {
+                                                      await doc.reference
+                                                          .delete();
+                                                      Get.snackbar(
+                                                        'Deleted',
+                                                        'Document removed',
+                                                        snackPosition:
+                                                            SnackPosition
+                                                                .BOTTOM,
                                                       );
-                                                  if (ok == true) {
-                                                    await doc.reference
-                                                        .delete();
-                                                    Get.snackbar(
-                                                      'Deleted',
-                                                      'Document removed',
-                                                      snackPosition:
-                                                          SnackPosition.BOTTOM,
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        client['name'] ?? 'Unknown client',
-                                        style: TextStyle(
-                                          color: Colors.grey.shade800,
+                                                    }
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          client['name'] ?? 'Unknown client',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.event,
+                                              size: 14,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              _fmt(created),
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Icon(
+                                              Icons.payment,
+                                              size: 14,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              (invoice['paymentMethod'] ?? '')
+                                                  .toString(),
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'Total',
+                                        style: TextStyle(fontSize: 12),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.event,
-                                            size: 14,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            _fmt(created),
-                                            style: TextStyle(
-                                              color: Colors.grey.shade600,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Icon(
-                                            Icons.payment,
-                                            size: 14,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            (invoice['paymentMethod'] ?? '')
-                                                .toString(),
-                                            style: TextStyle(
-                                              color: Colors.grey.shade600,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
+                                      Text(
+                                        _money(total),
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w800,
+                                          color: primary,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Total',
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                    Text(
-                                      _money(total),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: primary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ],

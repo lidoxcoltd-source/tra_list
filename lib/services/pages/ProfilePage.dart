@@ -156,112 +156,135 @@ class _ProfilePageState extends State<ProfilePage> {
       body: busy
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 16, 12, 80),
               children: [
-                _buildPreviewCard(w),
-                const SizedBox(height: 12),
-                _buildSection(
-                  icon: Icons.business,
-                  title: 'Company Details',
-                  children: [
-                    _buildTextField(
-                      nameC,
-                      'Company Name',
-                      Icons.label_important,
-                    ),
-                    _buildTextField(addressC, 'Address', Icons.location_on),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(phoneC, 'Phone', Icons.phone),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: () => Clipboard.setData(
-                            ClipboardData(text: phoneC.text),
-                          ),
-                          icon: const Icon(Icons.copy),
-                          label: const Text('Copy'),
-                        ),
-                      ],
-                    ),
-                    _buildTextField(emailC, 'Email', Icons.email),
-                    _buildTextField(websiteC, 'Website', Icons.language),
-                    _buildTextField(taxIdC, 'Tax ID', Icons.badge),
-                    _buildTextField(
-                      handleC,
-                      'Social Handle',
-                      Icons.alternate_email,
-                    ),
-                  ],
-                ),
-                _buildSection(
-                  icon: Icons.payment,
-                  title: 'Payment Details',
-                  children: [
-                    _buildTextField(
-                      beneficiaryC,
-                      'Beneficiary Name',
-                      Icons.person,
-                    ),
-                    _buildTextField(bankC, 'Bank Name', Icons.account_balance),
-                    _buildTextField(accountC, 'Account Number', Icons.pin),
-                    _buildTextField(swiftC, 'SWIFT/BIC Code', Icons.code),
-                    _buildTextField(
-                      paymentMethodC,
-                      'Default Payment Method',
-                      Icons.credit_card,
-                    ),
-                  ],
-                ),
-                _buildSection(
-                  icon: Icons.color_lens,
-                  title: 'Branding & Theming',
-                  children: [
-                    _buildColorRow(
-                      'Brand Color',
-                      brandColor,
-                      (c) => setState(() => brandColor = c),
-                    ),
-                    _buildColorRow(
-                      'Accent Color',
-                      accentColor,
-                      (c) => setState(() => accentColor = c),
-                    ),
-                    _buildColorRow(
-                      'Footer Color',
-                      footerColor,
-                      (c) => setState(() => footerColor = c),
-                    ),
-                    const SizedBox(height: 12),
-                    _logoCard(w),
-                    if (uploadProgress != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
+                RefreshIndicator(
+                  onRefresh: _boot,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 80),
+                    children: [
+                      _buildPreviewCard(w),
+                      const SizedBox(height: 12),
+                      _buildSection(
+                        icon: Icons.business,
+                        title: 'Company Details',
                         children: [
-                          Expanded(
-                            child: LinearProgressIndicator(
-                              value: uploadProgress! <= 1
-                                  ? uploadProgress
-                                  : null,
-                            ),
+                          _buildTextField(
+                            nameC,
+                            'Company Name',
+                            Icons.label_important,
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '${(uploadProgress! * 100).toStringAsFixed(0)}%',
+                          _buildTextField(
+                            addressC,
+                            'Address',
+                            Icons.location_on,
                           ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            tooltip: 'Cancel upload',
-                            onPressed: _currentUploadTask != null
-                                ? _cancelUpload
-                                : null,
-                            icon: const Icon(Icons.cancel),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  phoneC,
+                                  'Phone',
+                                  Icons.phone,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: () => Clipboard.setData(
+                                  ClipboardData(text: phoneC.text),
+                                ),
+                                icon: const Icon(Icons.copy),
+                                label: const Text('Copy'),
+                              ),
+                            ],
+                          ),
+                          _buildTextField(emailC, 'Email', Icons.email),
+                          _buildTextField(websiteC, 'Website', Icons.language),
+                          _buildTextField(taxIdC, 'Tax ID', Icons.badge),
+                          _buildTextField(
+                            handleC,
+                            'Social Handle',
+                            Icons.alternate_email,
                           ),
                         ],
                       ),
+                      _buildSection(
+                        icon: Icons.payment,
+                        title: 'Payment Details',
+                        children: [
+                          _buildTextField(
+                            beneficiaryC,
+                            'Beneficiary Name',
+                            Icons.person,
+                          ),
+                          _buildTextField(
+                            bankC,
+                            'Bank Name',
+                            Icons.account_balance,
+                          ),
+                          _buildTextField(
+                            accountC,
+                            'Account Number',
+                            Icons.pin,
+                          ),
+                          _buildTextField(swiftC, 'SWIFT/BIC Code', Icons.code),
+                          _buildTextField(
+                            paymentMethodC,
+                            'Default Payment Method',
+                            Icons.credit_card,
+                          ),
+                        ],
+                      ),
+                      _buildSection(
+                        icon: Icons.color_lens,
+                        title: 'Branding & Theming',
+                        children: [
+                          _buildColorRow(
+                            'Brand Color',
+                            brandColor,
+                            (c) => setState(() => brandColor = c),
+                          ),
+                          _buildColorRow(
+                            'Accent Color',
+                            accentColor,
+                            (c) => setState(() => accentColor = c),
+                          ),
+                          _buildColorRow(
+                            'Footer Color',
+                            footerColor,
+                            (c) => setState(() => footerColor = c),
+                          ),
+                          const SizedBox(height: 12),
+                          _logoCard(w),
+                          if (uploadProgress != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: LinearProgressIndicator(
+                                    value: uploadProgress! <= 1
+                                        ? uploadProgress
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '${(uploadProgress! * 100).toStringAsFixed(0)}%',
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  tooltip: 'Cancel upload',
+                                  onPressed: _currentUploadTask != null
+                                      ? _cancelUpload
+                                      : null,
+                                  icon: const Icon(Icons.cancel),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
-                  ],
+                  ),
                 ),
               ],
             ),

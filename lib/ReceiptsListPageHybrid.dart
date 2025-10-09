@@ -222,14 +222,20 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: receipts.length,
-          itemBuilder: (context, index) {
-            final doc = receipts[index];
-            final data = doc.data() as Map<String, dynamic>;
-            return _buildReceiptCard(data, isLocal: false);
+        return RefreshIndicator(
+          onRefresh: () async {
+            // Re-trigger the stream build
+            setState(() {});
           },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: receipts.length,
+            itemBuilder: (context, index) {
+              final doc = receipts[index];
+              final data = doc.data() as Map<String, dynamic>;
+              return _buildReceiptCard(data, isLocal: false);
+            },
+          ),
         );
       },
     );

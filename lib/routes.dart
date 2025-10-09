@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tra_list/HomePage.dart';
 import 'package:tra_list/AddReceiptPage.dart';
+import 'package:tra_list/invoice/categories_page.dart';
 import 'package:tra_list/ReceiptsListPageHybrid.dart';
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/FirebaseTestPage.dart';
@@ -44,6 +45,7 @@ class AppRoutes {
   static const String invoice = '/invoice';
   static const String invoicesList = '/invoices';
   static const String transactions = '/transactions';
+  static const String categories = '/categories';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
@@ -94,6 +96,12 @@ class AppRoutes {
     GetPage(
       name: transactions,
       page: () => const TransactionsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: categories,
+      page: () => const CategoriesPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
+import 'package:tra_list/services/profile_service.dart';
 import 'add_transaction_page.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
@@ -43,8 +44,13 @@ class _TransactionsPageState extends State<TransactionsPage>
   // small animation controller for number transitions
   late final AnimationController _animController;
 
+  bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Dynamic colors from profile
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFFFFA000);
 
   String _money(num v) {
     // Use the intl package for robust number formatting.
@@ -67,11 +73,27 @@ class _TransactionsPageState extends State<TransactionsPage>
     _startDate = DateTime(now.year, now.month, now.day);
     _endDate = _startDate!.add(const Duration(days: 1));
 
+    _loadProfileColors();
     _fetchFirstPage();
 
     _searchController.addListener(() {
       _setSearchQuery(_searchController.text);
     });
+  }
+
+  Future<void> _loadProfileColors() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      if (mounted && profile.containsKey('colors')) {
+        final colors = profile['colors'] as Map<String, dynamic>;
+        setState(() {
+          _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
+          _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile colors: $e');
+    }
   }
 
   @override
@@ -147,18 +169,47 @@ class _TransactionsPageState extends State<TransactionsPage>
       body: RefreshIndicator(
         onRefresh: _fetchFirstPage,
         child: CustomScrollView(
-          slivers: [_buildSliverAppBar(), _buildTransactionList()],
+          slivers: [
+            _buildSliverAppBar(),
+            _buildFilterChipsSliver(),
+            _buildTransactionList(),
+          ],
         ),
       ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Get.to(() => const AddTransactionPage());
-          _fetchFirstPage(); // Refresh list after adding
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add Transaction'),
-        backgroundColor: const Color(0xFFFFA000),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'add_income',
+            onPressed: () async {
+              await Get.to(
+                () => const AddTransactionPage(
+                  initialType: TransactionType.income,
+                ),
+              );
+              _fetchFirstPage();
+            },
+            label: const Text('Income', style: TextStyle(color: Colors.white)),
+            icon: const Icon(Icons.add, color: Colors.white),
+            backgroundColor: Colors.green.shade600,
+          ),
+          const SizedBox(width: 16),
+          FloatingActionButton.extended(
+            heroTag: 'add_expense',
+            onPressed: () async {
+              await Get.to(
+                () => const AddTransactionPage(
+                  initialType: TransactionType.expense,
+                ),
+              );
+              _fetchFirstPage();
+            },
+            label: const Text('Expense', style: TextStyle(color: Colors.white)),
+            icon: const Icon(Icons.add, color: Colors.white),
+            backgroundColor: Colors.red.shade500,
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
@@ -215,168 +266,71 @@ class _TransactionsPageState extends State<TransactionsPage>
       ),
       selected: selected,
       onSelected: (_) => _setFilter(p),
-      selectedColor: Colors.blue.shade200,
-      backgroundColor: Colors.blue.shade50,
+      selectedColor: _brandColor.withOpacity(0.3),
+      backgroundColor: _brandColor.withOpacity(0.1),
       elevation: 0,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }
 
   Widget _buildSummaryRow() {
-    // small reusable card builder
-    Widget card(
-      String title,
-      String value,
-      Color accent, {
-      bool large = false,
-    }) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x115A6CEA),
-                blurRadius: 20,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: large ? 14 : 12,
-                  color: Colors.blueGrey.shade400,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      title == 'Income'
-                          ? Icons.arrow_upward
-                          : (title == 'Expenses'
-                                ? Icons.arrow_downward_rounded
-                                : Icons.show_chart),
-                      size: 18,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      transitionBuilder: (child, anim) =>
-                          FadeTransition(opacity: anim, child: child),
-                      child: Text(
-                        value,
-                        key: ValueKey(value),
-                        style: TextStyle(
-                          fontSize: large ? 20 : 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueGrey.shade800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     final income = 'TSH ${_money(_currentIncome)}';
     final expense = 'TSH ${_money(_currentExpense)}';
     final net = 'TSH ${_money(_currentNet.abs())}';
 
-    return Row(
-      children: [
-        card('Income', income, Colors.green),
-        const SizedBox(width: 8),
-        card('Expenses', expense, Colors.red),
-        const SizedBox(width: 8),
-        // Net has custom styling
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: _currentNet >= 0
-                  ? LinearGradient(
-                      colors: [Color(0xFF66BB6A), Color(0xFF388E3C)],
-                    )
-                  : const LinearGradient(
-                      colors: [Color(0xFFFFB74D), Color(0xFFFF8A65)],
-                    ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 6,
-                  offset: Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Net',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        _currentNet >= 0
-                            ? Icons.trending_up
-                            : Icons.trending_down,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 450),
-                        transitionBuilder: (child, anim) =>
-                            FadeTransition(opacity: anim, child: child),
-                        child: Text(
-                          (_currentNet >= 0 ? '' : '-') + net,
-                          key: ValueKey(_currentNet),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use a Column layout on narrow screens
+        final bool useVerticalLayout = constraints.maxWidth < 450;
+
+        final incomeCard = _SummaryCard(
+          title: 'Income',
+          value: income,
+          accent: Colors.green,
+          isNet: false,
+        );
+
+        final expenseCard = _SummaryCard(
+          title: 'Expenses',
+          value: expense,
+          accent: Colors.red,
+          isNet: false,
+        );
+
+        final netCard = _SummaryCard(
+          title: 'Net',
+          value: (_currentNet >= 0 ? '' : '-') + net,
+          accent: _currentNet >= 0 ? Colors.green : Colors.orange,
+          isNet: true,
+          currentNet: _currentNet,
+        );
+
+        if (useVerticalLayout) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: incomeCard),
+                  const SizedBox(width: 8),
+                  Expanded(child: expenseCard),
+                ],
+              ),
+              const SizedBox(height: 8),
+              netCard,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: incomeCard),
+            const SizedBox(width: 8),
+            Expanded(child: expenseCard),
+            const SizedBox(width: 8),
+            Expanded(child: netCard),
+          ],
+        );
+      },
     );
   }
 
@@ -387,8 +341,17 @@ class _TransactionsPageState extends State<TransactionsPage>
     // Dismissible for swipe-to-delete with undo
     return Dismissible(
       key: ValueKey(t.id ?? index),
-      direction: DismissDirection.endToStart,
+      direction: DismissDirection.horizontal,
       background: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: Colors.blue.shade600,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.edit, color: Colors.white),
+      ),
+      secondaryBackground: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.centerRight,
         decoration: BoxDecoration(
@@ -397,7 +360,18 @@ class _TransactionsPageState extends State<TransactionsPage>
         ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      confirmDismiss: (_) => _confirmDeleteDialog(t),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          // Edit action
+          Get.to(
+            () => AddTransactionPage(transaction: t),
+          )?.then((_) => _fetchFirstPage());
+          return false; // Do not dismiss the item
+        } else {
+          // Delete action
+          return await _confirmDeleteDialog(t);
+        }
+      },
       onDismissed: (_) async {
         await _deleteTransaction(t);
       },
@@ -682,129 +656,156 @@ class _TransactionsPageState extends State<TransactionsPage>
   }
 
   Widget _buildSliverAppBar() {
+    // Make the expanded height adaptive to the screen size.
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isVerticalSummary = screenWidth < 450;
+
+    // Calculate height based on content.
+    // Card height is roughly 100px (16*2 padding + content).
+    // Title + padding + summary row(s).
+    final summaryHeight = isVerticalSummary
+        ? 100.0 +
+              8.0 +
+              100.0 // Two rows of cards + spacing
+        : 100.0; // Single row of cards
+    final topContentHeight =
+        14.0 + 12.0 + summaryHeight; // Title + spacing + summary
+    final totalPadding =
+        MediaQuery.of(context).padding.top +
+        kToolbarHeight +
+        8.0; // Top and bottom padding
+    final adaptiveHeight = totalPadding + topContentHeight;
+
     return SliverAppBar(
       pinned: true,
       floating: true,
       snap: true,
-      expandedHeight: 340,
+      expandedHeight: adaptiveHeight,
       elevation: 2,
-      backgroundColor: const Color(0xFF1976D2),
+      backgroundColor: _brandColor,
       foregroundColor: Colors.white,
-      title: const Text('Income & Expense'),
+      title: _isSearching
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                border: InputBorder.none,
+              ),
+            )
+          : const Text('Income & Expense'),
       actions: [
         IconButton(
-          tooltip: 'Export as PDF',
-          onPressed: _transactions.isEmpty || _isPdfBusy ? null : _exportPdf,
-          icon: _isPdfBusy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.picture_as_pdf_outlined),
-        ),
-        PopupMenuButton<String>(
-          onSelected: (v) {
-            if (v == 'refresh') _refreshNow();
-            if (v == 'clear_filters') _setFilter(FilterPeriod.all);
+          tooltip: 'Search',
+          onPressed: () {
+            setState(() {
+              _isSearching = !_isSearching;
+              if (!_isSearching) {
+                _searchController.clear();
+              }
+            });
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'refresh', child: Text('Refresh')),
-            PopupMenuItem(
-              value: 'clear_filters',
-              child: Text('Clear All Filters'),
-            ),
-          ],
+          icon: Icon(_isSearching ? Icons.close : Icons.search),
         ),
+        if (!_isSearching)
+          IconButton(
+            tooltip: 'Export as PDF',
+            onPressed: _transactions.isEmpty || _isPdfBusy ? null : _exportPdf,
+            icon: _isPdfBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+          ),
+        if (!_isSearching)
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'refresh') _refreshNow();
+              if (v == 'clear_filters') _setFilter(FilterPeriod.all);
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+              PopupMenuItem(
+                value: 'clear_filters',
+                child: Text('Clear All Filters'),
+              ),
+            ],
+          ),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+              colors: [
+                Color(0xFF1976D2),
+                Color(0xFF42A5F5),
+              ], // This could also be dynamic
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.only(top: 60, left: 16, right: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _filterTitle,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSummaryRow(),
-                ],
+              // Use MediaQuery to get status bar height + toolbar height for accurate top padding
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                left: 16,
+                right: 16,
+                bottom: 8, // Add some bottom padding
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _filterTitle,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSummaryRow(),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
 
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(150),
+  Widget _buildFilterChipsSliver() {
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _SliverFilterChipsDelegate(
+        minHeight: 70,
+        maxHeight: 115,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Column(
+          color: _brandColor, // Match app bar color
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            alignment: WrapAlignment.start,
             children: [
-              // Search Field
-              TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Search by description or category...',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.clear,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          onPressed: () => _searchController.clear(),
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.15),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Filter Chips
-              Wrap(
-                spacing: 8.0, // Horizontal space between chips
-                runSpacing: 4.0, // Vertical space between lines
-                alignment: WrapAlignment.start,
-                children: [
-                  _buildFilterChip(FilterPeriod.all, 'All Time'),
-                  _buildFilterChip(FilterPeriod.today, 'Today'),
-                  _buildFilterChip(FilterPeriod.week, 'This Week'),
-                  _buildFilterChip(FilterPeriod.month, 'This Month'),
-                  ActionChip(
-                    avatar: const Icon(Icons.calendar_today, size: 16),
-                    label: const Text('Custom Range'),
-                    onPressed: () => _setFilter(FilterPeriod.custom),
-                  ),
-                ],
+              _buildFilterChip(FilterPeriod.all, 'All Time'),
+              _buildFilterChip(FilterPeriod.today, 'Today'),
+              _buildFilterChip(FilterPeriod.week, 'This Week'),
+              _buildFilterChip(FilterPeriod.month, 'This Month'),
+              ActionChip(
+                avatar: const Icon(Icons.calendar_today, size: 16),
+                label: const Text('Custom Range'),
+                onPressed: () => _setFilter(FilterPeriod.custom),
               ),
             ],
           ),
@@ -837,6 +838,169 @@ class _TransactionsPageState extends State<TransactionsPage>
                 return _buildTransactionCard(_transactions[index], index);
               }, childCount: _transactions.length + (_hasMore ? 1 : 0)),
             ),
+    );
+  }
+}
+
+/// A delegate for creating a persistent header for the filter chips.
+class _SliverFilterChipsDelegate extends SliverPersistentHeaderDelegate {
+  _SliverFilterChipsDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.child,
+  });
+
+  final double minHeight;
+  final double maxHeight;
+  final Widget child;
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => (minHeight > maxHeight) ? minHeight : maxHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return SizedBox.expand(child: child);
+  }
+
+  @override
+  bool shouldRebuild(_SliverFilterChipsDelegate oldDelegate) {
+    return maxHeight != oldDelegate.maxHeight ||
+        minHeight != oldDelegate.minHeight ||
+        child != oldDelegate.child;
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.accent,
+    required this.isNet,
+    this.currentNet = 0,
+  });
+
+  final String title;
+  final String value;
+  final Color accent;
+  final bool isNet;
+  final double currentNet;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isNet) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: currentNet >= 0
+              ? const LinearGradient(
+                  colors: [Color(0xFF66BB6A), Color(0xFF388E3C)],
+                )
+              : const LinearGradient(
+                  colors: [Color(0xFFFFB74D), Color(0xFFFF8A65)],
+                ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 6,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: _buildCardContent(
+          title: title,
+          value: value,
+          iconBgColor: Colors.white.withOpacity(0.15),
+          iconFgColor: Colors.white,
+          valueColor: Colors.white,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x115A6CEA),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: _buildCardContent(
+        title: title,
+        value: value,
+        iconBgColor: accent.withOpacity(0.12),
+        iconFgColor: accent,
+        valueColor: Colors.blueGrey.shade800,
+      ),
+    );
+  }
+
+  Widget _buildCardContent({
+    required String title,
+    required String value,
+    required Color iconBgColor,
+    required Color iconFgColor,
+    required Color valueColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // IconButton( // This was causing the error, removed.
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            color: isNet ? Colors.white70 : Colors.blueGrey.shade400,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isNet
+                    ? (currentNet >= 0
+                          ? Icons.trending_up
+                          : Icons.trending_down)
+                    : (title == 'Income'
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward_rounded),
+                size: 18,
+                color: iconFgColor,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: valueColor,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

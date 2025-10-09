@@ -167,6 +167,16 @@ class HomePage extends StatelessWidget {
                       onTap: () => Get.toNamed(AppRoutes.transactions),
                     ),
 
+                    // Manage Categories
+                    _buildMenuCard(
+                      context,
+                      icon: Icons.category_outlined,
+                      title: 'Manage Categories',
+                      subtitle: 'Add or edit income/expense types',
+                      color: const Color(0xFF673AB7),
+                      onTap: () => Get.toNamed(AppRoutes.categories),
+                    ),
+
                     // Settings/Info
                     _buildMenuCard(
                       context,
