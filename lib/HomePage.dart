@@ -13,15 +13,18 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'TRA Receipt System',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          'home_title'.tr,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: const Color(0xFF1976D2),
         elevation: 4,
         actions: [
           IconButton(
-            tooltip: 'Profile',
+            tooltip: 'home_profile'.tr,
             icon: const Icon(Icons.person_outline),
             onPressed: () => Get.to(() => const ProfilePage()),
           ),
@@ -35,7 +38,7 @@ class HomePage extends StatelessWidget {
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'logout',
-                child: Row(
+                child: const Row(
                   children: [
                     Icon(Icons.logout, color: Colors.red),
                     SizedBox(width: 8),
@@ -115,8 +118,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.add_business,
-                      title: 'Create New Receipt',
-                      subtitle: 'Generate a new receipt with customer details',
+                      title: 'home_create_receipt'.tr,
+                      subtitle: 'home_create_receipt_sub'.tr,
                       color: const Color(0xFF4CAF50),
                       onTap: () {
                         Get.toNamed(AppRoutes.addReceipt);
@@ -127,8 +130,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.list_alt,
-                      title: 'View All Receipts',
-                      subtitle: 'Browse and manage existing receipts',
+                      title: 'home_view_receipts'.tr,
+                      subtitle: 'home_view_receipts_sub'.tr,
                       color: const Color(0xFF2196F3),
                       onTap: () {
                         Get.toNamed(AppRoutes.receiptsList);
@@ -139,8 +142,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.receipt_long,
-                      title: 'View Invoices',
-                      subtitle: 'Browse invoices you have saved',
+                      title: 'home_view_invoices'.tr,
+                      subtitle: 'home_view_invoices_sub'.tr,
                       color: const Color(0xFF3F51B5),
                       onTap: () => Get.toNamed(AppRoutes.invoicesList),
                     ),
@@ -149,8 +152,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.receipt,
-                      title: 'Generate Invoice',
-                      subtitle: 'Create and print a professional invoice',
+                      title: 'home_generate_invoice'.tr,
+                      subtitle: 'home_generate_invoice_sub'.tr,
                       color: const Color(0xFF8D6E63),
                       onTap: () {
                         Get.toNamed(AppRoutes.invoice); // use named route
@@ -161,8 +164,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.track_changes,
-                      title: 'Expense & Income',
-                      subtitle: 'Track your business finances',
+                      title: 'home_finance_tracker'.tr,
+                      subtitle: 'home_finance_tracker_sub'.tr,
                       color: const Color(0xFFFFA000),
                       onTap: () => Get.toNamed(AppRoutes.transactions),
                     ),
@@ -171,8 +174,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.category_outlined,
-                      title: 'Manage Categories',
-                      subtitle: 'Add or edit income/expense types',
+                      title: 'home_manage_categories'.tr,
+                      subtitle: 'home_manage_categories_sub'.tr,
                       color: const Color(0xFF673AB7),
                       onTap: () => Get.toNamed(AppRoutes.categories),
                     ),
@@ -181,8 +184,8 @@ class HomePage extends StatelessWidget {
                     _buildMenuCard(
                       context,
                       icon: Icons.info_outline,
-                      title: 'About',
-                      subtitle: 'System information and help',
+                      title: 'home_about'.tr,
+                      subtitle: 'home_about_sub'.tr,
                       color: const Color(0xFF9C27B0),
                       onTap: () {
                         _showAboutDialog(context);

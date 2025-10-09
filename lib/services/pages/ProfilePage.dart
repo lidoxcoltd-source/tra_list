@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:get/get.dart';
 
 /// Improved and professional re-design of the original ProfilePage.
 /// Features added:
@@ -26,6 +28,8 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final langController = Get.find<LanguageController>();
+
   final nameC = TextEditingController();
   final addressC = TextEditingController();
   final phoneC = TextEditingController();
@@ -126,7 +130,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final w = MediaQuery.of(context).size.width;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Company Profile'),
+        title: Text('profile_title'.tr),
         elevation: 0,
         flexibleSpace: Container(
           decoration: BoxDecoration(
@@ -148,145 +152,162 @@ class _ProfilePageState extends State<ProfilePage> {
               )
             : const Icon(Icons.save_alt),
         label: Text(
-          busy
+          busy || uploadProgress != null
               ? 'Saving...'
               : (uploadProgress != null ? 'Uploading...' : 'Save Changes'),
         ),
       ),
       body: busy
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              children: [
-                RefreshIndicator(
-                  onRefresh: _boot,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 80),
+          ? const Center(child: CircularProgressIndicator()) // Keep loader
+          : RefreshIndicator(
+              onRefresh: _boot,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 80),
+                children: [
+                  _buildPreviewCard(w),
+                  const SizedBox(height: 12),
+                  _buildSection(
+                    icon: Icons.language,
+                    title: 'profile_language'.tr,
                     children: [
-                      _buildPreviewCard(w),
-                      const SizedBox(height: 12),
-                      _buildSection(
-                        icon: Icons.business,
-                        title: 'Company Details',
-                        children: [
-                          _buildTextField(
-                            nameC,
-                            'Company Name',
-                            Icons.label_important,
-                          ),
-                          _buildTextField(
-                            addressC,
-                            'Address',
-                            Icons.location_on,
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  phoneC,
-                                  'Phone',
-                                  Icons.phone,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => Clipboard.setData(
-                                  ClipboardData(text: phoneC.text),
-                                ),
-                                icon: const Icon(Icons.copy),
-                                label: const Text('Copy'),
-                              ),
-                            ],
-                          ),
-                          _buildTextField(emailC, 'Email', Icons.email),
-                          _buildTextField(websiteC, 'Website', Icons.language),
-                          _buildTextField(taxIdC, 'Tax ID', Icons.badge),
-                          _buildTextField(
-                            handleC,
-                            'Social Handle',
-                            Icons.alternate_email,
-                          ),
-                        ],
-                      ),
-                      _buildSection(
-                        icon: Icons.payment,
-                        title: 'Payment Details',
-                        children: [
-                          _buildTextField(
-                            beneficiaryC,
-                            'Beneficiary Name',
-                            Icons.person,
-                          ),
-                          _buildTextField(
-                            bankC,
-                            'Bank Name',
-                            Icons.account_balance,
-                          ),
-                          _buildTextField(
-                            accountC,
-                            'Account Number',
-                            Icons.pin,
-                          ),
-                          _buildTextField(swiftC, 'SWIFT/BIC Code', Icons.code),
-                          _buildTextField(
-                            paymentMethodC,
-                            'Default Payment Method',
-                            Icons.credit_card,
-                          ),
-                        ],
-                      ),
-                      _buildSection(
-                        icon: Icons.color_lens,
-                        title: 'Branding & Theming',
-                        children: [
-                          _buildColorRow(
-                            'Brand Color',
-                            brandColor,
-                            (c) => setState(() => brandColor = c),
-                          ),
-                          _buildColorRow(
-                            'Accent Color',
-                            accentColor,
-                            (c) => setState(() => accentColor = c),
-                          ),
-                          _buildColorRow(
-                            'Footer Color',
-                            footerColor,
-                            (c) => setState(() => footerColor = c),
-                          ),
-                          const SizedBox(height: 12),
-                          _logoCard(w),
-                          if (uploadProgress != null) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: uploadProgress! <= 1
-                                        ? uploadProgress
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${(uploadProgress! * 100).toStringAsFixed(0)}%',
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  tooltip: 'Cancel upload',
-                                  onPressed: _currentUploadTask != null
-                                      ? _cancelUpload
-                                      : null,
-                                  icon: const Icon(Icons.cancel),
-                                ),
-                              ],
+                      ListTile(
+                        title: Text('profile_language'.tr),
+                        trailing: DropdownButton<String>(
+                          value: langController.locale.languageCode,
+                          onChanged: (val) {
+                            if (val == 'en') {
+                              langController.changeLanguage('en', 'US');
+                            } else if (val == 'sw') {
+                              langController.changeLanguage('sw', 'TZ');
+                            }
+                          },
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'en',
+                              child: Text('English'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'sw',
+                              child: Text('Kiswahili'),
                             ),
                           ],
-                        ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  _buildSection(
+                    icon: Icons.business,
+                    title: 'profile_company_details'.tr,
+                    children: [
+                      _buildTextField(
+                        nameC,
+                        'Company Name',
+                        Icons.label_important,
+                      ),
+                      _buildTextField(addressC, 'Address', Icons.location_on),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTextField(
+                              phoneC,
+                              'Phone',
+                              Icons.phone,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: () => Clipboard.setData(
+                              ClipboardData(text: phoneC.text),
+                            ),
+                            icon: const Icon(Icons.copy),
+                            label: const Text('Copy'),
+                          ),
+                        ],
+                      ),
+                      _buildTextField(emailC, 'Email', Icons.email),
+                      _buildTextField(websiteC, 'Website', Icons.language),
+                      _buildTextField(taxIdC, 'Tax ID', Icons.badge),
+                      _buildTextField(
+                        handleC,
+                        'Social Handle',
+                        Icons.alternate_email,
+                      ),
+                    ],
+                  ),
+                  _buildSection(
+                    icon: Icons.payment,
+                    title: 'profile_payment_details'.tr,
+                    children: [
+                      _buildTextField(
+                        beneficiaryC,
+                        'Beneficiary Name',
+                        Icons.person,
+                      ),
+                      _buildTextField(
+                        bankC,
+                        'Bank Name',
+                        Icons.account_balance,
+                      ),
+                      _buildTextField(accountC, 'Account Number', Icons.pin),
+                      _buildTextField(swiftC, 'SWIFT/BIC Code', Icons.code),
+                      _buildTextField(
+                        paymentMethodC,
+                        'Default Payment Method',
+                        Icons.credit_card,
+                      ),
+                    ],
+                  ),
+                  _buildSection(
+                    icon: Icons.color_lens,
+                    title: 'profile_branding'.tr,
+                    children: [
+                      _buildColorRow(
+                        'Brand Color',
+                        brandColor,
+                        (c) => setState(() => brandColor = c),
+                      ),
+                      _buildColorRow(
+                        'Accent Color',
+                        accentColor,
+                        (c) => setState(() => accentColor = c),
+                      ),
+                      _buildColorRow(
+                        'Footer Color',
+                        footerColor,
+                        (c) => setState(() => footerColor = c),
+                      ),
+                      const SizedBox(height: 12),
+                      _logoCard(w),
+                      if (uploadProgress != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: uploadProgress! <= 1
+                                    ? uploadProgress
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${(uploadProgress! * 100).toStringAsFixed(0)}%',
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Cancel upload',
+                              onPressed: _currentUploadTask != null
+                                  ? _cancelUpload
+                                  : null,
+                              icon: const Icon(Icons.cancel),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,10 +24,12 @@ class _TransactionsPageState extends State<TransactionsPage>
   FilterPeriod _filter = FilterPeriod.today;
   DateTime? _startDate;
   DateTime? _endDate;
-  String _filterTitle = 'Today';
+  String _filterTitle = 'transactions_today'.tr;
 
   // Pagination state
+  // This holds all transactions fetched from Firestore for the current filter.
   final List<TransactionModel> _allFetchedTransactions = [];
+  // This holds the transactions currently displayed (after search filtering).
   final List<TransactionModel> _transactions = [];
   DocumentSnapshot? _lastDoc;
   bool _loadingMore = false;
@@ -39,7 +42,9 @@ class _TransactionsPageState extends State<TransactionsPage>
   double _currentNet = 0;
 
   bool _isPdfBusy = false;
-  bool _isRefreshing = false;
+  // _isFetching combines initial load and refresh states.
+  bool _isFetching = false;
+  // Removed _isRefreshing, as _isFetching serves the same purpose.
 
   // small animation controller for number transitions
   late final AnimationController _animController;
@@ -47,6 +52,9 @@ class _TransactionsPageState extends State<TransactionsPage>
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // NEW: Grouped transactions for the list view
+  Map<DateTime, List<TransactionModel>> _groupedTransactions = {};
 
   // Dynamic colors from profile
   Color _brandColor = const Color(0xFF1976D2);
@@ -104,9 +112,9 @@ class _TransactionsPageState extends State<TransactionsPage>
   }
 
   Future<void> _fetchFirstPage() async {
-    if (_isRefreshing) return;
+    if (_isFetching) return;
     setState(() {
-      _isRefreshing = true;
+      _isFetching = true;
       _allFetchedTransactions.clear();
       _transactions.clear();
       _lastDoc = null;
@@ -122,12 +130,12 @@ class _TransactionsPageState extends State<TransactionsPage>
       _updateStateFromSnapshot(snap, isFirstPage: true);
     } catch (e) {
       Get.snackbar(
-        'Error',
+        'error'.tr,
         'Failed to fetch transactions: $e',
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
-      if (mounted) setState(() => _isRefreshing = false);
+      if (mounted) setState(() => _isFetching = false);
     }
   }
 
@@ -145,7 +153,7 @@ class _TransactionsPageState extends State<TransactionsPage>
       _updateStateFromSnapshot(snap, isFirstPage: false);
     } catch (e) {
       Get.snackbar(
-        'Error',
+        'error'.tr,
         'Failed to fetch more transactions: $e',
         snackPosition: SnackPosition.BOTTOM,
       );
@@ -156,10 +164,10 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   Future<void> _refreshNow() async {
     // small UX: briefly replay animation
-    setState(() => _isRefreshing = true);
+    setState(() => _isFetching = true);
     _animController.forward(from: 0);
     await _fetchFirstPage();
-    if (mounted) setState(() => _isRefreshing = false);
+    if (mounted) setState(() => _isFetching = false);
   }
 
   @override
@@ -167,6 +175,7 @@ class _TransactionsPageState extends State<TransactionsPage>
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       body: RefreshIndicator(
+        // Keep RefreshIndicator at the top level
         onRefresh: _fetchFirstPage,
         child: CustomScrollView(
           slivers: [
@@ -176,38 +185,41 @@ class _TransactionsPageState extends State<TransactionsPage>
           ],
         ),
       ),
-
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
+      // NEW: Replaced two FABs with a cleaner SpeedDial FAB.
+      floatingActionButton: SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: _brandColor,
+        foregroundColor: Colors.white,
+        overlayColor: Colors.black,
+        overlayOpacity: 0.4,
+        spacing: 12,
         children: [
-          FloatingActionButton.extended(
-            heroTag: 'add_income',
-            onPressed: () async {
-              await Get.to(
-                () => const AddTransactionPage(
-                  initialType: TransactionType.income,
-                ),
-              );
-              _fetchFirstPage();
-            },
-            label: const Text('Income', style: TextStyle(color: Colors.white)),
-            icon: const Icon(Icons.add, color: Colors.white),
-            backgroundColor: Colors.green.shade600,
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton.extended(
-            heroTag: 'add_expense',
-            onPressed: () async {
-              await Get.to(
+          SpeedDialChild(
+            child: const Icon(Icons.arrow_downward, color: Colors.white),
+            backgroundColor: Colors.red.shade500,
+            label: 'expense'.tr,
+            onTap: () async {
+              final result = await Get.to(
                 () => const AddTransactionPage(
                   initialType: TransactionType.expense,
                 ),
               );
-              _fetchFirstPage();
+              if (result == true) _fetchFirstPage();
             },
-            label: const Text('Expense', style: TextStyle(color: Colors.white)),
-            icon: const Icon(Icons.add, color: Colors.white),
-            backgroundColor: Colors.red.shade500,
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.arrow_upward, color: Colors.white),
+            backgroundColor: Colors.green.shade600,
+            label: 'income'.tr,
+            onTap: () async {
+              final result = await Get.to(
+                () => const AddTransactionPage(
+                  initialType: TransactionType.income,
+                ),
+              );
+              if (result == true) _fetchFirstPage();
+            },
           ),
         ],
       ),
@@ -237,6 +249,7 @@ class _TransactionsPageState extends State<TransactionsPage>
       _allFetchedTransactions.addAll(newTransactions);
       _setSearchQuery(_searchQuery); // Re-apply search on new data
       _recalculateTotals();
+      _groupTransactions(); // NEW: Group transactions after fetching/filtering
     });
   }
 
@@ -257,6 +270,32 @@ class _TransactionsPageState extends State<TransactionsPage>
     _animController.forward(from: 0);
   }
 
+  // NEW: Groups transactions by date for the list view.
+  void _groupTransactions() {
+    final grouped = <DateTime, List<TransactionModel>>{};
+    for (final t in _transactions) {
+      final dateKey = DateTime(t.date.year, t.date.month, t.date.day);
+      if (grouped[dateKey] == null) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey]!.add(t);
+    }
+    // Sort the groups by date descending
+    final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    _groupedTransactions = {for (var key in sortedKeys) key: grouped[key]!};
+  }
+
+  // NEW: Helper to format date group headers.
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    if (date == today) return 'Today';
+    if (date == yesterday) return 'Yesterday';
+    return DateFormat.yMMMMd().format(date); // e.g., "October 29, 2023"
+  }
+
   Widget _buildFilterChip(FilterPeriod p, String label) {
     final selected = _filter == p;
     return ChoiceChip(
@@ -266,7 +305,7 @@ class _TransactionsPageState extends State<TransactionsPage>
       ),
       selected: selected,
       onSelected: (_) => _setFilter(p),
-      selectedColor: _brandColor.withOpacity(0.3),
+      selectedColor: _accentColor.withOpacity(0.3),
       backgroundColor: _brandColor.withOpacity(0.1),
       elevation: 0,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -284,21 +323,21 @@ class _TransactionsPageState extends State<TransactionsPage>
         final bool useVerticalLayout = constraints.maxWidth < 450;
 
         final incomeCard = _SummaryCard(
-          title: 'Income',
+          title: 'income'.tr,
           value: income,
           accent: Colors.green,
           isNet: false,
         );
 
         final expenseCard = _SummaryCard(
-          title: 'Expenses',
+          title: 'expenses'.tr,
           value: expense,
           accent: Colors.red,
           isNet: false,
         );
 
         final netCard = _SummaryCard(
-          title: 'Net',
+          title: 'net'.tr,
           value: (_currentNet >= 0 ? '' : '-') + net,
           accent: _currentNet >= 0 ? Colors.green : Colors.orange,
           isNet: true,
@@ -340,10 +379,11 @@ class _TransactionsPageState extends State<TransactionsPage>
 
     // Dismissible for swipe-to-delete with undo
     return Dismissible(
+      // Keep Dismissible for swipe actions
       key: ValueKey(t.id ?? index),
       direction: DismissDirection.horizontal,
       background: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
           color: Colors.blue.shade600,
@@ -352,7 +392,7 @@ class _TransactionsPageState extends State<TransactionsPage>
         child: const Icon(Icons.edit, color: Colors.white),
       ),
       secondaryBackground: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         alignment: Alignment.centerRight,
         decoration: BoxDecoration(
           color: Colors.red.shade600,
@@ -363,9 +403,10 @@ class _TransactionsPageState extends State<TransactionsPage>
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           // Edit action
-          Get.to(
-            () => AddTransactionPage(transaction: t),
-          )?.then((_) => _fetchFirstPage());
+          Get.to(() => AddTransactionPage(transaction: t))?.then((result) {
+            // Only refresh if the transaction was actually saved.
+            if (result == true) _fetchFirstPage();
+          });
           return false; // Do not dismiss the item
         } else {
           // Delete action
@@ -376,11 +417,12 @@ class _TransactionsPageState extends State<TransactionsPage>
         await _deleteTransaction(t);
       },
       child: Card(
+        // REDESIGN: Cleaner card with no border
         elevation: 0,
         margin: const EdgeInsets.symmetric(vertical: 6),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade200),
+          side: BorderSide(color: Colors.grey.shade200, width: 0.5),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -389,7 +431,7 @@ class _TransactionsPageState extends State<TransactionsPage>
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                // small avatar with icon
+                // REDESIGN: Avatar with icon
                 Container(
                   height: 48,
                   width: 48,
@@ -416,26 +458,12 @@ class _TransactionsPageState extends State<TransactionsPage>
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text(
-                            t.category,
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text('•', style: TextStyle(color: Colors.grey)),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${t.date.day}/${t.date.month}/${t.date.year}',
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        t.category,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -447,6 +475,7 @@ class _TransactionsPageState extends State<TransactionsPage>
                     Text(
                       '${isExpense ? '-' : '+'}TSH ${_money(t.amount)}',
                       style: TextStyle(
+                        // Bolder amount
                         color: accent,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
@@ -466,18 +495,16 @@ class _TransactionsPageState extends State<TransactionsPage>
     // Ask the user to confirm and then delete
     final confirm = await Get.dialog<bool>(
       AlertDialog(
-        title: const Text('Delete transaction?'),
-        content: const Text(
-          'This action is permanent. Are you sure you want to delete this transaction?',
-        ),
+        title: Text('transactions_delete_title'.tr),
+        content: Text('transactions_delete_confirm'.tr),
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           TextButton(
             onPressed: () => Get.back(result: true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text('delete'.tr, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -492,18 +519,19 @@ class _TransactionsPageState extends State<TransactionsPage>
       if (t.id == null) return;
       await TransactionService.deleteTransaction(t.id!);
       setState(() {
+        // Also remove from the main fetched list to prevent re-appearance
         _allFetchedTransactions.removeWhere((item) => item.id == t.id);
         _transactions.removeWhere((item) => item.id == t.id);
         _recalculateTotals();
       });
       Get.snackbar(
-        'Success',
-        'Transaction deleted',
+        'success'.tr,
+        'transactions_deleted_success'.tr,
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (e) {
       Get.snackbar(
-        'Error',
+        'error'.tr,
         'Failed to delete transaction: $e',
         snackPosition: SnackPosition.BOTTOM,
       );
@@ -514,24 +542,24 @@ class _TransactionsPageState extends State<TransactionsPage>
     final now = DateTime.now();
     DateTime? start;
     DateTime? end;
-    String title = 'All Time';
+    String title = 'transactions_all_time'.tr;
 
     switch (value) {
       case FilterPeriod.today:
         start = DateTime(now.year, now.month, now.day);
         end = start.add(const Duration(days: 1));
-        title = 'Today';
+        title = 'transactions_today'.tr;
         break;
       case FilterPeriod.week:
         start = now.subtract(Duration(days: now.weekday - 1));
         start = DateTime(start.year, start.month, start.day);
         end = start.add(const Duration(days: 7));
-        title = 'This Week';
+        title = 'transactions_this_week'.tr;
         break;
       case FilterPeriod.month:
         start = DateTime(now.year, now.month, 1);
         end = DateTime(now.year, now.month + 1, 1);
-        title = 'This Month';
+        title = 'transactions_this_month'.tr;
         break;
       case FilterPeriod.custom:
         final range = await showDateRangePicker(
@@ -578,7 +606,11 @@ class _TransactionsPageState extends State<TransactionsPage>
         duration: const Duration(seconds: 6),
       );
     } catch (e) {
-      Get.snackbar('Export failed', '$e', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'transactions_export_pdf'.tr,
+        '$e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } finally {
       if (mounted) setState(() => _isPdfBusy = false);
     }
@@ -586,9 +618,11 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   Widget _buildLoader() {
     if (!_hasMore) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Center(child: Text('End of list')),
+      return Padding(
+        padding: EdgeInsets.all(
+          16.0,
+        ), // This is a const constructor, so it's fine.
+        child: Center(child: Text('transactions_end_of_list'.tr)),
       );
     }
     return Center(
@@ -598,7 +632,7 @@ class _TransactionsPageState extends State<TransactionsPage>
             ? const CircularProgressIndicator()
             : ElevatedButton(
                 onPressed: _fetchNextPage,
-                child: const Text('Load More'),
+                child: Text('transactions_load_more'.tr),
               ),
       ),
     );
@@ -611,17 +645,19 @@ class _TransactionsPageState extends State<TransactionsPage>
           children: [
             ListTile(
               leading: const Icon(Icons.edit),
-              title: const Text('Edit Transaction'),
+              title: Text('edit_transaction_title'.tr),
               onTap: () {
                 Get.back();
-                Get.to(
-                  () => AddTransactionPage(transaction: t),
-                )?.then((_) => _fetchFirstPage());
+                Get.to(() => AddTransactionPage(transaction: t))?.then((
+                  result,
+                ) {
+                  if (result == true) _fetchFirstPage();
+                });
               },
             ),
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Delete Transaction'),
+              title: Text('transactions_delete_title'.tr),
               onTap: () async {
                 Get.back(); // Close bottom sheet
                 final confirm = await _confirmDeleteDialog(t);
@@ -644,6 +680,7 @@ class _TransactionsPageState extends State<TransactionsPage>
         _transactions.clear();
         _transactions.addAll(_allFetchedTransactions);
       } else {
+        // Apply search filter
         _transactions.clear();
         _transactions.addAll(
           _allFetchedTransactions.where((t) {
@@ -652,6 +689,7 @@ class _TransactionsPageState extends State<TransactionsPage>
           }),
         );
       }
+      _groupTransactions(); // Re-group after filtering
     });
   }
 
@@ -681,24 +719,28 @@ class _TransactionsPageState extends State<TransactionsPage>
       floating: true,
       snap: true,
       expandedHeight: adaptiveHeight,
-      elevation: 2,
+      elevation: 1,
       backgroundColor: _brandColor,
       foregroundColor: Colors.white,
       title: _isSearching
-          ? TextField(
-              controller: _searchController,
-              autofocus: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                border: InputBorder.none,
+          // NEW: Animated search bar transition
+          ? Hero(
+              tag: 'search_field',
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: '${'search'.tr}...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                  border: InputBorder.none,
+                ),
               ),
             )
-          : const Text('Income & Expense'),
+          : Text('transactions_title'.tr),
       actions: [
         IconButton(
-          tooltip: 'Search',
+          tooltip: 'search'.tr,
           onPressed: () {
             setState(() {
               _isSearching = !_isSearching;
@@ -707,11 +749,14 @@ class _TransactionsPageState extends State<TransactionsPage>
               }
             });
           },
-          icon: Icon(_isSearching ? Icons.close : Icons.search),
+          icon: Hero(
+            tag: 'search_icon',
+            child: Icon(_isSearching ? Icons.close : Icons.search),
+          ),
         ),
         if (!_isSearching)
           IconButton(
-            tooltip: 'Export as PDF',
+            tooltip: 'transactions_export_pdf'.tr,
             onPressed: _transactions.isEmpty || _isPdfBusy ? null : _exportPdf,
             icon: _isPdfBusy
                 ? const SizedBox(
@@ -730,23 +775,20 @@ class _TransactionsPageState extends State<TransactionsPage>
               if (v == 'refresh') _refreshNow();
               if (v == 'clear_filters') _setFilter(FilterPeriod.all);
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'refresh', child: Text('refresh'.tr)),
               PopupMenuItem(
                 value: 'clear_filters',
-                child: Text('Clear All Filters'),
+                child: Text('transactions_clear_filters'.tr),
               ),
             ],
           ),
       ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Color(0xFF1976D2),
-                Color(0xFF42A5F5),
-              ], // This could also be dynamic
+              colors: [_brandColor, _accentColor.withOpacity(0.8)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -788,23 +830,26 @@ class _TransactionsPageState extends State<TransactionsPage>
       pinned: true,
       delegate: _SliverFilterChipsDelegate(
         minHeight: 70,
-        maxHeight: 115,
+        maxHeight: 100, // Adjusted for a single row of chips
         child: Container(
           color: _brandColor, // Match app bar color
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           alignment: Alignment.centerLeft,
           child: Wrap(
             spacing: 8.0,
             runSpacing: 4.0,
             alignment: WrapAlignment.start,
             children: [
-              _buildFilterChip(FilterPeriod.all, 'All Time'),
-              _buildFilterChip(FilterPeriod.today, 'Today'),
-              _buildFilterChip(FilterPeriod.week, 'This Week'),
-              _buildFilterChip(FilterPeriod.month, 'This Month'),
+              _buildFilterChip(FilterPeriod.all, 'transactions_all_time'.tr),
+              _buildFilterChip(FilterPeriod.today, 'transactions_today'.tr),
+              _buildFilterChip(FilterPeriod.week, 'transactions_this_week'.tr),
+              _buildFilterChip(
+                FilterPeriod.month,
+                'transactions_this_month'.tr,
+              ),
               ActionChip(
                 avatar: const Icon(Icons.calendar_today, size: 16),
-                label: const Text('Custom Range'),
+                label: Text('transactions_custom_range'.tr),
                 onPressed: () => _setFilter(FilterPeriod.custom),
               ),
             ],
@@ -816,28 +861,180 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   Widget _buildTransactionList() {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-      sliver: _isRefreshing && _transactions.isEmpty
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        120,
+      ), // More bottom padding for FAB
+      sliver: _isFetching && _transactions.isEmpty
           ? const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator()),
             )
           : _transactions.isEmpty
           ? SliverFillRemaining(
+              hasScrollBody: false,
               child: Center(
-                child: Text(
-                  _searchQuery.isNotEmpty
-                      ? 'No results for "$_searchQuery"'
-                      : 'No transactions found for this period.',
-                  style: TextStyle(color: Colors.grey.shade600),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 60,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _searchQuery.isNotEmpty
+                          ? '${'transactions_no_transactions'.tr} for "$_searchQuery"'
+                          : 'transactions_no_transactions'.tr,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             )
-          : SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                if (index == _transactions.length) return _buildLoader();
-                return _buildTransactionCard(_transactions[index], index);
-              }, childCount: _transactions.length + (_hasMore ? 1 : 0)),
+          // NEW: Use SliverMainAxisGroup to group items by date
+          : SliverMainAxisGroup(
+              slivers: _groupedTransactions.entries.map((entry) {
+                final date = entry.key;
+                final transactionsInGroup = entry.value;
+                return _TransactionGroup(
+                  date: date,
+                  transactions: transactionsInGroup,
+                  header: _formatDateHeader(date),
+                  children: transactionsInGroup
+                      .map(
+                        (t) =>
+                            _buildTransactionCard(t, _transactions.indexOf(t)),
+                      )
+                      .toList(),
+                );
+              }).toList(),
             ),
+    );
+  }
+}
+
+// NEW: A custom Sliver widget to group a header and a list of children.
+class _TransactionGroup extends StatelessWidget {
+  final DateTime date;
+  final String header;
+  final List<TransactionModel> transactions;
+  final List<Widget> children;
+  const _TransactionGroup({
+    required this.date,
+    required this.header,
+    required this.transactions,
+    required this.children,
+  });
+
+  void _showDateSummary(BuildContext context) {
+    final income = transactions
+        .where((t) => t.type == TransactionType.income)
+        .fold<double>(0, (sum, t) => sum + t.amount);
+    final expense = transactions
+        .where((t) => t.type == TransactionType.expense)
+        .fold<double>(0, (sum, t) => sum + t.amount);
+    final net = income - expense;
+
+    String money(num v) => NumberFormat.currency(
+      locale: 'en_US',
+      symbol: 'TSH ',
+      decimalDigits: 2,
+    ).format(v);
+
+    Get.dialog(
+      AlertDialog(
+        title: Text('Summary for $header'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _summaryRow('income'.tr, money(income), Colors.green),
+            _summaryRow('expenses'.tr, money(expense), Colors.red),
+            const Divider(height: 24),
+            _summaryRow(
+              'net'.tr,
+              money(net),
+              net >= 0 ? Colors.blue : Colors.orange,
+              isBold: true,
+            ),
+          ],
+        ),
+        actions: [TextButton(onPressed: Get.back, child: Text('close'.tr))],
+      ),
+    );
+  }
+
+  Widget _summaryRow(
+    String label,
+    String value,
+    Color color, {
+    bool isBold = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontWeight: isBold ? FontWeight.bold : null),
+          ),
+          Text(
+            value,
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverPersistentHeader(
+          pinned: false,
+          delegate: _SliverHeaderDelegate(
+            child: InkWell(
+              onTap: () => _showDateSummary(context),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20, bottom: 8),
+                child: Row(
+                  children: [
+                    Text(
+                      header,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.grey.shade500,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => children[index],
+            childCount: children.length,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -877,6 +1074,33 @@ class _SliverFilterChipsDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+// NEW: A simple delegate for the date group headers.
+class _SliverHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  _SliverHeaderDelegate({required this.child});
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  double get maxExtent => 50;
+
+  @override
+  double get minExtent => 50;
+
+  @override
+  bool shouldRebuild(covariant _SliverHeaderDelegate oldDelegate) {
+    return child != oldDelegate.child;
+  }
+}
+
+/// REDESIGN: The summary cards at the top of the page.
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.title,
@@ -895,6 +1119,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isNet) {
+      // Special styling for the "Net" card
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -925,6 +1150,7 @@ class _SummaryCard extends StatelessWidget {
     }
 
     return Container(
+      // Standard styling for Income/Expense cards
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -957,7 +1183,6 @@ class _SummaryCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // IconButton( // This was causing the error, removed.
         Text(
           title,
           style: TextStyle(
@@ -979,23 +1204,26 @@ class _SummaryCard extends StatelessWidget {
                     ? (currentNet >= 0
                           ? Icons.trending_up
                           : Icons.trending_down)
-                    : (title == 'Income'
-                          ? Icons.arrow_upward
-                          : Icons.arrow_downward_rounded),
+                    : (title == 'income'.tr
+                          ? Icons.account_balance_wallet_outlined
+                          : Icons.payment_outlined),
                 size: 18,
                 color: iconFgColor,
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: valueColor,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: valueColor,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

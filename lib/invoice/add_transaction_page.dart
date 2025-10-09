@@ -160,7 +160,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         await TransactionService.updateTransaction(model.id!, model);
       }
 
-      Get.back();
+      Get.back(result: true); // Return true on success
       Get.snackbar(
         'Success',
         'Transaction saved successfully',

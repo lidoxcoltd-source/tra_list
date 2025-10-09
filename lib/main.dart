@@ -3,19 +3,26 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:tra_list/routes.dart';
+import 'package:tra_list/invoice/app_translations.dart';
+import 'package:tra_list/invoice/language_controller.dart';
 
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await GetStorage.init(); // Initialize GetStorage for language persistence
   debugPrint('Storage bucket (runtime) = ${FirebaseStorage.instance.bucket}');
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
+
+  // Initialize and register the LanguageController
+  final langController = Get.put(LanguageController());
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +32,12 @@ class MyApp extends StatelessWidget {
 
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'TRA Receipt Verification',
+      title: 'TRA Receipt System',
+      // Localization settings
+      translations: AppTranslations(),
+      locale: langController.locale, // Set initial locale from storage
+      fallbackLocale: const Locale('en', 'US'), // Fallback language
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
