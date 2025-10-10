@@ -12,7 +12,7 @@ class TransactionService {
     return u.uid;
   }
 
-  static CollectionReference<TransactionModel> _collectionRef() {
+  static CollectionReference<TransactionModel> getCollectionRef() {
     final uid = _uidOrThrow();
     return _db
         .collection('users')
@@ -25,18 +25,18 @@ class TransactionService {
   }
 
   static Future<void> saveTransaction(TransactionModel transaction) async {
-    await _collectionRef().add(transaction);
+    await getCollectionRef().add(transaction);
   }
 
   static Future<void> updateTransaction(
     String id,
     TransactionModel transaction,
   ) async {
-    await _collectionRef().doc(id).set(transaction);
+    await getCollectionRef().doc(id).set(transaction);
   }
 
   static Future<void> deleteTransaction(String id) async {
-    await _collectionRef().doc(id).delete();
+    await getCollectionRef().doc(id).delete();
   }
 
   static Future<QuerySnapshot<TransactionModel>> getTransactions({
@@ -45,7 +45,7 @@ class TransactionService {
     DateTime? startDate,
     DateTime? endDate,
   }) {
-    Query<TransactionModel> query = _collectionRef().orderBy(
+    Query<TransactionModel> query = getCollectionRef().orderBy(
       'date',
       descending: true,
     );

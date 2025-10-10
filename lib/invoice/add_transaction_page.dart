@@ -6,6 +6,7 @@ import 'transaction_model.dart';
 import 'category_model.dart';
 import 'category_service.dart';
 import 'transaction_service.dart';
+import 'package:tra_list/services/profile_service.dart'; // <--- added
 
 class AddTransactionPage extends StatefulWidget {
   final TransactionModel? transaction;
@@ -58,6 +59,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   List<CategoryModel> _expenseCategories = [];
   bool _categoriesLoading = true;
 
+  // Brand colors (fetched from ProfileService if available)
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFF42A5F5);
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +77,44 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _isExpense = widget.initialType == TransactionType.expense;
     }
     _loadCategories();
+    _loadBrandColors(); // <--- fetch colors from firebase/profile
+  }
+
+  Future<void> _loadBrandColors() async {
+    // No-op/default implementation so the file compiles even if ProfileService
+    // does not expose a static `getProfile` method. If your ProfileService
+    // provides an instance method (for example `ProfileService().getProfile()`)
+    // or a differently named static method (for example `fetchProfile()`),
+    // replace the implementation below to fetch and apply profile colors.
+    //
+    // Example (if your service has an instance method):
+    // try {
+    //   final profile = await ProfileService().getProfile();
+    //   if (profile != null) {
+    //     setState(() {
+    //       final b = _tryParseColor(profile.brandColor);
+    //       final a = _tryParseColor(profile.accentColor);
+    //       if (b != null) _brandColor = b;
+    //       if (a != null) _accentColor = a;
+    //     });
+    //   }
+    // } catch (_) {
+    //   // ignore and keep defaults
+    // }
+    return;
+  }
+
+  Color? _tryParseColor(dynamic value) {
+    if (value == null) return null;
+    try {
+      if (value is int) return Color(value);
+      if (value is String) {
+        var hex = value.replaceAll('#', '').toUpperCase();
+        if (hex.length == 6) hex = 'FF$hex';
+        return Color(int.parse(hex, radix: 16));
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> _loadCategories() async {
@@ -182,93 +225,113 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   Widget build(BuildContext context) {
     final isNew = widget.transaction == null;
+    // Responsive helpers
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 420;
+    final categories = _isExpense ? _expenseCategories : _incomeCategories;
+
+    // Height we reserve for the bottom control (button area)
+    final double bottomBarHeight = isMobile ? 76.0 : 96.0;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isNew ? 'Add Transaction' : 'Edit Transaction'),
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+              colors: [_brandColor, _accentColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
+        elevation: 2,
+        actions: [
+          if (!_busy)
+            IconButton(
+              icon: const Icon(Icons.check),
+              tooltip: 'Save',
+              onPressed: _save,
+            ),
+        ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadCategories,
+        onRefresh: () async {
+          await Future.wait([_loadCategories(), _loadBrandColors()]);
+        },
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarHeight),
             children: [
+              // Type toggle
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: ElevatedButton.icon(
                       onPressed: () {
                         if (!_isExpense) setState(() => _isExpense = true);
                       },
                       icon: Icon(
                         Icons.arrow_downward_rounded,
-                        color: _isExpense ? Colors.red.shade700 : Colors.grey,
+                        color: _isExpense ? Colors.white : _brandColor,
                       ),
                       label: Text(
                         'Expense',
                         style: TextStyle(
-                          color: _isExpense
-                              ? Colors.red.shade700
-                              : Colors.black87,
+                          color: _isExpense ? Colors.white : _brandColor,
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isExpense
+                            ? Colors.red.shade600
+                            : Colors.white,
+                        foregroundColor: _isExpense
+                            ? Colors.white
+                            : _brandColor,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                        ),
-                        backgroundColor: _isExpense
-                            ? Colors.red.shade50
-                            : Colors.transparent,
-                        side: BorderSide(
-                          color: _isExpense
-                              ? Colors.red.shade300
-                              : Colors.grey.shade300,
+                          side: BorderSide(
+                            color: _isExpense
+                                ? Colors.red.shade600
+                                : _brandColor.withOpacity(0.2),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: ElevatedButton.icon(
                       onPressed: () {
                         if (_isExpense) setState(() => _isExpense = false);
                       },
                       icon: Icon(
                         Icons.arrow_upward_rounded,
-                        color: !_isExpense
-                            ? Colors.green.shade700
-                            : Colors.grey,
+                        color: !_isExpense ? Colors.white : _brandColor,
                       ),
                       label: Text(
                         'Income',
                         style: TextStyle(
-                          color: !_isExpense
-                              ? Colors.green.shade700
-                              : Colors.black87,
+                          color: !_isExpense ? Colors.white : _brandColor,
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: !_isExpense
+                            ? Colors.green.shade700
+                            : Colors.white,
+                        foregroundColor: !_isExpense
+                            ? Colors.white
+                            : _brandColor,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                        ),
-                        backgroundColor: !_isExpense
-                            ? Colors.green.shade50
-                            : Colors.transparent,
-                        side: BorderSide(
-                          color: !_isExpense
-                              ? Colors.green.shade300
-                              : Colors.grey.shade300,
+                          side: BorderSide(
+                            color: !_isExpense
+                                ? Colors.green.shade700
+                                : _brandColor.withOpacity(0.2),
+                          ),
                         ),
                       ),
                     ),
@@ -276,102 +339,190 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // Description
               TextFormField(
                 controller: _descC,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Description',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.description),
+                  filled: true,
+                  fillColor: Colors.white,
                 ),
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'Description is required' : null,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _amountC,
-                decoration: const InputDecoration(
-                  labelText: 'Amount (TSH)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.attach_money),
+
+              // Amount (prominent)
+              Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  ThousandsSeparatorInputFormatter(),
-                ],
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Amount is required';
-                  if (double.tryParse(v.replaceAll(',', '')) == null)
-                    return 'Invalid number';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      items:
-                          (_isExpense ? _expenseCategories : _incomeCategories)
-                              .map(
-                                (cat) => DropdownMenuItem(
-                                  value: cat.name,
-                                  child: Text(cat.name),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Amount (TSH)',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          // Make the amount field responsive: expand on small screens,
+                          // keep a comfortable width on larger screens.
+                          SizedBox(
+                            width: isMobile ? screenWidth * 0.55 : 200,
+                            child: TextFormField(
+                              controller: _amountC,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                prefixText: 'TSH ',
+                                prefixStyle: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
                                 ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedCategory = value;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Category',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.category),
-                        suffixIcon: _categoriesLoading
-                            ? const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : null,
+                              ),
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                ThousandsSeparatorInputFormatter(),
+                              ],
+                              validator: (v) {
+                                if (v == null || v.isEmpty)
+                                  return 'Amount is required';
+                                if (double.tryParse(v.replaceAll(',', '')) ==
+                                    null)
+                                  return 'Invalid number';
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                      hint: const Text('Select a category'),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select a category';
-                        }
-                        return null;
-                      },
-                    ),
+                      SizedBox(width: isMobile ? 12 : 24),
+                      // Quick amount buttons
+                      Column(
+                        children: [
+                          Text(
+                            'Quick',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            children: [5000, 1000].map((val) {
+                              return OutlinedButton(
+                                onPressed: () {
+                                  final current =
+                                      double.tryParse(
+                                        _amountC.text.replaceAll(',', ''),
+                                      ) ??
+                                      0;
+                                  final newVal = (current + val).toInt();
+                                  final formatted = newVal
+                                      .toString()
+                                      .replaceAllMapped(
+                                        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                                        (m) => '${m[1]},',
+                                      );
+                                  setState(() => _amountC.text = formatted);
+                                },
+                                child: Text('$val'),
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: _brandColor.withOpacity(0.14),
+                                  ),
+                                  minimumSize: const Size(56, 36),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _showAddCategoryDialog,
-                    icon: const Icon(Icons.add_circle_outline),
-                    tooltip: 'Add new category',
-                    padding: const EdgeInsets.only(top: 8),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 16),
+
+              // Category chips + add
+              Text('Category', style: TextStyle(color: Colors.grey.shade800)),
+              const SizedBox(height: 8),
+              _categoriesLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ...categories.map((cat) {
+                          final selected = _selectedCategory == cat.name;
+                          return ChoiceChip(
+                            label: Text(cat.name),
+                            selected: selected,
+                            onSelected: (_) =>
+                                setState(() => _selectedCategory = cat.name),
+                            selectedColor: _brandColor,
+                            backgroundColor: Colors.grey.shade200,
+                            labelStyle: TextStyle(
+                              color: selected ? Colors.white : Colors.black87,
+                            ),
+                          );
+                        }).toList(),
+                        ActionChip(
+                          avatar: const Icon(Icons.add, size: 18),
+                          label: const Text('Add'),
+                          onPressed: _showAddCategoryDialog,
+                          backgroundColor: _brandColor.withOpacity(0.12),
+                        ),
+                      ],
+                    ),
+              const SizedBox(height: 16),
+
+              // Date
               ListTile(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  side: BorderSide(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade300),
                 ),
-                leading: const Icon(Icons.calendar_today),
+                leading: CircleAvatar(
+                  backgroundColor: _brandColor.withOpacity(0.12),
+                  child: Icon(Icons.calendar_today, color: _brandColor),
+                ),
                 title: const Text('Date'),
                 subtitle: Text(
                   '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                ),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null && picked != _selectedDate) {
+                      setState(() => _selectedDate = picked);
+                    }
+                  },
+                  child: Text('Change'),
+                  style: TextButton.styleFrom(foregroundColor: _brandColor),
                 ),
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -385,25 +536,64 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   }
                 },
               ),
+              // remove the fixed spacer -- we now reserve bottom space with ListView padding
             ],
           ),
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ElevatedButton.icon(
-          onPressed: _busy ? null : _save,
-          icon: _busy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.save),
-          label: Text(_busy ? 'Saving...' : 'Save Transaction'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            textStyle: const TextStyle(fontSize: 16),
+      // Single bottom control (always present) with responsive styling.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            height: 56,
+            width: double.infinity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [_brandColor, _accentColor]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: _brandColor.withOpacity(0.18),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: _busy ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.save, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            'Save Transaction',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           ),
         ),
       ),

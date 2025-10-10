@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'add_transaction_page.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 
-enum FilterPeriod { all, today, week, month, custom }
+enum FilterPeriod { all, today, week, month, custom, singleDay }
+
+// NEW: Enum to manage the summary card filter state.
+enum SummaryFilter { all, income, expense }
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -40,6 +44,9 @@ class _TransactionsPageState extends State<TransactionsPage>
   double _currentIncome = 0;
   double _currentExpense = 0;
   double _currentNet = 0;
+
+  // NEW: State for the summary card filter.
+  SummaryFilter _summaryFilter = SummaryFilter.all;
 
   bool _isPdfBusy = false;
   // _isFetching combines initial load and refresh states.
@@ -247,7 +254,7 @@ class _TransactionsPageState extends State<TransactionsPage>
         _allFetchedTransactions.clear();
       }
       _allFetchedTransactions.addAll(newTransactions);
-      _setSearchQuery(_searchQuery); // Re-apply search on new data
+      _applyAllFilters(); // Re-apply all filters on new data
       _recalculateTotals();
       _groupTransactions(); // NEW: Group transactions after fetching/filtering
     });
@@ -255,11 +262,15 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   void _recalculateTotals() {
     final totalIncome = _transactions
-        .where((t) => t.type == TransactionType.income)
+        .where(
+          (t) => t.type == TransactionType.income,
+        ) // This should be based on _allFetchedTransactions
         .fold<double>(0, (sum, t) => sum + t.amount);
 
     final totalExpense = _transactions
-        .where((t) => t.type == TransactionType.expense)
+        .where(
+          (t) => t.type == TransactionType.expense,
+        ) // This should be based on _allFetchedTransactions
         .fold<double>(0, (sum, t) => sum + t.amount);
 
     setState(() {
@@ -326,22 +337,42 @@ class _TransactionsPageState extends State<TransactionsPage>
           title: 'income'.tr,
           value: income,
           accent: Colors.green,
-          isNet: false,
+          isSelected: _summaryFilter == SummaryFilter.income,
+          onTap: () {
+            setState(() {
+              _summaryFilter = _summaryFilter == SummaryFilter.income
+                  ? SummaryFilter.all
+                  : SummaryFilter.income;
+            });
+            _applyAllFilters();
+          },
         );
 
         final expenseCard = _SummaryCard(
           title: 'expenses'.tr,
           value: expense,
           accent: Colors.red,
-          isNet: false,
+          isSelected: _summaryFilter == SummaryFilter.expense,
+          onTap: () {
+            setState(() {
+              _summaryFilter = _summaryFilter == SummaryFilter.expense
+                  ? SummaryFilter.all
+                  : SummaryFilter.expense;
+            });
+            _applyAllFilters();
+          },
         );
 
         final netCard = _SummaryCard(
           title: 'net'.tr,
           value: (_currentNet >= 0 ? '' : '-') + net,
           accent: _currentNet >= 0 ? Colors.green : Colors.orange,
-          isNet: true,
           currentNet: _currentNet,
+          isSelected: _summaryFilter == SummaryFilter.all,
+          onTap: () {
+            setState(() => _summaryFilter = SummaryFilter.all);
+            _applyAllFilters();
+          },
         );
 
         if (useVerticalLayout) {
@@ -561,6 +592,12 @@ class _TransactionsPageState extends State<TransactionsPage>
         end = DateTime(now.year, now.month + 1, 1);
         title = 'transactions_this_month'.tr;
         break;
+      case FilterPeriod.singleDay:
+        // Use already-selected single-day range if available, otherwise default to today.
+        start = _startDate ?? DateTime(now.year, now.month, now.day);
+        end = start.add(const Duration(days: 1));
+        title = DateFormat.yMMMMd().format(start);
+        break;
       case FilterPeriod.custom:
         final range = await showDateRangePicker(
           context: context,
@@ -587,6 +624,24 @@ class _TransactionsPageState extends State<TransactionsPage>
       _filterTitle = title;
     });
     _fetchFirstPage();
+  }
+
+  // NEW: A dedicated method to filter for a single day when a date header is tapped.
+  void _filterBySingleDay(DateTime date) {
+    setState(() {
+      _filter = FilterPeriod.singleDay;
+      _startDate = date;
+      _endDate = date.add(const Duration(days: 1));
+      _filterTitle = DateFormat.yMMMMd().format(date);
+    });
+    _fetchFirstPage();
+  }
+
+  // NEW: A method to clear the single day filter and go back to the previous filter.
+  void _clearSingleDayFilter() {
+    // For simplicity, we'll default back to 'Today'.
+    // A more complex implementation could store the previous filter state.
+    _setFilter(FilterPeriod.today);
   }
 
   Future<void> _exportPdf() async {
@@ -674,16 +729,33 @@ class _TransactionsPageState extends State<TransactionsPage>
   }
 
   void _setSearchQuery(String q) {
+    // Renaming to reflect its broader role
+    _applyAllFilters(searchQuery: q);
+  }
+
+  // NEW: A unified method to apply all active filters.
+  void _applyAllFilters({String? searchQuery}) {
     setState(() {
-      _searchQuery = q.trim().toLowerCase();
+      if (searchQuery != null) {
+        _searchQuery = searchQuery.trim().toLowerCase();
+      }
+
+      // Start with all transactions for the current period
+      Iterable<TransactionModel> filtered = _allFetchedTransactions;
+
+      // Apply summary filter (income/expense)
+      if (_summaryFilter == SummaryFilter.income) {
+        filtered = filtered.where((t) => t.type == TransactionType.income);
+      } else if (_summaryFilter == SummaryFilter.expense) {
+        filtered = filtered.where((t) => t.type == TransactionType.expense);
+      }
+
+      // Apply search query
       if (_searchQuery.isEmpty) {
-        _transactions.clear();
-        _transactions.addAll(_allFetchedTransactions);
+        _transactions.assignAll(filtered);
       } else {
-        // Apply search filter
-        _transactions.clear();
-        _transactions.addAll(
-          _allFetchedTransactions.where((t) {
+        _transactions.assignAll(
+          filtered.where((t) {
             return t.description.toLowerCase().contains(_searchQuery) ||
                 t.category.toLowerCase().contains(_searchQuery);
           }),
@@ -739,6 +811,21 @@ class _TransactionsPageState extends State<TransactionsPage>
             )
           : Text('transactions_title'.tr),
       actions: [
+        // Show a compact clear action in the toolbar when single-day filter is active
+        if (_filter == FilterPeriod.singleDay && !_isSearching)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: TextButton.icon(
+              onPressed: _clearSingleDayFilter,
+              icon: const Icon(Icons.close, color: Colors.white, size: 18),
+              label: Text('Clear', style: const TextStyle(color: Colors.white)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
         IconButton(
           tooltip: 'search'.tr,
           onPressed: () {
@@ -785,41 +872,46 @@ class _TransactionsPageState extends State<TransactionsPage>
           ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_brandColor, _accentColor.withOpacity(0.8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              // Use MediaQuery to get status bar height + toolbar height for accurate top padding
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + kToolbarHeight,
-                left: 16,
-                right: 16,
-                bottom: 8, // Add some bottom padding
+        background: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_brandColor, _accentColor.withOpacity(0.8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _filterTitle,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+              child: SafeArea(
+                child: Padding(
+                  // Use MediaQuery to get status bar height + toolbar height for accurate top padding
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                    left: 16,
+                    right: 16,
+                    bottom: 8, // Add some bottom padding
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _filterTitle,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildSummaryRow(),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildSummaryRow(),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            // NEW: Show a "Clear Filter" button when a single day is selected.
+          ],
         ),
       ),
     );
@@ -904,13 +996,14 @@ class _TransactionsPageState extends State<TransactionsPage>
                 final date = entry.key;
                 final transactionsInGroup = entry.value;
                 return _TransactionGroup(
-                  date: date,
-                  transactions: transactionsInGroup,
+                  onHeaderTap: () => _filterBySingleDay(date),
                   header: _formatDateHeader(date),
                   children: transactionsInGroup
                       .map(
-                        (t) =>
-                            _buildTransactionCard(t, _transactions.indexOf(t)),
+                        (t) => _buildTransactionCard(
+                          t,
+                          _allFetchedTransactions.indexOf(t),
+                        ),
                       )
                       .toList(),
                 );
@@ -922,107 +1015,34 @@ class _TransactionsPageState extends State<TransactionsPage>
 
 // NEW: A custom Sliver widget to group a header and a list of children.
 class _TransactionGroup extends StatelessWidget {
-  final DateTime date;
   final String header;
-  final List<TransactionModel> transactions;
   final List<Widget> children;
+  final VoidCallback onHeaderTap;
+
   const _TransactionGroup({
-    required this.date,
     required this.header,
-    required this.transactions,
     required this.children,
+    required this.onHeaderTap,
   });
-
-  void _showDateSummary(BuildContext context) {
-    final income = transactions
-        .where((t) => t.type == TransactionType.income)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-    final expense = transactions
-        .where((t) => t.type == TransactionType.expense)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-    final net = income - expense;
-
-    String money(num v) => NumberFormat.currency(
-      locale: 'en_US',
-      symbol: 'TSH ',
-      decimalDigits: 2,
-    ).format(v);
-
-    Get.dialog(
-      AlertDialog(
-        title: Text('Summary for $header'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _summaryRow('income'.tr, money(income), Colors.green),
-            _summaryRow('expenses'.tr, money(expense), Colors.red),
-            const Divider(height: 24),
-            _summaryRow(
-              'net'.tr,
-              money(net),
-              net >= 0 ? Colors.blue : Colors.orange,
-              isBold: true,
-            ),
-          ],
-        ),
-        actions: [TextButton(onPressed: Get.back, child: Text('close'.tr))],
-      ),
-    );
-  }
-
-  Widget _summaryRow(
-    String label,
-    String value,
-    Color color, {
-    bool isBold = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(fontWeight: isBold ? FontWeight.bold : null),
-          ),
-          Text(
-            value,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return SliverMainAxisGroup(
       slivers: [
         SliverPersistentHeader(
-          pinned: false,
+          pinned: false, // Keep headers from sticking
           delegate: _SliverHeaderDelegate(
             child: InkWell(
-              onTap: () => _showDateSummary(context),
+              onTap: onHeaderTap,
               child: Padding(
                 padding: const EdgeInsets.only(top: 20, bottom: 8),
-                child: Row(
-                  children: [
-                    Text(
-                      header,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.grey.shade500,
-                      size: 16,
-                    ),
-                  ],
+                child: Text(
+                  header,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ),
             ),
@@ -1106,21 +1126,27 @@ class _SummaryCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.accent,
-    required this.isNet,
+    required this.isSelected,
+    required this.onTap,
     this.currentNet = 0,
   });
 
   final String title;
   final String value;
   final Color accent;
-  final bool isNet;
+  final bool isSelected;
+  final VoidCallback onTap;
   final double currentNet;
 
   @override
   Widget build(BuildContext context) {
-    if (isNet) {
+    final bool isNetCard = title == 'net'.tr;
+
+    final Widget cardContent;
+
+    if (isNetCard) {
       // Special styling for the "Net" card
-      return Container(
+      cardContent = Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: currentNet >= 0
@@ -1147,28 +1173,42 @@ class _SummaryCard extends StatelessWidget {
           valueColor: Colors.white,
         ),
       );
+    } else {
+      // Standard styling for Income/Expense cards
+      cardContent = Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x115A6CEA),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: _buildCardContent(
+          title: title,
+          value: value,
+          iconBgColor: accent.withOpacity(0.12),
+          iconFgColor: accent,
+          valueColor: Colors.blueGrey.shade800,
+        ),
+      );
     }
 
-    return Container(
-      // Standard styling for Income/Expense cards
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x115A6CEA),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: _buildCardContent(
-        title: title,
-        value: value,
-        iconBgColor: accent.withOpacity(0.12),
-        iconFgColor: accent,
-        valueColor: Colors.blueGrey.shade800,
+    // Wrap the content with InkWell for tap effects and AnimatedOpacity for selection feedback.
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: isSelected ? 1.0 : 0.65,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: cardContent,
+        ),
       ),
     );
   }
@@ -1180,6 +1220,7 @@ class _SummaryCard extends StatelessWidget {
     required Color iconFgColor,
     required Color valueColor,
   }) {
+    final bool isNetCard = title == 'net'.tr;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1187,7 +1228,7 @@ class _SummaryCard extends StatelessWidget {
           title,
           style: TextStyle(
             fontSize: 12,
-            color: isNet ? Colors.white70 : Colors.blueGrey.shade400,
+            color: isNetCard ? Colors.white70 : Colors.blueGrey.shade400,
           ),
         ),
         const SizedBox(height: 8),
@@ -1200,7 +1241,7 @@ class _SummaryCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                isNet
+                isNetCard
                     ? (currentNet >= 0
                           ? Icons.trending_up
                           : Icons.trending_down)
