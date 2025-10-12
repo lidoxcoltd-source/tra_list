@@ -48,7 +48,8 @@ flutter:
     - assets/qr.png # QR code image
     - assets/tra-logo.png # Old TRA logo
     - assets/frame.png # Fallback QR frame
-    - assets/social_icons.png # Fallback QR frame
+    - assets/social_icons.png
+   # Fallback QR frame
     - assets/fonts/
 
   fonts:

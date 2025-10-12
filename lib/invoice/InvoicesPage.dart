@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/pdf/delivery_note_pdf.dart';
+import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
 import 'package:tra_list/services/pdf/proforma_pdf.dart';
+import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
 
-import 'InvoicePage.dart';
-import '../services/pdf/invoice_pdf.dart';
+import 'InvoicePage.dart' as invoice_page;
+import 'advance_invoice_page.dart';
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -71,19 +73,30 @@ class _InvoicesPageState extends State<InvoicesPage> {
         .snapshots();
 
     return Scaffold(
+      // NEW: Floating Action Button for quick creation
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const invoice_page.InvoicePage()),
+          );
+        },
+        label: const Text('New Document'),
+        icon: const Icon(Icons.add),
+        backgroundColor: primary,
+      ),
       appBar: AppBar(
         elevation: 0,
         title: const Text('My Documents'),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            tooltip: 'New Document',
+            tooltip: 'New Advance Invoice',
             onPressed: () {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const InvoicePage()));
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdvanceInvoicePage()),
+              );
             },
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.payments_outlined),
           ),
         ],
         flexibleSpace: Container(
@@ -95,50 +108,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
             ),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextField(
-              controller: _searchC,
-              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-              decoration: InputDecoration(
-                // Search hint is generic now
-                hintText: 'Search by invoice no. or client name',
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.15),
-                hintStyle: const TextStyle(color: Colors.white70),
-                prefixIcon: const Icon(Icons.search, color: Colors.white),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear',
-                        icon: const Icon(Icons.clear, color: Colors.white),
-                        onPressed: () {
-                          _searchC.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: Colors.white24,
-                    width: 1.2,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white, width: 1.4),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
+      backgroundColor: Colors.grey.shade50,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (context, snap) {
@@ -163,13 +134,19 @@ class _InvoicesPageState extends State<InvoicesPage> {
           if (filtered.isEmpty) {
             return _EmptyState(
               onCreate: () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const InvoicePage()));
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const invoice_page.InvoicePage(),
+                  ),
+                );
+              },
+              onCreateAdvance: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdvanceInvoicePage()),
+                );
               },
             );
           }
-
           // Only sum the totals for actual invoices
           final invoiceTotalSum = filtered.fold<num>(
             0,
@@ -184,27 +161,51 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 10,
+                ), // Search bar
+                child: TextField(
+                  controller: _searchC,
+                  onChanged: (q) => setState(() => _query = q.toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: 'Search by client or invoice no...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchC.clear();
+                              setState(() => _query = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: Row(
                   children: [
-                    _StatChip(
+                    _StatCard(
                       label: 'Documents',
                       value: '${filtered.length}',
                       icon: Icons.receipt_long,
                       color: primary,
                     ),
-                    const SizedBox(width: 10),
-                    _StatChip(
-                      // This chip now only shows invoice totals
-                      label: 'Invoice Total (TSH)',
-                      value: _money(invoiceTotalSum),
+                    const SizedBox(width: 12),
+                    _StatCard(
+                      label: 'Invoice Total',
+                      value: 'TSH ${_money(invoiceTotalSum)}',
                       icon: Icons.summarize_outlined,
                       color: accent,
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 0),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -242,13 +243,13 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           );
                         },
                         child: Card(
-                          elevation: 0,
+                          elevation: 2,
+                          shadowColor: Colors.black.withOpacity(0.05),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
-                            side: BorderSide(color: Colors.grey.shade300),
                           ),
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                             onTap: () => _previewPdf(data, kind),
                             onLongPress: () => _showActions(context, doc),
                             child: Padding(
@@ -257,12 +258,11 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Container(
-                                    // Dynamic icon based on document kind
                                     height: 44,
                                     width: 44,
                                     decoration: BoxDecoration(
                                       color: primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
                                       _getIconForKind(kind),
@@ -277,10 +277,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                       children: [
                                         Row(
                                           children: [
-                                            Expanded(
+                                            Flexible(
                                               child: Text(
                                                 '${_getTitleForKind(kind)} #${invoice['number'] ?? doc.id}',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontWeight: FontWeight.w700,
                                                   fontSize: 16,
                                                 ),
@@ -365,6 +365,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                                       onPressed: () => _savePdf(
                                                         data,
                                                         'reminder',
+                                                      ),
+                                                    ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Advance Payment',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'advance',
                                                       ),
                                                     ),
                                                   ],
@@ -534,6 +543,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
       'proforma' => Icons.request_quote_outlined,
       'delivery' => Icons.local_shipping_outlined,
       'reminder' => Icons.alarm_on_outlined,
+      'advance' => Icons.payments_outlined,
       _ => Icons.receipt_long, // invoice
     };
   }
@@ -543,6 +553,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
       'proforma' => 'Proforma',
       'delivery' => 'Delivery Note',
       'reminder' => 'Reminder',
+      'advance' => 'Advance Payment Invoice',
       _ => 'Invoice',
     };
   }
@@ -567,6 +578,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
             DeliveryNotePdf.generateAndSave(clean, fileName: fileName),
         'reminder': () =>
             PaymentReminderPdf.generateAndSave(clean, fileName: fileName),
+        'advance': () =>
+            AdvancePaymentPdf.generateAndSave(clean, fileName: fileName),
       }[kind]!).call();
 
       Get.snackbar(
@@ -593,6 +606,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
         'proforma': () => ProformaPdf.generate(data),
         'delivery': () => DeliveryNotePdf.generate(data),
         'reminder': () => PaymentReminderPdf.generate(data),
+        'advance': () => AdvancePaymentPdf.generate(data),
       }[kind]!).call();
     } catch (e) {
       Get.snackbar(
@@ -654,9 +668,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCreate});
+  const _EmptyState({required this.onCreate, required this.onCreateAdvance});
 
   final VoidCallback onCreate;
+  final VoidCallback onCreateAdvance;
 
   @override
   Widget build(BuildContext context) {
@@ -680,47 +695,64 @@ class _EmptyState extends StatelessWidget {
             icon: const Icon(Icons.add),
             label: const Text('Create New Document'),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onCreateAdvance,
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Create Advance Invoice'),
+          ),
         ],
       ),
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
+class _StatCard extends StatelessWidget {
+  const _StatCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
   });
-
   final String label;
   final String value;
   final IconData icon;
   final Color color;
-
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 20),
+            Icon(icon, color: color, size: 24),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(color: color, fontSize: 12)),
-                Text(
-                  value,
-                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
-                ),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(color: Colors.grey.shade600)),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -25,8 +25,11 @@ class _InvoicePageState extends State<InvoicePage> {
   // Company profile loaded from Firestore
   Map<String, dynamic> _company = {};
 
-  final _clientController = TextEditingController(text: 'RAZIA AUTO WORKS');
-  final _invoiceNoController = TextEditingController(text: '234');
+  final _clientController = TextEditingController(text: '');
+  final _invoiceNoController = TextEditingController(
+    text:
+        'INV-${DateTime.now().toIso8601String().split("T").first}-${(DateTime.now().millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
+  );
   final _issueDateController = TextEditingController(
     text: _fmtDate(DateTime.now()),
   );
@@ -34,14 +37,7 @@ class _InvoicePageState extends State<InvoicePage> {
     text: _fmtDate(DateTime.now().add(const Duration(days: 0))),
   );
 
-  final List<Map<String, dynamic>> _items = [
-    {'desc': 'Profoma', 'qty': 3, 'unit': 15000.0},
-    {'desc': 'Invoice', 'qty': 3, 'unit': 15000.0},
-    {'desc': 'Delivery Note', 'qty': 3, 'unit': 15000.0},
-    {'desc': 'Service Card', 'qty': 50, 'unit': 400.0},
-    {'desc': 'Business Card', 'qty': 100, 'unit': 400.0},
-    {'desc': 'Sticker', 'qty': 50, 'unit': 400.0},
-  ];
+  final List<Map<String, dynamic>> _items = [];
 
   static String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
