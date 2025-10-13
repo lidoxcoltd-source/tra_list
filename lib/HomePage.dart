@@ -170,6 +170,18 @@ class HomePage extends StatelessWidget {
                       onTap: () => Get.toNamed(AppRoutes.transactions),
                     ),
 
+                    // Analytics & Insights
+                    _buildMenuCard(
+                      context,
+                      icon: Icons.analytics_outlined,
+                      title: 'home_analytics'.tr,
+                      subtitle: 'home_analytics_sub'.tr,
+                      color: const Color(0xFF00897B), // Teal color
+                      onTap: () {
+                        Get.toNamed(AppRoutes.analytics);
+                      },
+                    ),
+
                     // Manage Categories
                     _buildMenuCard(
                       context,
