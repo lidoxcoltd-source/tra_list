@@ -2,11 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // Add this dependency
+import 'dart:io';
 import 'transaction_model.dart';
 import 'category_model.dart';
 import 'category_service.dart';
 import 'transaction_service.dart';
-import 'package:tra_list/services/profile_service.dart'; // <--- added
+import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/offline_service.dart'; // You'll need to create this
 
 class AddTransactionPage extends StatefulWidget {
   final TransactionModel? transaction;
@@ -63,9 +66,27 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Color _brandColor = const Color(0xFF1976D2);
   Color _accentColor = const Color(0xFF42A5F5);
 
+  // Connectivity state
+  bool _isOnline = true;
+  late final Connectivity _connectivity;
+
   @override
   void initState() {
     super.initState();
+    _connectivity = Connectivity();
+    _initConnectivity();
+
+    // Listen to connectivity changes. Different versions of connectivity_plus
+    // now emit a List<ConnectivityResult>. We check if the list contains anything
+    // other than 'none' to determine the online state.
+    _connectivity.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
+      if (results.isNotEmpty) {
+        _updateConnectionStatus(results.first);
+      }
+    });
+
     if (widget.transaction != null) {
       final t = widget.transaction!;
       _isExpense = t.type == TransactionType.expense;
@@ -77,7 +98,94 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       _isExpense = widget.initialType == TransactionType.expense;
     }
     _loadCategories();
-    _loadBrandColors(); // <--- fetch colors from firebase/profile
+    _loadBrandColors();
+  }
+
+  Future<void> _initConnectivity() async {
+    late ConnectivityResult result;
+    try {
+      final results = await _connectivity.checkConnectivity();
+      result = results
+          .first; // Assuming we care about the first result if multiple are returned
+    } on PlatformException catch (_) {
+      result = ConnectivityResult.none;
+    }
+
+    if (!mounted) return;
+
+    return _updateConnectionStatus(result);
+  }
+
+  Future<void> _updateConnectionStatus(ConnectivityResult result) async {
+    final wasOnline = _isOnline;
+    _isOnline = result != ConnectivityResult.none;
+
+    // Double-check with actual internet connectivity
+    if (_isOnline) {
+      _isOnline = await _hasInternetConnection();
+    }
+
+    if (mounted) {
+      setState(() {});
+
+      // Show connectivity status
+      if (wasOnline != _isOnline) {
+        _showConnectivityStatus();
+      }
+
+      // If we just came back online, try to sync offline data
+      if (!wasOnline && _isOnline) {
+        _syncOfflineData();
+      }
+    }
+  }
+
+  Future<bool> _hasInternetConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    }
+  }
+
+  void _showConnectivityStatus() {
+    final message = _isOnline
+        ? 'Back online - transactions will sync automatically'
+        : 'No internet connection - transactions will be saved offline';
+
+    final backgroundColor = _isOnline ? Colors.green : Colors.orange;
+
+    Get.snackbar(
+      _isOnline ? 'Connected' : 'Offline Mode',
+      message,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: backgroundColor,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      icon: Icon(_isOnline ? Icons.wifi : Icons.wifi_off, color: Colors.white),
+    );
+  }
+
+  Future<void> _syncOfflineData() async {
+    try {
+      await OfflineService.syncPendingTransactions();
+      Get.snackbar(
+        'Sync Complete',
+        'Offline transactions have been synced',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Sync Error',
+        'Failed to sync some offline transactions',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+    }
   }
 
   Future<void> _loadBrandColors() async {
@@ -120,8 +228,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Future<void> _loadCategories() async {
     setState(() => _categoriesLoading = true);
     try {
-      final snapshot = await CategoryService.getCategoriesStream().first;
-      final allCategories = snapshot.docs.map((doc) => doc.data()).toList();
+      List<CategoryModel> allCategories;
+
+      if (_isOnline) {
+        final snapshot = await CategoryService.getCategoriesStream().first;
+        allCategories = snapshot.docs.map((doc) => doc.data()).toList();
+
+        // Cache categories for offline use
+        await OfflineService.cacheCategories(allCategories);
+      } else {
+        // Load from offline cache
+        allCategories = await OfflineService.getCachedCategories();
+      }
+
       if (mounted) {
         setState(() {
           _incomeCategories = allCategories
@@ -132,9 +251,51 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               .toList();
         });
       }
+    } catch (e) {
+      // Fallback to cached data if online request fails
+      if (_isOnline) {
+        try {
+          final cachedCategories = await OfflineService.getCachedCategories();
+          if (mounted) {
+            setState(() {
+              _incomeCategories = cachedCategories
+                  .where((c) => c.type == TransactionType.income)
+                  .toList();
+              _expenseCategories = cachedCategories
+                  .where((c) => c.type == TransactionType.expense)
+                  .toList();
+            });
+          }
+        } catch (_) {
+          // Use default categories if no cache available
+          _useDefaultCategories();
+        }
+      } else {
+        _useDefaultCategories();
+      }
     } finally {
       if (mounted) setState(() => _categoriesLoading = false);
     }
+  }
+
+  void _useDefaultCategories() {
+    final defaultExpenseCategories = [
+      CategoryModel(name: 'Food & Dining', type: TransactionType.expense),
+      CategoryModel(name: 'Transportation', type: TransactionType.expense),
+      CategoryModel(name: 'Shopping', type: TransactionType.expense),
+      CategoryModel(name: 'Bills & Utilities', type: TransactionType.expense),
+    ];
+
+    final defaultIncomeCategories = [
+      CategoryModel(name: 'Salary', type: TransactionType.income),
+      CategoryModel(name: 'Business', type: TransactionType.income),
+      CategoryModel(name: 'Other Income', type: TransactionType.income),
+    ];
+
+    setState(() {
+      _expenseCategories = defaultExpenseCategories;
+      _incomeCategories = defaultIncomeCategories;
+    });
   }
 
   @override
@@ -148,11 +309,33 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final nameController = TextEditingController();
     final newCategoryName = await Get.dialog<String>(
       AlertDialog(
-        title: const Text('Add New Category'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(labelText: 'Category Name'),
-          autofocus: true,
+        title: Row(
+          children: [
+            const Text('Add New Category'),
+            if (!_isOnline) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.wifi_off, size: 16, color: Colors.orange),
+            ],
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!_isOnline)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Category will be saved offline and synced when connection is restored.',
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+              ),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Category Name'),
+              autofocus: true,
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
@@ -169,11 +352,23 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         name: newCategoryName,
         type: _isExpense ? TransactionType.expense : TransactionType.income,
       );
-      await CategoryService.addCategory(newCategory);
-      await _loadCategories(); // Refresh the list
-      setState(() {
-        _selectedCategory = newCategoryName; // Auto-select the new category
-      });
+
+      if (_isOnline) {
+        await CategoryService.addCategory(newCategory);
+        await _loadCategories(); // Refresh the list
+      } else {
+        // Save offline
+        await OfflineService.saveCategoryOffline(newCategory);
+        // Add to local list immediately
+        setState(() {
+          if (_isExpense) {
+            _expenseCategories.add(newCategory);
+          } else {
+            _incomeCategories.add(newCategory);
+          }
+          _selectedCategory = newCategoryName; // Auto-select the new category
+        });
+      }
     }
   }
 
@@ -197,18 +392,36 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         uid: uid,
       );
 
-      if (widget.transaction == null) {
-        await TransactionService.saveTransaction(model);
-      } else {
-        await TransactionService.updateTransaction(model.id!, model);
-      }
+      if (_isOnline) {
+        // Save online
+        if (widget.transaction == null) {
+          await TransactionService.saveTransaction(model);
+        } else {
+          await TransactionService.updateTransaction(model.id!, model);
+        }
 
-      Get.back(result: true); // Return true on success
-      Get.snackbar(
-        'Success',
-        'Transaction saved successfully',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+        Get.back(result: true);
+        Get.snackbar(
+          'Success',
+          'Transaction saved successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else {
+        // Save offline
+        await OfflineService.saveTransactionOffline(model);
+
+        Get.back(result: true);
+        Get.snackbar(
+          'Saved Offline',
+          'Transaction saved offline and will sync when connection is restored',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 4),
+        );
+      }
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -235,7 +448,44 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isNew ? 'Add Transaction' : 'Edit Transaction'),
+        // Explicitly add a back button.
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+        title: Row(
+          children: [
+            Text(isNew ? 'Add Transaction' : 'Edit Transaction'),
+            const Spacer(),
+            // Connection status indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _isOnline ? Colors.green : Colors.orange,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isOnline ? Icons.wifi : Icons.wifi_off,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isOnline ? 'Online' : 'Offline',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -264,6 +514,33 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarHeight),
             children: [
+              // Offline indicator banner
+              if (!_isOnline)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    border: Border.all(color: Colors.orange.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Working offline. Changes will sync when connection is restored.',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Type toggle
               Row(
                 children: [
@@ -463,7 +740,18 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               const SizedBox(height: 16),
 
               // Category chips + add
-              Text('Category', style: TextStyle(color: Colors.grey.shade800)),
+              Row(
+                children: [
+                  Text(
+                    'Category',
+                    style: TextStyle(color: Colors.grey.shade800),
+                  ),
+                  if (!_isOnline) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.wifi_off, size: 14, color: Colors.orange),
+                  ],
+                ],
+              ),
               const SizedBox(height: 8),
               _categoriesLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -580,12 +868,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.save, color: Colors.white),
-                          SizedBox(width: 8),
+                        children: [
+                          Icon(
+                            _isOnline ? Icons.save : Icons.save_alt,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            'Save Transaction',
-                            style: TextStyle(
+                            _isOnline ? 'Save Transaction' : 'Save Offline',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),

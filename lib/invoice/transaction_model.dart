@@ -36,12 +36,43 @@ class TransactionModel {
     );
   }
 
+  // NEW: Factory to create from a map (for JSON decoding)
+  factory TransactionModel.fromJson(Map<String, dynamic> json) {
+    return TransactionModel(
+      id: json['id'],
+      type: (json['type'] == 'income')
+          ? TransactionType.income
+          : TransactionType.expense,
+      description: json['description'] ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      // Handle both Timestamp and ISO8601 string for date
+      date: json['date'] is String
+          ? DateTime.parse(json['date'])
+          : (json['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      category: json['category'] ?? 'Uncategorized',
+      uid: json['uid'] ?? '',
+    );
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'type': type == TransactionType.income ? 'income' : 'expense',
       'description': description,
       'amount': amount,
       'date': Timestamp.fromDate(date),
+      'category': category,
+      'uid': uid,
+    };
+  }
+
+  // NEW: Method to convert to a map (for JSON encoding)
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type == TransactionType.income ? 'income' : 'expense',
+      'description': description,
+      'amount': amount,
+      'date': date.toIso8601String(), // Use ISO8601 for JSON compatibility
       'category': category,
       'uid': uid,
     };

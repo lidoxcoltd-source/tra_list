@@ -10,6 +10,7 @@ environment:
 dependencies:
   barcode: ^2.2.6
   cloud_firestore: ^6.0.2
+  connectivity_plus: ^7.0.0
   cupertino_icons: ^1.0.8
   excel: ^4.0.6
   file_picker: ^10.3.3
