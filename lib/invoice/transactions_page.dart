@@ -5,11 +5,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
+import 'package:tra_list/invoice/transaction_excel_export.dart'; // Add this import
 import 'package:tra_list/services/profile_service.dart';
 import 'add_transaction_page.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'analytics_page.dart';
 
 enum FilterPeriod { all, today, week, month, custom, singleDay }
 
@@ -49,6 +51,7 @@ class _TransactionsPageState extends State<TransactionsPage>
   SummaryFilter _summaryFilter = SummaryFilter.all;
 
   bool _isPdfBusy = false;
+  bool _isExcelBusy = false; // Add this line
   // _isFetching combines initial load and refresh states.
   bool _isFetching = false;
   // Removed _isRefreshing, as _isFetching serves the same purpose.
@@ -671,6 +674,33 @@ class _TransactionsPageState extends State<TransactionsPage>
     }
   }
 
+  Future<void> _exportExcel() async {
+    setState(() => _isExcelBusy = true);
+    try {
+      final pathOrName = await TransactionExcelExport.generateAndSave(
+        transactions: _transactions,
+        totalIncome: _currentIncome,
+        totalExpense: _currentExpense,
+        netProfit: _currentNet,
+        filterTitle: _filterTitle,
+      );
+      Get.snackbar(
+        kIsWeb ? 'Excel downloaded' : 'Excel saved',
+        pathOrName,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 6),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Export Excel',
+        'Failed to export Excel: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => _isExcelBusy = false);
+    }
+  }
+
   Widget _buildLoader() {
     if (!_hasMore) {
       return Padding(
@@ -857,16 +887,69 @@ class _TransactionsPageState extends State<TransactionsPage>
                 : const Icon(Icons.picture_as_pdf_outlined),
           ),
         if (!_isSearching)
+          IconButton(
+            tooltip: 'Export as Excel',
+            onPressed: _transactions.isEmpty || _isExcelBusy
+                ? null
+                : _exportExcel,
+            icon: _isExcelBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.table_chart_outlined),
+          ),
+        if (!_isSearching)
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'refresh') _refreshNow();
               if (v == 'clear_filters') _setFilter(FilterPeriod.all);
+              if (v == 'export_excel') _exportExcel();
+              if (v == 'export_pdf') _exportPdf();
+              if (v == 'analytics') {
+                Get.to(() => const AnalyticsPage());
+              }
             },
             itemBuilder: (context) => [
               PopupMenuItem(value: 'refresh', child: Text('refresh'.tr)),
               PopupMenuItem(
                 value: 'clear_filters',
                 child: Text('transactions_clear_filters'.tr),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'export_pdf',
+                child: Row(
+                  children: [
+                    const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Export PDF'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'export_excel',
+                child: Row(
+                  children: [
+                    const Icon(Icons.table_chart_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Export Excel'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'analytics',
+                child: Row(
+                  children: [
+                    const Icon(Icons.analytics_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Analytics'),
+                  ],
+                ),
               ),
             ],
           ),

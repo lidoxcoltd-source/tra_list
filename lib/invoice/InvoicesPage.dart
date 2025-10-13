@@ -376,6 +376,13 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                                         'advance',
                                                       ),
                                                     ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Excel',
+                                                      ),
+                                                      onPressed: () =>
+                                                          _saveAsExcel(data),
+                                                    ),
                                                   ],
                                                   child: const Text(
                                                     'Generate As...',
@@ -612,6 +619,28 @@ class _InvoicesPageState extends State<InvoicesPage> {
       Get.snackbar(
         'Error',
         'Failed to generate preview: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _saveAsExcel(Map<String, dynamic> data) async {
+    // Excel export helper not available in this build; inform the user.
+    try {
+      // If you have a concrete implementation for Excel export, replace
+      // the body of this method with a call to that implementation.
+      Get.snackbar(
+        'Excel export',
+        'Excel export is not available in this build.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to save Excel file: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
