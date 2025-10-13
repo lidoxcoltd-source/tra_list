@@ -18,6 +18,9 @@ enum FilterPeriod { all, today, week, month, custom, singleDay }
 // NEW: Enum to manage the summary card filter state.
 enum SummaryFilter { all, income, expense }
 
+// NEW: Enum for advanced sorting options.
+enum SortOption { dateDesc, dateAsc, amountDesc, amountAsc }
+
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
 
@@ -49,6 +52,9 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   // NEW: State for the summary card filter.
   SummaryFilter _summaryFilter = SummaryFilter.all;
+
+  // NEW: State for sorting option.
+  SortOption _sortOption = SortOption.dateDesc;
 
   bool _isPdfBusy = false;
   bool _isExcelBusy = false; // Add this line
@@ -515,6 +521,15 @@ class _TransactionsPageState extends State<TransactionsPage>
                         fontSize: 14,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      DateFormat.jm().format(t.date), // e.g., "5:08 PM"
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -770,6 +785,21 @@ class _TransactionsPageState extends State<TransactionsPage>
         _searchQuery = searchQuery.trim().toLowerCase();
       }
 
+      // Sort the base list first
+      _allFetchedTransactions.sort((a, b) {
+        switch (_sortOption) {
+          case SortOption.dateAsc:
+            return a.date.compareTo(b.date);
+          case SortOption.amountDesc:
+            return b.amount.compareTo(a.amount);
+          case SortOption.amountAsc:
+            return a.amount.compareTo(b.amount);
+          case SortOption.dateDesc:
+          default:
+            return b.date.compareTo(a.date);
+        }
+      });
+
       // Start with all transactions for the current period
       Iterable<TransactionModel> filtered = _allFetchedTransactions;
 
@@ -871,6 +901,48 @@ class _TransactionsPageState extends State<TransactionsPage>
             child: Icon(_isSearching ? Icons.close : Icons.search),
           ),
         ),
+        if (!_isSearching)
+          PopupMenuButton<SortOption>(
+            tooltip: 'Sort by',
+            icon: const Icon(Icons.sort),
+            onSelected: (newSortOption) {
+              if (_sortOption != newSortOption) {
+                setState(() {
+                  _sortOption = newSortOption;
+                });
+                _applyAllFilters(); // Re-sort and re-group the list
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                enabled: false,
+                child: Text(
+                  'Sort by',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              CheckedPopupMenuItem(
+                value: SortOption.dateDesc,
+                checked: _sortOption == SortOption.dateDesc,
+                child: const Text('Date (Newest First)'),
+              ),
+              CheckedPopupMenuItem(
+                value: SortOption.dateAsc,
+                checked: _sortOption == SortOption.dateAsc,
+                child: const Text('Date (Oldest First)'),
+              ),
+              CheckedPopupMenuItem(
+                value: SortOption.amountDesc,
+                checked: _sortOption == SortOption.amountDesc,
+                child: const Text('Amount (Highest First)'),
+              ),
+              CheckedPopupMenuItem(
+                value: SortOption.amountAsc,
+                checked: _sortOption == SortOption.amountAsc,
+                child: const Text('Amount (Lowest First)'),
+              ),
+            ],
+          ),
         if (!_isSearching)
           IconButton(
             tooltip: 'transactions_export_pdf'.tr,

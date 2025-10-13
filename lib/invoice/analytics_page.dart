@@ -7,6 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:tra_list/invoice/transaction_report_pdf.dart';
+import 'package:tra_list/invoice/transaction_excel_export.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -20,6 +23,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   List<TransactionModel> _transactions = [];
   bool _isLoading = true;
   String _selectedPeriod = 'This Month';
+  TransactionType? _typeFilter; // New: Filter for income/expense
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
 
@@ -32,6 +36,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   late AnimationController _cardAnimController;
 
   // Analytics data
+  List<MapEntry<String, double>> _categoryChartData = [];
   Map<String, double> _categoryData = {};
   List<MonthlyData> _monthlyData = [];
   Map<String, int> _transactionFrequency = {};
@@ -40,6 +45,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   double _totalExpense = 0;
   double _netFlow = 0;
   int _transactionCount = 0;
+
+  bool _isPdfBusy = false;
+  bool _isExcelBusy = false;
 
   @override
   void initState() {
@@ -116,6 +124,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   void _processAnalyticsData() {
     if (_transactions.isEmpty) return;
 
+    _categoryChartData.clear();
     _categoryData.clear();
     _monthlyData.clear();
     _transactionFrequency.clear();
@@ -129,7 +138,12 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     // Use a local variable for total to avoid race conditions with setState
     double totalAmount = 0;
 
-    for (final transaction in _transactions) {
+    final filteredTransactions = _transactions.where((t) {
+      if (_typeFilter == null) return true;
+      return t.type == _typeFilter;
+    }).toList();
+
+    for (final transaction in filteredTransactions) {
       if (transaction.amount < 0 ||
           transaction.date == null ||
           transaction.category == null) {
@@ -175,6 +189,10 @@ class _AnalyticsPageState extends State<AnalyticsPage>
 
     _monthlyData = monthlyMap.values.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
+
+    _categoryChartData = _categoryData.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    _transactionCount = filteredTransactions.length;
   }
 
   @override
@@ -193,7 +211,28 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         backgroundColor: _brandColor,
         foregroundColor: Colors.white,
         elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50.0),
+          child: _buildTypeFilter(),
+        ),
         actions: [
+          if (!_isPdfBusy)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              onPressed: _transactions.isEmpty ? null : _exportPdf,
+              tooltip: 'Export as PDF',
+            ),
+          if (_isPdfBusy)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(18.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              ),
+            ),
           PopupMenuButton<String>(
             onSelected: _changePeriod,
             itemBuilder: (context) => const [
@@ -219,8 +258,8 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: _isLoading && _transactions.isEmpty
+          ? _buildSkeletonLoader()
           : RefreshIndicator(
               onRefresh: _loadAnalyticsData,
               child: SingleChildScrollView(
@@ -245,6 +284,56 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildTypeFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: _brandColor,
+      child: SegmentedButton<TransactionType?>(
+        segments: const [
+          ButtonSegment(
+            value: null,
+            label: Text('All'),
+            icon: Icon(Icons.all_inclusive),
+          ),
+          ButtonSegment(
+            value: TransactionType.income,
+            label: Text('Income'),
+            icon: Icon(Icons.arrow_upward),
+          ),
+          ButtonSegment(
+            value: TransactionType.expense,
+            label: Text('Expense'),
+            icon: Icon(Icons.arrow_downward),
+          ),
+        ],
+        selected: {_typeFilter},
+        onSelectionChanged: (newSelection) {
+          setState(() {
+            _typeFilter = newSelection.first;
+            _processAnalyticsData(); // Re-process with the new filter
+          });
+        },
+        style: SegmentedButton.styleFrom(
+          backgroundColor: _brandColor.withOpacity(0.5),
+          foregroundColor: Colors.white.withOpacity(0.7),
+          selectedForegroundColor: _brandColor,
+          selectedBackgroundColor: Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkeletonLoader() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: List.generate(5, (_) => _buildSkeletonCard()),
+      ),
     );
   }
 
@@ -511,13 +600,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Widget _buildCategoryPieChart() {
-    if (_categoryData.isEmpty) {
-      return _buildEmptyChart('No category data available');
-    }
+    if (_categoryChartData.isEmpty) return _buildEmptyChart('No category data');
 
-    final sortedCategories = _categoryData.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final topCategories = sortedCategories.take(5).toList();
+    final topCategories = _categoryChartData.take(5).toList();
 
     return AnimatedBuilder(
       animation: _chartAnimController,
@@ -546,7 +631,11 @@ class _AnalyticsPageState extends State<AnalyticsPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Category Distribution',
+                _typeFilter == TransactionType.expense
+                    ? 'Top Spending Categories'
+                    : _typeFilter == TransactionType.income
+                    ? 'Top Income Sources'
+                    : 'Category Distribution',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -575,7 +664,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                       yValueMapper: (MapEntry<String, double> data, _) =>
                           data.value,
                       dataLabelMapper: (MapEntry<String, double> data, _) =>
-                          '${((data.value / (_totalIncome + _totalExpense)) * 100).toStringAsFixed(1)}%',
+                          data.value > 0
+                          ? '${((data.value / (_totalIncome + _totalExpense)) * 100).toStringAsFixed(1)}%'
+                          : '',
                       dataLabelSettings: const DataLabelSettings(
                         isVisible: true,
                         labelPosition: ChartDataLabelPosition.outside,
@@ -584,6 +675,12 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      onPointTap: (ChartPointDetails details) {
+                        if (details.pointIndex == null) return;
+                        final tappedCategory =
+                            topCategories[details.pointIndex!];
+                        _showTransactionsForCategory(tappedCategory.key);
+                      },
                       innerRadius: '50%',
                       pointColorMapper: (MapEntry<String, double> data, index) {
                         final colors = [
@@ -607,12 +704,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Widget _buildCategoryAnalysis() {
-    if (_categoryData.isEmpty) {
-      return _buildEmptyChart('No category data available');
-    }
-
-    final sortedCategories = _categoryData.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    if (_categoryChartData.isEmpty) return _buildEmptyChart('No category data');
 
     return AnimatedBuilder(
       animation: _chartAnimController,
@@ -649,7 +741,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 ),
               ),
               const SizedBox(height: 20),
-              ...sortedCategories.take(5).map((entry) {
+              ..._categoryChartData.take(5).map((entry) {
                 final percentage =
                     (entry.value / (_totalIncome + _totalExpense)) * 100;
                 return _buildCategoryItem(entry.key, entry.value, percentage);
@@ -662,6 +754,8 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Widget _buildCategoryItem(String category, double amount, double percentage) {
+    final total = _totalIncome + _totalExpense;
+    final safePercentage = total > 0 ? (amount / total) : 0.0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -694,7 +788,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           ),
           const SizedBox(height: 8),
           LinearProgressIndicator(
-            value: percentage / 100,
+            value: safePercentage,
             backgroundColor: Colors.grey[200],
             valueColor: AlwaysStoppedAnimation(_brandColor),
             minHeight: 4,
@@ -918,6 +1012,25 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     );
   }
 
+  Widget _buildSkeletonCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(width: 120, height: 16, color: Colors.white),
+          const SizedBox(height: 16),
+          Container(width: double.infinity, height: 100, color: Colors.white),
+        ],
+      ),
+    );
+  }
+
   List<InsightData> _generateInsights() {
     final insights = <InsightData>[];
 
@@ -1059,6 +1172,103 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     }
 
     _loadAnalyticsData();
+  }
+
+  Future<void> _exportPdf() async {
+    setState(() => _isPdfBusy = true);
+    try {
+      final pathOrName = await TransactionReportPdf.generateAndSave(
+        transactions: _transactions.where((t) {
+          if (_typeFilter == null) return true;
+          return t.type == _typeFilter;
+        }).toList(),
+        totalIncome: _totalIncome,
+        totalExpense: _totalExpense,
+        netProfit: _netFlow,
+        filterTitle: 'Analytics Report: $_selectedPeriod',
+      );
+      Get.snackbar(
+        'PDF saved',
+        pathOrName,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 6),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'PDF Export Error',
+        '$e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => _isPdfBusy = false);
+    }
+  }
+
+  void _showTransactionsForCategory(String category) {
+    final categoryTransactions = _transactions
+        .where(
+          (t) =>
+              t.category == category &&
+              (_typeFilter == null || t.type == _typeFilter),
+        )
+        .toList();
+
+    Get.bottomSheet(
+      Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Transactions for "$category"',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 24),
+            Expanded(
+              child: ListView.builder(
+                itemCount: categoryTransactions.length,
+                itemBuilder: (context, index) {
+                  final t = categoryTransactions[index];
+                  final isExpense = t.type == TransactionType.expense;
+                  return ListTile(
+                    leading: Icon(
+                      isExpense ? Icons.arrow_downward : Icons.arrow_upward,
+                      color: isExpense ? Colors.red : Colors.green,
+                    ),
+                    title: Text(t.description),
+                    subtitle: Text(DateFormat.yMMMd().format(t.date)),
+                    trailing: Text(
+                      '${isExpense ? '-' : '+'}TSH ${_formatMoney(t.amount)}',
+                      style: TextStyle(
+                        color: isExpense ? Colors.red : Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Get.back(),
+                child: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
+    );
   }
 }
 
