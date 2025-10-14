@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'routes.dart';
+import 'services/profile_service.dart';
 import 'PDFService.dart'; // Use PDFService for printing
 
 // Add conditional import for web
@@ -22,10 +23,14 @@ class ReceiptsListPage extends StatefulWidget {
 class _ReceiptsListPageState extends State<ReceiptsListPage> {
   bool _useLocalStorage = false;
   List<Map<String, dynamic>> _localReceipts = [];
+  // Dynamic colors from profile
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFFFFA000);
 
   @override
   void initState() {
     super.initState();
+    _loadProfileColors();
     _loadLocalReceipts();
   }
 
@@ -35,15 +40,32 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
     });
   }
 
+  Future<void> _loadProfileColors() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      if (mounted && profile.containsKey('colors')) {
+        final colors = profile['colors'] as Map<String, dynamic>;
+        setState(() {
+          _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
+          _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile colors: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: Text(_useLocalStorage ? 'Local Receipts' : 'All Receipts'),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFFFE500),
-        foregroundColor: Colors.black87,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: [_brandColor, _accentColor]),
+          ),
+        ),
         elevation: 0,
         actions: [
           PopupMenuButton<String>(

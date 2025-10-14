@@ -1,0 +1,287 @@
+import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:tra_list/services/offline_service.dart';
+import 'package:tra_list/services/profile_service.dart';
+import 'category_model.dart';
+import 'category_service.dart';
+import 'transaction_model.dart';
+import 'transaction_service.dart';
+
+class AddTransactionController extends GetxController {
+  // Transaction Data
+  final RxBool isExpense = true.obs;
+  final descC = TextEditingController();
+  final amountC = TextEditingController();
+  final RxnString selectedCategory = RxnString(null);
+  final Rx<DateTime> selectedDate = DateTime.now().obs;
+
+  // UI State
+  final RxBool busy = false.obs;
+  final RxBool categoriesLoading = true.obs;
+
+  // Categories
+  final RxList<CategoryModel> incomeCategories = <CategoryModel>[].obs;
+  final RxList<CategoryModel> expenseCategories = <CategoryModel>[].obs;
+
+  // Theming
+  final Rx<Color> brandColor = const Color(0xFF1976D2).obs;
+  final Rx<Color> accentColor = const Color(0xFF42A5F5).obs;
+
+  // Connectivity
+  final RxBool isOnline = true.obs;
+  final Connectivity _connectivity = Connectivity();
+
+  // Original transaction for editing
+  final TransactionModel? _originalTransaction;
+
+  AddTransactionController({
+    TransactionModel? transaction,
+    TransactionType? initialType,
+  }) : _originalTransaction = transaction {
+    if (transaction != null) {
+      isExpense.value = transaction.type == TransactionType.expense;
+      descC.text = transaction.description;
+      amountC.text = transaction.amount.toStringAsFixed(
+        0,
+      ); // Assuming no decimals for display
+      selectedCategory.value = transaction.category;
+      selectedDate.value = transaction.date;
+    } else if (initialType != null) {
+      isExpense.value = initialType == TransactionType.expense;
+    }
+  }
+
+  @override
+  Future<void> onInit() async {
+    super.onInit();
+    ProfileService.loadAndSetLanguage();
+
+    // **FIX**: Await connectivity check before loading data
+    await _initConnectivity();
+    await loadCategories();
+    await loadBrandColors();
+
+    _connectivity.onConnectivityChanged.listen((results) {
+      if (results.isNotEmpty) {
+        _updateConnectionStatus(results.first);
+      }
+    });
+  }
+
+  @override
+  void onClose() {
+    descC.dispose();
+    amountC.dispose();
+    super.onClose();
+  }
+
+  Future<void> _initConnectivity() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      await _updateConnectionStatus(results.first);
+    } catch (e) {
+      await _updateConnectionStatus(ConnectivityResult.none);
+    }
+  }
+
+  Future<void> _updateConnectionStatus(ConnectivityResult result) async {
+    final wasOnline = isOnline.value;
+    bool newOnlineStatus = result != ConnectivityResult.none;
+
+    if (newOnlineStatus) {
+      newOnlineStatus = await _hasInternetConnection();
+    }
+
+    isOnline.value = newOnlineStatus;
+
+    if (!wasOnline && isOnline.value) {
+      _showConnectivityStatus();
+      _syncOfflineData();
+    }
+  }
+
+  Future<bool> _hasInternetConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    }
+  }
+
+  void _showConnectivityStatus() {
+    final message = isOnline.isTrue
+        ? 'Back online - transactions will sync automatically'.tr
+        : 'No internet connection - transactions will be saved offline'.tr;
+    final backgroundColor = isOnline.isTrue ? Colors.green : Colors.orange;
+
+    Get.snackbar(
+      isOnline.isTrue ? 'Connected'.tr : 'Offline Mode'.tr,
+      message,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: backgroundColor,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      icon: Icon(
+        isOnline.isTrue ? Icons.wifi : Icons.wifi_off,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Future<void> _syncOfflineData() async {
+    final result = await OfflineService.syncPendingData();
+    if (result.failureCount > 0) {
+      Get.snackbar(
+        'Sync Error'.tr,
+        '${'Failed to sync some offline transactions'.tr}: ${result.errors.join(", ")}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+    } else if (result.successCount > 0) {
+      Get.snackbar(
+        'Sync Complete'.tr,
+        '${result.successCount} offline item(s) have been synced'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> loadBrandColors() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      if (profile.containsKey('colors')) {
+        final colors = profile['colors'] as Map<String, dynamic>;
+        brandColor.value = Color(colors['brand'] as int? ?? 0xFF1976D2);
+        accentColor.value = Color(colors['accent'] as int? ?? 0xFFFFA000);
+      }
+    } catch (e) {
+      debugPrint('Could not load profile colors: $e');
+    }
+  }
+
+  Future<void> loadCategories() async {
+    categoriesLoading.value = true;
+    try {
+      List<CategoryModel> allCategories;
+      if (isOnline.value) {
+        try {
+          final snapshot = await CategoryService.getCategoriesStream().first;
+          allCategories = snapshot.docs.map((doc) => doc.data()).toList();
+          await OfflineService.cacheCategories(allCategories);
+        } catch (e) {
+          allCategories = await OfflineService.getCachedCategories();
+        }
+      } else {
+        allCategories = await OfflineService.getCachedCategories();
+      }
+      _updateCategoryState(allCategories);
+    } catch (e) {
+      _useDefaultCategories();
+    } finally {
+      categoriesLoading.value = false;
+    }
+  }
+
+  void _updateCategoryState(List<CategoryModel> allCategories) {
+    incomeCategories.value = allCategories
+        .where((c) => c.type == TransactionType.income)
+        .toList();
+    expenseCategories.value = allCategories
+        .where((c) => c.type == TransactionType.expense)
+        .toList();
+  }
+
+  void _useDefaultCategories() {
+    expenseCategories.value = [
+      CategoryModel(name: 'Food & Dining', type: TransactionType.expense),
+      CategoryModel(name: 'Transportation', type: TransactionType.expense),
+    ];
+    incomeCategories.value = [
+      CategoryModel(name: 'Salary', type: TransactionType.income),
+      CategoryModel(name: 'Business', type: TransactionType.income),
+    ];
+  }
+
+  Future<void> addNewCategory(String newCategoryName) async {
+    final newCategory = CategoryModel(
+      name: newCategoryName,
+      type: isExpense.value ? TransactionType.expense : TransactionType.income,
+    );
+
+    if (isExpense.value) {
+      expenseCategories.add(newCategory);
+    } else {
+      incomeCategories.add(newCategory);
+    }
+    selectedCategory.value = newCategoryName;
+
+    if (isOnline.value) {
+      await CategoryService.addCategory(newCategory);
+    } else {
+      await OfflineService.saveCategoryOffline(newCategory);
+    }
+  }
+
+  Future<void> save() async {
+    busy.value = true;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw Exception('User not signed in');
+
+      final model = TransactionModel(
+        id: _originalTransaction?.id,
+        type: isExpense.value
+            ? TransactionType.expense
+            : TransactionType.income,
+        description: descC.text.trim(),
+        amount: double.tryParse(amountC.text.replaceAll(',', '')) ?? 0.0,
+        date: selectedDate.value,
+        category: selectedCategory.value ?? 'Uncategorized',
+        uid: uid,
+      );
+
+      if (isOnline.value) {
+        if (_originalTransaction == null) {
+          await TransactionService.saveTransaction(model);
+        } else {
+          await TransactionService.updateTransaction(model.id!, model);
+        }
+        Get.snackbar(
+          'success'.tr,
+          'Transaction saved successfully'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else {
+        await OfflineService.saveTransactionOffline(model);
+        Get.snackbar(
+          'Saved Offline'.tr,
+          'Transaction saved offline and will sync when connection is restored'
+              .tr,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+      }
+      Get.back(result: true);
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to save transaction: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      busy.value = false;
+    }
+  }
+}

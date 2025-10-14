@@ -2,7 +2,9 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:get/get.dart';
 import '../utils/image_utils.dart';
+import 'package:tra_list/invoice/language_controller.dart';
 
 class ProfileService {
   static final _db = FirebaseFirestore.instance;
@@ -77,6 +79,30 @@ class ProfileService {
     final payload = Map<String, dynamic>.from(data);
     payload['updatedAt'] = FieldValue.serverTimestamp();
     await _docRef(uid).set(payload, SetOptions(merge: true));
+  }
+
+  /// Loads the user's language preference from their profile and sets it globally.
+  /// This should be called once after the user signs in.
+  static Future<void> loadAndSetLanguage() async {
+    try {
+      final uid = _uidOrThrow();
+      final ref = _docRef(uid);
+      final snap = await ref.get();
+
+      if (snap.exists && snap.data()!.containsKey('language')) {
+        final langCode = snap.data()!['language']?.toString();
+        if (langCode != null) {
+          final langController = Get.find<LanguageController>();
+          langController.changeLanguage(
+            langCode,
+            langCode == 'sw' ? 'TZ' : 'US',
+          );
+        }
+      }
+    } catch (e) {
+      // Silently fail, as default language will be used.
+      print('Could not load language preference: $e');
+    }
   }
 
   // Back-compat alias

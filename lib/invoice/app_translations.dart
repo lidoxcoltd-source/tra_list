@@ -17,13 +17,16 @@ class AppTranslations extends Translations {
       'net': 'Net',
       'search': 'Search',
       'refresh': 'Refresh',
+      'Clear': 'Clear',
       'total': 'Total',
       'category': 'Category',
       'categories': 'Categories',
       'description': 'Description',
+      'details': 'Details',
       'amount': 'Amount',
       'date': 'Date',
       'close': 'Close',
+      'Add': 'Add',
 
       // Home Page
       'home_title': 'TRA Receipt System',
@@ -64,6 +67,11 @@ class AppTranslations extends Translations {
       'transactions_this_week': 'This Week',
       'transactions_this_month': 'This Month',
       'transactions_custom_range': 'Custom Range',
+      'Sort by': 'Sort by',
+      'Date (Newest First)': 'Date (Newest First)',
+      'Date (Oldest First)': 'Date (Oldest First)',
+      'Amount (Highest First)': 'Amount (Highest First)',
+      'Amount (Lowest First)': 'Amount (Lowest First)',
       'transactions_add_income': 'Income',
       'transactions_add_expense': 'Expense',
       'transactions_delete_title': 'Delete transaction?',
@@ -73,6 +81,11 @@ class AppTranslations extends Translations {
       'transactions_end_of_list': 'End of list',
       'transactions_load_more': 'Load More',
       'transactions_no_transactions': 'No transactions found for this period.',
+      'Today': 'Today',
+      'Yesterday': 'Yesterday',
+      'Export PDF': 'Export PDF',
+      'Export Excel': 'Export Excel',
+      'Analytics': 'Analytics',
 
       // Add Transaction Page
       'add_transaction_title': 'Add Transaction',
@@ -80,6 +93,24 @@ class AppTranslations extends Translations {
       'add_category_title': 'Add New Category',
       'category_name': 'Category Name',
       'save_transaction': 'Save Transaction',
+      'Back online - transactions will sync automatically':
+          'Back online - transactions will sync automatically',
+      'No internet connection - transactions will be saved offline':
+          'No internet connection - transactions will be saved offline',
+      'Connected': 'Connected',
+      'Offline Mode': 'Offline Mode',
+      'Sync Complete': 'Sync Complete',
+      'Offline transactions have been synced':
+          'Offline transactions have been synced',
+      'Sync Error': 'Sync Error',
+      'Failed to sync some offline transactions':
+          'Failed to sync some offline transactions',
+      'Category will be saved offline and synced when connection is restored.':
+          'Category will be saved offline and synced when connection is restored.',
+      'Transaction saved successfully': 'Transaction saved successfully',
+      'Saved Offline': 'Saved Offline',
+      'Transaction saved offline and will sync when connection is restored':
+          'Transaction saved offline and will sync when connection is restored',
 
       // Categories Page
       'categories_title': 'Manage Categories',
@@ -94,6 +125,77 @@ class AppTranslations extends Translations {
       'profile_company_details': 'Company Details',
       'profile_payment_details': 'Payment Details',
       'profile_branding': 'Branding & Theming',
+      'analytics_all': 'All',
+      'analytics_financial_overview': 'Financial Overview',
+      'analytics_total_income': 'Total Income',
+      'analytics_total_expense': 'Total Expense',
+      'analytics_transactions': 'Transactions',
+      'analytics_no_cash_flow_data': 'No data available for cash flow analysis',
+      'analytics_cash_flow_trend': 'Cash Flow Trend',
+      'analytics_no_category_data': 'No category data',
+      'analytics_top_spending_categories': 'Top Spending Categories',
+      'analytics_top_income_sources': 'Top Income Sources',
+      'analytics_category_distribution': 'Category Distribution',
+      'analytics_top_categories': 'Top Categories',
+      'analytics_no_frequency_data': 'No frequency data available',
+      'analytics_transaction_pattern': 'Transaction Pattern',
+      'analytics_ai_insights': 'AI Insights',
+      'analytics_positive_cash_flow': 'Positive Cash Flow',
+      'analytics_positive_cash_flow_desc':
+          'Great! Your income exceeds expenses by',
+      'analytics_healthy_financial_position':
+          'This is a healthy financial position.',
+      'analytics_negative_cash_flow': 'Action Required: Negative Cash Flow',
+      'analytics_negative_cash_flow_desc':
+          'Your expenses are higher than your income by',
+      'analytics_negative_cash_flow_suggestion':
+          'Consider reviewing spending habits or finding new income streams.',
+      'analytics_balanced_budget': 'Balanced Budget',
+      'analytics_balanced_budget_desc':
+          'Your income and expenses are balanced. Look for opportunities to increase your savings.',
+      'analytics_top_spending_area': 'Top Spending Area',
+      'analytics_top_spending_area_desc1': 'Your highest spending is in',
+      'analytics_top_spending_area_desc2': 'making up',
+      'analytics_top_spending_area_desc3':
+          'of total expenses. Review this category for potential savings.',
+      'analytics_suggestion_diversify_spending':
+          'Suggestion: Diversify Spending',
+      'analytics_suggestion_diversify_spending_desc':
+          'A large portion of your budget goes to',
+      'analytics_suggestion_diversify_spending_suggestion':
+          'Setting a specific budget for this category could improve your financial flexibility.',
+      'analytics_busiest_day': 'Busiest Transaction Day',
+      'analytics_busiest_day_desc': 'You tend to make the most transactions on',
+      'analytics_busiest_day_suggestion':
+          'Being mindful of spending on this day could help manage your budget.',
+      'analytics_avg_expense_value': 'Average Expense Value',
+      'analytics_avg_expense_value_desc': 'Your average expense transaction is',
+      'analytics_avg_expense_value_suggestion':
+          'Tracking small expenses can lead to big savings over time.',
+      'analytics_not_enough_data': 'Not Enough Data',
+      'analytics_not_enough_data_desc':
+          'Add more transactions to unlock powerful AI-driven insights and suggestions for your financial health.',
+      'analytics_report_title': 'Analytics Report',
+      'PDF saved': 'PDF saved',
+      'Week': 'Week',
+      'Day': 'Day',
+      'Month': 'Month',
+      'Year': 'Year',
+      'Monday': 'Monday',
+      'Tuesday': 'Tuesday',
+      'Wednesday': 'Wednesday',
+      'Thursday': 'Thursday',
+      'Friday': 'Friday',
+      'Saturday': 'Saturday',
+      'Sunday': 'Sunday',
+      'PDF Export Error': 'PDF Export Error',
+      'analytics_transactions_for': 'Transactions for',
+      'analytics_last_3_months': 'Last 3 Months',
+      'analytics_this_year': 'This Year',
+      'Other': 'Other',
+      'Network timeout. Please check your connection.':
+          'Network timeout. Please check your connection.',
+      'Failed to load analytics data: ': 'Failed to load analytics data: ',
     },
     'sw_TZ': {
       // General
@@ -109,13 +211,16 @@ class AppTranslations extends Translations {
       'net': 'Jumla Halisi',
       'search': 'Tafuta',
       'refresh': 'Burudisha',
+      'Clear': 'Futa',
       'total': 'Jumla',
       'category': 'Kategoria',
       'categories': 'Kategoria',
       'description': 'Maelezo',
+      'details': 'Maelezo',
       'amount': 'Kiasi',
       'date': 'Tarehe',
       'close': 'Funga',
+      'Add': 'Ongeza',
 
       // Home Page
       'home_title': 'Mfumo wa Risiti wa TRA',
@@ -156,6 +261,11 @@ class AppTranslations extends Translations {
       'transactions_this_week': 'Wiki Hii',
       'transactions_this_month': 'Mwezi Huu',
       'transactions_custom_range': 'Chagua Kipindi',
+      'Sort by': 'Panga kwa',
+      'Date (Newest First)': 'Tarehe (Mpya Kwanza)',
+      'Date (Oldest First)': 'Tarehe (Zamani Kwanza)',
+      'Amount (Highest First)': 'Kiasi (Kikubwa Kwanza)',
+      'Amount (Lowest First)': 'Kiasi (Kidogo Kwanza)',
       'transactions_add_income': 'Mapato',
       'transactions_add_expense': 'Matumizi',
       'transactions_delete_title': 'Futa muamala?',
@@ -165,6 +275,11 @@ class AppTranslations extends Translations {
       'transactions_end_of_list': 'Mwisho wa orodha',
       'transactions_load_more': 'Pakia Zaidi',
       'transactions_no_transactions': 'Hakuna miamala kwa kipindi hiki.',
+      'Today': 'Leo',
+      'Yesterday': 'Jana',
+      'Export PDF': 'Hamisha PDF',
+      'Export Excel': 'Hamisha Excel',
+      'Analytics': 'Uchambuzi',
 
       // Add Transaction Page
       'add_transaction_title': 'Ongeza Muamala',
@@ -172,6 +287,24 @@ class AppTranslations extends Translations {
       'add_category_title': 'Ongeza Kategoria Mpya',
       'category_name': 'Jina la Kategoria',
       'save_transaction': 'Hifadhi Muamala',
+      'Back online - transactions will sync automatically':
+          'Umerudi mtandaoni - miamala itasawazishwa kiotomatiki',
+      'No internet connection - transactions will be saved offline':
+          'Hakuna muunganisho wa intaneti - miamala itahifadhiwa nje ya mtandao',
+      'Connected': 'Imeunganishwa',
+      'Offline Mode': 'Hali ya Nje ya Mtandao',
+      'Sync Complete': 'Usawazishaji Umekamilika',
+      'Offline transactions have been synced':
+          'Miamala ya nje ya mtandao imesawazishwa',
+      'Sync Error': 'Hitilafu ya Usawazishaji',
+      'Failed to sync some offline transactions':
+          'Imeshindwa kusawazisha baadhi ya miamala ya nje ya mtandao',
+      'Category will be saved offline and synced when connection is restored.':
+          'Kategoria itahifadhiwa nje ya mtandao na kusawazishwa muunganisho utakapopatikana.',
+      'Transaction saved successfully': 'Muamala umehifadhiwa kikamilifu',
+      'Saved Offline': 'Imehifadhiwa Nje ya Mtandao',
+      'Transaction saved offline and will sync when connection is restored':
+          'Muamala umehifadhiwa nje ya mtandao na utasawazishwa muunganisho utakapopatikana',
 
       // Categories Page
       'categories_title': 'Dhibiti Kategoria',
@@ -186,6 +319,81 @@ class AppTranslations extends Translations {
       'profile_company_details': 'Maelezo ya Kampuni',
       'profile_payment_details': 'Maelezo ya Malipo',
       'profile_branding': 'Chapa na Mandhari',
+      'analytics_all': 'Zote',
+      'analytics_financial_overview': 'Muhtasari wa Kifedha',
+      'analytics_total_income': 'Jumla ya Mapato',
+      'analytics_total_expense': 'Jumla ya Matumizi',
+      'analytics_transactions': 'Miamala',
+      'analytics_no_cash_flow_data':
+          'Hakuna data ya uchambuzi wa mtiririko wa fedha',
+      'analytics_cash_flow_trend': 'Mwenendo wa Mtiririko wa Fedha',
+      'analytics_no_category_data': 'Hakuna data ya kategoria',
+      'analytics_top_spending_categories': 'Kategoria za Juu za Matumizi',
+      'analytics_top_income_sources': 'Vyanzo Vikuu vya Mapato',
+      'analytics_category_distribution': 'Mgawanyo wa Kategoria',
+      'analytics_top_categories': 'Kategoria za Juu',
+      'analytics_no_frequency_data': 'Hakuna data ya marudio ya miamala',
+      'analytics_transaction_pattern': 'Mpangilio wa Miamala',
+      'analytics_ai_insights': 'Ufahamu wa AI',
+      'analytics_positive_cash_flow': 'Mtiririko Chanya wa Fedha',
+      'analytics_positive_cash_flow_desc':
+          'Safi! Mapato yako yanazidi matumizi kwa',
+      'analytics_healthy_financial_position': 'Hii ni hali nzuri ya kifedha.',
+      'analytics_negative_cash_flow':
+          'Hatua Inahitajika: Mtiririko Hasi wa Fedha',
+      'analytics_negative_cash_flow_desc':
+          'Matumizi yako ni ya juu kuliko mapato kwa',
+      'analytics_negative_cash_flow_suggestion':
+          'Fikiria kupitia upya tabia za matumizi au kutafuta vyanzo vipya vya mapato.',
+      'analytics_balanced_budget': 'Bajeti Sawa',
+      'analytics_balanced_budget_desc':
+          'Mapato na matumizi yako yanasawazika. Tafuta fursa za kuongeza akiba yako.',
+      'analytics_top_spending_area': 'Eneo Kuu la Matumizi',
+      'analytics_top_spending_area_desc1': 'Matumizi yako makubwa yapo kwenye',
+      'analytics_top_spending_area_desc2': 'ikiwa ni',
+      'analytics_top_spending_area_desc3':
+          'ya jumla ya matumizi. Pitia kategoria hii kwa uwezekano wa kuweka akiba.',
+      'analytics_suggestion_diversify_spending':
+          'Pendekezo: Tofautisha Matumizi',
+      'analytics_suggestion_diversify_spending_desc':
+          'Sehemu kubwa ya bajeti yako inaenda kwa',
+      'analytics_suggestion_diversify_spending_suggestion':
+          'Kuweka bajeti maalum kwa kategoria hii kunaweza kuboresha unyumbufu wako wa kifedha.',
+      'analytics_busiest_day': 'Siku yenye Miamala Mingi Zaidi',
+      'analytics_busiest_day_desc':
+          'Unaelekea kufanya miamala mingi zaidi siku za',
+      'analytics_busiest_day_suggestion':
+          'Kuwa mwangalifu na matumizi siku hii kunaweza kusaidia kudhibiti bajeti yako.',
+      'analytics_avg_expense_value': 'Wastani wa Thamani ya Matumizi',
+      'analytics_avg_expense_value_desc':
+          'Wastani wa muamala wako wa matumizi ni',
+      'analytics_avg_expense_value_suggestion':
+          'Kufuatilia matumizi madogo kunaweza kusababisha akiba kubwa baada ya muda.',
+      'analytics_not_enough_data': 'Hakuna Data ya Kutosha',
+      'analytics_not_enough_data_desc':
+          'Ongeza miamala zaidi ili kufungua ufahamu na mapendekezo ya AI kwa afya yako ya kifedha.',
+      'analytics_report_title': 'Ripoti ya Uchambuzi',
+      'PDF saved': 'PDF imehifadhiwa',
+      'Week': 'Wiki',
+      'Day': 'Siku',
+      'Month': 'Mwezi',
+      'Year': 'Mwaka',
+      'Monday': 'Jumatatu',
+      'Tuesday': 'Jumanne',
+      'Wednesday': 'Jumatano',
+      'Thursday': 'Alhamisi',
+      'Friday': 'Ijumaa',
+      'Saturday': 'Jumamosi',
+      'Sunday': 'Jumapili',
+      'PDF Export Error': 'Hitilafu ya Kuhamisha PDF',
+      'analytics_transactions_for': 'Miamala ya',
+      'analytics_last_3_months': 'Miezi 3 Iliyopita',
+      'analytics_this_year': 'Mwaka Huu',
+      'Other': 'Nyingine',
+      'Network timeout. Please check your connection.':
+          'Muda wa mtandao umeisha. Tafadhali angalia muunganisho wako.',
+      'Failed to load analytics data: ':
+          'Imeshindwa kupakia data ya uchambuzi: ',
     },
   };
 }

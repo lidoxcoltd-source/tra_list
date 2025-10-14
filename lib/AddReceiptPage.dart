@@ -7,6 +7,7 @@ import 'dart:math';
 import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
+import 'services/profile_service.dart';
 import 'dart:html' as html show window;
 
 class AddReceiptPage extends StatefulWidget {
@@ -59,11 +60,16 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   final _taxController = TextEditingController(text: '0.00');
   final _totalInclTaxController = TextEditingController();
 
+  // Dynamic colors from profile
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFFFFA000);
+
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _loadProfileColors();
     _setCurrentDateTime();
     _generateReceiptNumber();
     _generateVerificationCode();
@@ -80,6 +86,21 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   void _generateReceiptNumber() {
     final now = DateTime.now();
     _receiptNoController.text = '${now.millisecondsSinceEpoch}'.substring(7);
+  }
+
+  Future<void> _loadProfileColors() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      if (mounted && profile.containsKey('colors')) {
+        final colors = profile['colors'] as Map<String, dynamic>;
+        setState(() {
+          _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
+          _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile colors: $e');
+    }
   }
 
   void _generateVerificationCode() {
@@ -311,10 +332,17 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('Add New Receipt'),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFFFE500),
-        foregroundColor: Colors.black87,
+        foregroundColor: Colors.white,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brandColor, _accentColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -454,7 +482,9 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                            color: Color(0xFFFFE500),
+                            color: Color(
+                              0xFF1976D2,
+                            ), // Use a consistent focus color
                             width: 2,
                           ),
                         ),
@@ -521,7 +551,9 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                            color: Color(0xFFFFE500),
+                            color: Color(
+                              0xFF1976D2,
+                            ), // Use a consistent focus color
                             width: 2,
                           ),
                         ),
@@ -599,10 +631,10 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: _isLoading ? null : _previewReceipt,
-                        icon: const Icon(Icons.preview),
+                        icon: const Icon(Icons.visibility),
                         label: const Text('Preview Receipt'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
+                          backgroundColor: _accentColor,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -624,8 +656,8 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                             : const Icon(Icons.save),
                         label: Text(_isLoading ? 'Saving...' : 'Save Receipt'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFE500),
-                          foregroundColor: Colors.black87,
+                          backgroundColor: _brandColor,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                       ),
@@ -693,7 +725,10 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFFFFE500), width: 2),
+            borderSide: BorderSide(
+              color: _accentColor, // Use accent color for focus
+              width: 2,
+            ),
           ),
           filled: readOnly,
           fillColor: readOnly ? Colors.grey.shade100 : null,

@@ -97,6 +97,18 @@ class _ProfilePageState extends State<ProfilePage> {
           0xFF000000 | (colors['footer'] as int? ?? 0x424242),
         );
         logoUrl = (data['logoUrl']?.toString().trim() ?? '');
+
+        // Load language from profile
+        final langCode = data['language']?.toString();
+        if (langCode != null) {
+          final currentLang = langController.locale.languageCode;
+          if (langCode != currentLang) {
+            langController.changeLanguage(
+              langCode,
+              langCode == 'sw' ? 'TZ' : 'US',
+            );
+          }
+        }
       });
     } catch (e) {
       if (mounted)
@@ -172,13 +184,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       ListTile(
                         title: Text('profile_language'.tr),
-                        trailing: DropdownButton<String>(
+                        trailing: DropdownButton<String?>(
                           value: langController.locale.languageCode,
                           onChanged: (val) {
                             if (val == 'en') {
                               langController.changeLanguage('en', 'US');
+                              _saveLanguage('en');
                             } else if (val == 'sw') {
                               langController.changeLanguage('sw', 'TZ');
+                              _saveLanguage('sw');
                             }
                           },
                           items: const [
@@ -708,6 +722,19 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Save only the language setting to Firebase.
+  Future<void> _saveLanguage(String langCode) async {
+    try {
+      await ProfileService.save({'language': langCode});
+      Get.snackbar(
+        'Language Saved',
+        'Your language preference has been updated.',
+      );
+    } catch (e) {
+      Get.snackbar('Error', 'Could not save language preference: $e');
+    }
+  }
+
   Future<void> _save() async {
     if (busy) return;
     try {
@@ -738,6 +765,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'footer': footerColor.value & 0xFFFFFFFF,
         },
         if (newUrl != null) 'logoUrl': newUrl,
+        'language': langController.locale.languageCode,
       });
 
       if (!mounted) return;

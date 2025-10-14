@@ -36,4 +36,12 @@ class CategoryModel {
     'name': name,
     'type': type == TransactionType.income ? 'income' : 'expense',
   };
+
+  // Method to convert to a map for Firestore
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'type': type == TransactionType.income ? 'income' : 'expense',
+    };
+  }
 }

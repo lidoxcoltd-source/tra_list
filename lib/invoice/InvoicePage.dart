@@ -25,6 +25,10 @@ class _InvoicePageState extends State<InvoicePage> {
   // Company profile loaded from Firestore
   Map<String, dynamic> _company = {};
 
+  // Dynamic colors from profile
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFFFFA000);
+
   final _clientController = TextEditingController(text: '');
   final _invoiceNoController = TextEditingController(
     text:
@@ -44,7 +48,8 @@ class _InvoicePageState extends State<InvoicePage> {
   @override
   void initState() {
     super.initState();
-    _loadCompany(); // fetch profile from Firestore
+    // fetch profile from Firestore and load colors
+    _loadCompanyAndColors();
   }
 
   @override
@@ -65,7 +70,7 @@ class _InvoicePageState extends State<InvoicePage> {
       .toStringAsFixed(0)
       .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
 
-  Future<void> _loadCompany() async {
+  Future<void> _loadCompanyAndColors() async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
@@ -79,7 +84,14 @@ class _InvoicePageState extends State<InvoicePage> {
       }
       final profile = await ProfileService.loadOrCreate();
       if (!mounted) return;
-      setState(() => _company = profile ?? {});
+      setState(() {
+        _company = profile ?? {};
+        if (profile.containsKey('colors')) {
+          final colors = profile['colors'] as Map<String, dynamic>;
+          _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
+          _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        }
+      });
       debugPrint(
         'InvoicePage: loaded company: ${_company['name'] ?? '(none)'}',
       );
@@ -96,16 +108,15 @@ class _InvoicePageState extends State<InvoicePage> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = const Color(0xFF1976D2);
-
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         foregroundColor: Colors.white,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          // Apply consistent gradient
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+              colors: [_brandColor, _accentColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -143,7 +154,7 @@ class _InvoicePageState extends State<InvoicePage> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: primary,
+                        color: _brandColor,
                       ),
                     ),
                   ],
@@ -151,8 +162,8 @@ class _InvoicePageState extends State<InvoicePage> {
               ),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: primary,
-                  side: BorderSide(color: primary),
+                  foregroundColor: _brandColor,
+                  side: BorderSide(color: _brandColor),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 14,
@@ -168,7 +179,7 @@ class _InvoicePageState extends State<InvoicePage> {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
+                  backgroundColor: _brandColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -210,7 +221,10 @@ class _InvoicePageState extends State<InvoicePage> {
             ),
             focusedBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(10)),
-              borderSide: BorderSide(color: Color(0xFF1976D2), width: 1.6),
+              borderSide: BorderSide(
+                color: Color(0xFF1976D2),
+                width: 1.6,
+              ), // Kept for consistency
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -363,8 +377,8 @@ class _InvoicePageState extends State<InvoicePage> {
                             const Spacer(),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: primary,
-                                side: BorderSide(color: primary),
+                                foregroundColor: _brandColor,
+                                side: BorderSide(color: _brandColor),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -386,7 +400,7 @@ class _InvoicePageState extends State<InvoicePage> {
                         const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
-                            color: primary.withOpacity(0.08),
+                            color: _brandColor.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.symmetric(
@@ -506,7 +520,7 @@ class _InvoicePageState extends State<InvoicePage> {
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
-                              color: primary,
+                              color: _brandColor,
                             ),
                           ),
                         ),
@@ -536,10 +550,11 @@ class _InvoicePageState extends State<InvoicePage> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xFF1976D2).withOpacity(0.12),
+            // Use brand color
+            color: _brandColor.withOpacity(0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: const Color(0xFF1976D2), size: 20),
+          child: Icon(icon, color: _brandColor, size: 20),
         ),
         const SizedBox(width: 10),
         Text(

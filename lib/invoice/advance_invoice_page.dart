@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tra_list/services/profile_service.dart';
 import 'package:flutter/services.dart';
 
 class AdvanceInvoicePage extends StatefulWidget {
@@ -55,6 +56,10 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
   DateTime _issueDate = DateTime.now();
   DateTime? _advanceDueDate = DateTime.now().add(const Duration(days: 5));
 
+  // Dynamic colors from profile
+  Color _brandColor = const Color(0xFF1976D2);
+  Color _accentColor = const Color(0xFFFFA000);
+
   String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
   @override
@@ -67,6 +72,27 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
     _taxC.dispose();
     _advancePaidC.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileColors();
+  }
+
+  Future<void> _loadProfileColors() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      if (mounted && profile.containsKey('colors')) {
+        final colors = profile['colors'] as Map<String, dynamic>;
+        setState(() {
+          _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
+          _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load profile colors: $e');
+    }
   }
 
   double get _subtotal =>
@@ -154,12 +180,22 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        foregroundColor: Colors.white,
         title: const Text('Advance Invoice'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brandColor, _accentColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Save',
             icon: const Icon(Icons.save),
-            onPressed: _save,
+            onPressed: _save, // Keep save action
           ),
         ],
       ),
@@ -263,7 +299,7 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
             const SizedBox(height: 24),
             Card(
               elevation: 0,
-              color: Theme.of(context).colorScheme.primaryContainer,
+              color: _brandColor.withOpacity(0.1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: DefaultTextStyle(
@@ -284,10 +320,22 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
               ),
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.save),
-              label: const Text('Save Advance Invoice'),
+            SizedBox(
+              height: 50,
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save),
+                label: const Text('Save Advance Invoice'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _brandColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
           ],
         ),

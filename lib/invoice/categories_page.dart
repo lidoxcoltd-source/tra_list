@@ -12,6 +12,7 @@ class CategoriesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        // No tr needed for widgets
         title: const Text('Manage Categories'),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -36,7 +37,7 @@ class CategoriesPage extends StatelessWidget {
           if (categories.isEmpty) {
             return const Center(
               child: Text('No categories found. Tap + to add one.'),
-            );
+            ); // No tr needed for widgets
           }
 
           return RefreshIndicator(
@@ -85,14 +86,14 @@ class CategoriesPage extends StatelessWidget {
   void _confirmDelete(CategoryModel category) {
     Get.dialog(
       AlertDialog(
-        title: const Text('Delete Category'),
+        title: Text('Delete Category'.tr),
         content: Text('Are you sure you want to delete "${category.name}"?'),
         actions: [
-          TextButton(onPressed: Get.back, child: const Text('Cancel')),
+          TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
           TextButton(
             onPressed: () async {
               await CategoryService.deleteCategory(category.id!);
-              Get.back();
+              Get.back(); // No tr needed for logic
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
@@ -107,14 +108,16 @@ class CategoriesPage extends StatelessWidget {
 
     Get.dialog(
       AlertDialog(
-        title: Text(category == null ? 'Add Category' : 'Edit Category'),
+        title: Text(
+          category == null ? 'add_category_title'.tr : 'Edit Category'.tr,
+        ),
         content: StatefulBuilder(
           builder: (context, setState) {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: nameController,
+                  controller: nameController, // No tr needed for widgets
                   decoration: const InputDecoration(labelText: 'Category Name'),
                   autofocus: true,
                 ),
@@ -122,19 +125,19 @@ class CategoriesPage extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Type: '),
+                    Text('Type:'.tr),
                     Radio<TransactionType>(
                       value: TransactionType.expense,
                       groupValue: type,
                       onChanged: (v) => setState(() => type = v!),
                     ),
-                    const Text('Expense'),
+                    Text('expense'.tr),
                     Radio<TransactionType>(
                       value: TransactionType.income,
                       groupValue: type,
                       onChanged: (v) => setState(() => type = v!),
                     ),
-                    const Text('Income'),
+                    Text('income'.tr),
                   ],
                 ),
               ],
@@ -142,8 +145,9 @@ class CategoriesPage extends StatelessWidget {
           },
         ),
         actions: [
-          TextButton(onPressed: Get.back, child: const Text('Cancel')),
+          TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
           ElevatedButton(
+            // No tr needed for widgets
             onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
@@ -161,7 +165,7 @@ class CategoriesPage extends StatelessWidget {
               }
               Get.back();
             },
-            child: const Text('Save'),
+            child: Text('save'.tr),
           ),
         ],
       ),
