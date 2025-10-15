@@ -41,42 +41,13 @@ class AddTransactionPage extends GetView<AddTransactionController> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarHeight),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + bottomBarHeight,
+            ), // No tr needed for widgets
             children: [
-              // Offline indicator banner
-              Obx(
-                () => controller.isOnline.isFalse
-                    ? Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          border: Border.all(color: Colors.orange.shade200),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Colors.orange.shade700,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Working offline. Changes will sync when connection is restored.'
-                                    .tr,
-                                style: TextStyle(
-                                  color: Colors.orange.shade700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-
               // Type toggle
               _buildTypeToggle(),
               const SizedBox(height: 16),
@@ -108,28 +79,10 @@ class AddTransactionPage extends GetView<AddTransactionController> {
     final nameController = TextEditingController();
     final newCategoryName = await Get.dialog<String>(
       AlertDialog(
-        title: Row(
-          children: [
-            const Text('Add New Category'),
-            if (controller.isOnline.isFalse) ...[
-              const SizedBox(width: 8),
-              Icon(Icons.wifi_off, size: 16, color: Colors.orange),
-            ],
-          ],
-        ),
+        title: Row(children: [const Text('Add New Category')]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (controller.isOnline.isFalse)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'Category will be saved offline and synced when connection is restored.'
-                      .tr,
-                  style: TextStyle(color: Colors.orange, fontSize: 12),
-                ),
-              ),
             TextField(
               controller: nameController,
               decoration: InputDecoration(labelText: 'category_name'.tr),
@@ -166,34 +119,6 @@ class AddTransactionPage extends GetView<AddTransactionController> {
           children: [
             Text(
               isNew ? 'add_transaction_title'.tr : 'edit_transaction_title'.tr,
-            ),
-            const Spacer(),
-            // Connection status indicator
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: controller.isOnline.value ? Colors.green : Colors.orange,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    controller.isOnline.value ? Icons.wifi : Icons.wifi_off,
-                    size: 14,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    controller.isOnline.value ? 'Online'.tr : 'Offline'.tr,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -289,17 +214,10 @@ class AddTransactionPage extends GetView<AddTransactionController> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            controller.isOnline.value
-                                ? Icons.save
-                                : Icons.save_alt,
-                            color: Colors.white,
-                          ),
+                          const Icon(Icons.save, color: Colors.white),
                           const SizedBox(width: 8),
                           Text(
-                            controller.isOnline.value
-                                ? 'save_transaction'.tr
-                                : 'Save Offline'.tr,
+                            'save_transaction'.tr,
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -432,80 +350,100 @@ class AddTransactionPage extends GetView<AddTransactionController> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${'amount'.tr} (TSH)',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: isMobile ? screenWidth * 0.55 : 200,
-                  child: TextFormField(
-                    controller: controller.amountC,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      prefixText: 'TSH ',
-                      prefixStyle: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      ThousandsSeparatorInputFormatter(),
-                    ],
-                    validator: (v) {
-                      if (v == null || v.isEmpty)
-                        return 'Amount is required'.tr;
-                      if (double.tryParse(v.replaceAll(',', '')) == null)
-                        return 'Invalid number'.tr;
-                      return null;
-                    },
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${'amount'.tr} (TSH)',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: isMobile ? screenWidth * 0.55 : 200,
+                    child: TextFormField(
+                      controller: controller.amountC,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        prefixText: 'TSH ',
+                        prefixStyle: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        ThousandsSeparatorInputFormatter(),
+                      ],
+                      validator: (v) {
+                        if (v == null || v.isEmpty)
+                          return 'Amount is required'.tr;
+                        if (double.tryParse(v.replaceAll(',', '')) == null)
+                          return 'Invalid number'.tr;
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
             SizedBox(width: isMobile ? 12 : 24),
-            Column(
-              children: [
-                Text('Quick'.tr, style: TextStyle(color: Colors.grey.shade600)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  children: [5000, 1000].map((val) {
-                    return OutlinedButton(
-                      onPressed: () {
-                        final current =
-                            double.tryParse(
-                              controller.amountC.text.replaceAll(',', ''),
-                            ) ??
-                            0;
-                        final newVal = (current + val).toInt();
-                        final formatted = newVal.toString().replaceAllMapped(
-                          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                          (m) => '${m[1]},',
-                        );
-                        controller.amountC.text = formatted;
-                      },
-                      child: Text('$val'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: controller.brandColor.value.withOpacity(0.14),
+            // Quick add buttons (reactive to brand color)
+            Obx(() {
+              String _formatInt(int n) => n.toString().replaceAllMapped(
+                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                (m) => '${m[1]},',
+              );
+
+              void _setAmountFromInt(int value) {
+                final formatted = _formatInt(value);
+                controller.amountC.value = controller.amountC.value.copyWith(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              }
+
+              return Column(
+                children: [
+                  Text(
+                    'Quick'.tr,
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [1000, 5000, 10000].map((val) {
+                      return OutlinedButton(
+                        onPressed: () {
+                          final current =
+                              int.tryParse(
+                                controller.amountC.text.replaceAll(',', ''),
+                              ) ??
+                              0;
+                          final newVal = current + val;
+                          _setAmountFromInt(newVal);
+                        },
+                        child: Text('$val'),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: controller.brandColor.value.withOpacity(
+                              0.14,
+                            ),
+                          ),
+                          foregroundColor: controller.brandColor.value,
+                          minimumSize: const Size(56, 36),
                         ),
-                        minimumSize: const Size(56, 36),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -526,10 +464,6 @@ class AddTransactionPage extends GetView<AddTransactionController> {
                 'category'.tr,
                 style: TextStyle(color: Colors.grey.shade800),
               ),
-              if (controller.isOnline.isFalse) ...[
-                const SizedBox(width: 8),
-                const Icon(Icons.wifi_off, size: 14, color: Colors.orange),
-              ],
             ],
           ),
           const SizedBox(height: 8),

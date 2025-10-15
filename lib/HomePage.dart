@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tra_list/jobs/controllers/job_controller.dart';
 import 'package:tra_list/invoice/transactions_page.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/pages/ProfilePage.dart';
@@ -11,6 +12,9 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ensure JobController is available for the summary widget.
+    // Get.put is safe to call multiple times; it won't create a new instance.
+    final jobController = Get.put(JobController());
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -64,6 +68,8 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header Section
+              _buildJobsSummaryCard(context, jobController),
+              const SizedBox(height: 20),
 
               // Menu Options
               Expanded(
@@ -131,6 +137,17 @@ class HomePage extends StatelessWidget {
                       onTap: () => Get.toNamed(AppRoutes.transactions),
                     ),
 
+                    // Manage Jobs
+                    _buildMenuCard(
+                      context,
+                      icon: Icons.work_history_outlined,
+                      title: 'home_manage_jobs'.tr,
+                      subtitle: 'home_manage_jobs_sub'.tr,
+                      color: const Color(0xFF795548),
+                      onTap: () {
+                        Get.toNamed(AppRoutes.jobs);
+                      },
+                    ),
                     // Analytics & Insights
                     _buildMenuCard(
                       context,
@@ -222,6 +239,101 @@ class HomePage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildJobsSummaryCard(BuildContext context, JobController controller) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => Get.toNamed(AppRoutes.jobs),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF795548).withOpacity(0.8),
+                const Color(0xFF5D4037).withOpacity(0.9),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Obx(
+            () => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.work_history_outlined,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'home_jobs_overview'.tr,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildSummaryStat(
+                      'home_active_jobs'.tr,
+                      controller.active.length.toString(),
+                    ),
+                    _buildSummaryStat(
+                      'home_due_soon'.tr,
+                      controller.dueSoon.length.toString(),
+                      highlight: controller.dueSoon.isNotEmpty,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryStat(
+    String label,
+    String value, {
+    bool highlight = false,
+  }) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: highlight ? Colors.amber.shade300 : Colors.white,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8)),
+        ),
+      ],
     );
   }
 

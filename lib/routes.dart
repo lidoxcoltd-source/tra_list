@@ -5,6 +5,7 @@ import 'package:tra_list/HomePage.dart';
 import 'package:tra_list/AddReceiptPage.dart';
 import 'package:tra_list/invoice/categories_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
+import 'package:tra_list/jobs/views/jobs_page.dart';
 
 import 'package:tra_list/ReceiptsListPageHybrid.dart';
 import 'package:tra_list/ReceiptPage.dart';
@@ -49,6 +50,7 @@ class AppRoutes {
   static const String transactions = '/transactions';
   static const String categories = '/categories';
   static const String analytics = '/analytics';
+  static const String jobs = '/jobs';
   static const String clientCredit = '/client-credit';
 
   // Helper method to generate receipt URL
@@ -112,6 +114,12 @@ class AppRoutes {
     GetPage(
       name: analytics,
       page: () => const AnalyticsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: jobs,
+      page: () => const JobsPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

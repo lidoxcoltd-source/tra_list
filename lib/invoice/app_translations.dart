@@ -46,6 +46,12 @@ class AppTranslations extends Translations {
       'home_analytics_sub': 'View financial charts and reports',
       'home_about': 'About',
       'home_about_sub': 'System information and help',
+      'home_manage_jobs': 'Manage Jobs',
+      'home_manage_jobs_sub': 'Register and track client jobs',
+      'home_jobs_overview': 'Jobs Overview',
+      'home_active_jobs': 'Active Jobs',
+      'home_due_soon': 'Due Soon',
+
       'home_profile': 'Profile',
       'home_sign_out': 'Sign Out',
 
@@ -91,22 +97,8 @@ class AppTranslations extends Translations {
       'add_transaction_title': 'Add Transaction',
       'edit_transaction_title': 'Edit Transaction',
       'add_category_title': 'Add New Category',
-      'category_name': 'Category Name',
       'save_transaction': 'Save Transaction',
-      'Back online - transactions will sync automatically':
-          'Back online - transactions will sync automatically',
-      'No internet connection - transactions will be saved offline':
-          'No internet connection - transactions will be saved offline',
-      'Connected': 'Connected',
-      'Offline Mode': 'Offline Mode',
-      'Sync Complete': 'Sync Complete',
-      'Offline transactions have been synced':
-          'Offline transactions have been synced',
-      'Sync Error': 'Sync Error',
-      'Failed to sync some offline transactions':
-          'Failed to sync some offline transactions',
-      'Category will be saved offline and synced when connection is restored.':
-          'Category will be saved offline and synced when connection is restored.',
+      'category_name': 'Category Name', // No tr needed for logic
       'Transaction saved successfully': 'Transaction saved successfully',
       'Saved Offline': 'Saved Offline',
       'Transaction saved offline and will sync when connection is restored':
@@ -160,6 +152,60 @@ class AppTranslations extends Translations {
           'of total expenses. Review this category for potential savings.',
       'analytics_suggestion_diversify_spending':
           'Suggestion: Diversify Spending',
+
+      // Jobs
+      'jobs_title': 'Jobs',
+      'add_job_title': 'Add New Job',
+      'edit_job_title': 'Edit Job',
+      'jobs_all': 'All',
+      'jobs_active': 'Active',
+      'jobs_completed': 'Completed',
+      'jobs_important': 'Important',
+      'no_jobs': 'No jobs found.',
+      'client_name': 'Client Name',
+      'job_type': 'Job Type',
+      'total_amount': 'Total Amount',
+      'advance_paid': 'Advance Paid',
+      'paid_in_full': 'Paid in Full',
+      'start_date': 'Start Date',
+      'due_date': 'Due Date',
+      'save_job': 'Save Job',
+      'delete_job': 'Delete Job',
+      'mark_complete': 'Mark as Complete',
+      'phone_primary': 'Primary Phone',
+      'phone_secondary': 'Secondary Phone',
+      'paid': 'Paid',
+      'balance': 'Balance',
+      'due_today': 'Due Today',
+      'overdue_by_days': 'Overdue by @days days',
+      'due_in_days': 'Due in @days days',
+
+      // Validation
+      'validation_required': 'This field is required',
+      'validation_amount_positive': 'Amount must be a positive number',
+      'validation_advance_not_exceed': 'Advance cannot exceed total amount',
+
+      // Sorting
+      'Date Added (Newest)': 'Date Added (Newest)',
+      'Date Added (Oldest)': 'Date Added (Oldest)',
+      'Due Date (Soonest)': 'Due Date (Soonest)',
+      'Client Name (A-Z)': 'Client Name (A-Z)',
+      'Client Name (Z-A)': 'Client Name (Z-A)',
+      'Are you sure you want to delete this job?':
+          'Are you sure you want to delete this job?',
+      'record_payment_in_transactions': 'Record Payment in Transactions',
+      'record_payment_confirm_title': 'Confirm Payment Record',
+      'record_payment_confirm_content':
+          'This will add an income of TSH @amount to your transactions under the "Job Payments" category. Do you want to continue?',
+      'Payment already recorded': 'Payment already recorded',
+      'record_final_payment_title': 'Record Final Payment?',
+      'record_final_payment_content':
+          'This job has a balance of TSH @amount. Do you want to record this as a final income payment in your transactions?',
+      'send_payment_reminder': 'Send Payment Reminder',
+      'payment_reminder_message':
+          'Dear @client,\n\nThis is a friendly reminder that the payment for your job "@job_type" is overdue. The outstanding balance is TSH @balance.\n\nPlease make the payment at your earliest convenience.\n\nThank you,\n@company_name',
+      'Could not open WhatsApp. Is it installed?':
+          'Could not open WhatsApp. Is it installed?',
       'analytics_suggestion_diversify_spending_desc':
           'A large portion of your budget goes to',
       'analytics_suggestion_diversify_spending_suggestion':
@@ -240,6 +286,11 @@ class AppTranslations extends Translations {
       'home_analytics_sub': 'Angalia chati za kifedha na ripoti',
       'home_about': 'Kuhusu',
       'home_about_sub': 'Taarifa za mfumo na msaada',
+      'home_manage_jobs': 'Dhibiti Kazi',
+      'home_manage_jobs_sub': 'Sajili na fuatilia kazi za wateja',
+      'home_jobs_overview': 'Muhtasari wa Kazi',
+      'home_active_jobs': 'Kazi Zinazoendelea',
+      'home_due_soon': 'Zinakaribia Kukamilika',
       'home_profile': 'Wasifu',
       'home_sign_out': 'Toka Nje',
 
@@ -285,22 +336,8 @@ class AppTranslations extends Translations {
       'add_transaction_title': 'Ongeza Muamala',
       'edit_transaction_title': 'Hariri Muamala',
       'add_category_title': 'Ongeza Kategoria Mpya',
-      'category_name': 'Jina la Kategoria',
       'save_transaction': 'Hifadhi Muamala',
-      'Back online - transactions will sync automatically':
-          'Umerudi mtandaoni - miamala itasawazishwa kiotomatiki',
-      'No internet connection - transactions will be saved offline':
-          'Hakuna muunganisho wa intaneti - miamala itahifadhiwa nje ya mtandao',
-      'Connected': 'Imeunganishwa',
-      'Offline Mode': 'Hali ya Nje ya Mtandao',
-      'Sync Complete': 'Usawazishaji Umekamilika',
-      'Offline transactions have been synced':
-          'Miamala ya nje ya mtandao imesawazishwa',
-      'Sync Error': 'Hitilafu ya Usawazishaji',
-      'Failed to sync some offline transactions':
-          'Imeshindwa kusawazisha baadhi ya miamala ya nje ya mtandao',
-      'Category will be saved offline and synced when connection is restored.':
-          'Kategoria itahifadhiwa nje ya mtandao na kusawazishwa muunganisho utakapopatikana.',
+      'category_name': 'Jina la Kategoria', // No tr needed for logic
       'Transaction saved successfully': 'Muamala umehifadhiwa kikamilifu',
       'Saved Offline': 'Imehifadhiwa Nje ya Mtandao',
       'Transaction saved offline and will sync when connection is restored':
@@ -355,6 +392,60 @@ class AppTranslations extends Translations {
           'ya jumla ya matumizi. Pitia kategoria hii kwa uwezekano wa kuweka akiba.',
       'analytics_suggestion_diversify_spending':
           'Pendekezo: Tofautisha Matumizi',
+
+      // Kazi
+      'jobs_title': 'Kazi',
+      'add_job_title': 'Sajili Kazi Mpya',
+      'edit_job_title': 'Hariri Kazi',
+      'jobs_all': 'Zote',
+      'jobs_active': 'Zinazoendelea',
+      'jobs_completed': 'Zilizokamilika',
+      'jobs_important': 'Muhimu',
+      'no_jobs': 'Hakuna kazi zilizopatikana.',
+      'client_name': 'Jina la Mteja',
+      'job_type': 'Aina ya Kazi',
+      'total_amount': 'Gharama Kamili',
+      'advance_paid': 'Malipo ya Awali',
+      'paid_in_full': 'Amelipa Zote',
+      'start_date': 'Tarehe ya Kuanza',
+      'due_date': 'Tarehe ya Kukamilika',
+      'save_job': 'Hifadhi Kazi',
+      'delete_job': 'Futa Kazi',
+      'mark_complete': 'Weka alama imekamilika',
+      'phone_primary': 'Namba Kuu ya Simu',
+      'phone_secondary': 'Namba ya Ziada',
+      'paid': 'Amelipa',
+      'balance': 'Bado',
+      'due_today': 'Inakamilika Leo',
+      'overdue_by_days': 'Imechelewa kwa siku @days',
+      'due_in_days': 'Zimebaki siku @days',
+
+      // Uthibitishaji
+      'validation_required': 'Sehemu hii inahitajika',
+      'validation_amount_positive': 'Kiasi lazima kiwe namba chanya',
+      'validation_advance_not_exceed': 'Malipo ya awali haiwezi kuzidi jumla',
+
+      // Kuchagua
+      'Date Added (Newest)': 'Tarehe (Mpya Kwanza)',
+      'Date Added (Oldest)': 'Tarehe (Zamani Kwanza)',
+      'Due Date (Soonest)': 'Tarehe ya Kukamilika (Karibu Zaidi)',
+      'Client Name (A-Z)': 'Jina la Mteja (A-Z)',
+      'Client Name (Z-A)': 'Jina la Mteja (Z-A)',
+      'Are you sure you want to delete this job?':
+          'Una uhakika unataka kufuta kazi hii?',
+      'record_payment_in_transactions': 'Rekodi Malipo Kwenye Miamala',
+      'record_payment_confirm_title': 'Thibitisha Kurekodi Malipo',
+      'record_payment_confirm_content':
+          'Hii itaongeza mapato ya TSH @amount kwenye miamala yako chini ya kategoria ya "Malipo ya Kazi". Unataka kuendelea?',
+      'Payment already recorded': 'Malipo yamesharekodiwa',
+      'record_final_payment_title': 'Rekodi Malipo ya Mwisho?',
+      'record_final_payment_content':
+          'Kazi hii ina salio la TSH @amount. Je, unataka kurekodi hili kama malipo ya mwisho ya mapato kwenye miamala yako?',
+      'send_payment_reminder': 'Tuma Kikumbusho cha Malipo',
+      'payment_reminder_message':
+          'Ndugu @client,\n\nHuu ni ukumbusho kwamba malipo ya kazi yako "@job_type" yamechelewa. Salio lililobaki ni TSH @balance.\n\Tafadhali fanya malipo mapema iwezekanavyo.\n\nAsante,\n@company_name',
+      'Could not open WhatsApp. Is it installed?':
+          'Imeshindwa kufungua WhatsApp. Imewekwa kwenye simu?',
       'analytics_suggestion_diversify_spending_desc':
           'Sehemu kubwa ya bajeti yako inaenda kwa',
       'analytics_suggestion_diversify_spending_suggestion':

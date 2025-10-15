@@ -11,7 +11,6 @@ import 'transaction_model.dart';
 import 'transaction_report_pdf.dart';
 import 'transaction_service.dart';
 import 'package:tra_list/services/profile_service.dart';
-import 'package:tra_list/services/offline_service.dart';
 
 enum FilterPeriod { all, today, yesterday, week, month, custom, singleDay }
 
@@ -426,7 +425,6 @@ class TransactionsController extends GetxController {
       }
 
       // Perform actual deletion
-      await OfflineService.deleteTransactionOffline(t.id!);
       await TransactionService.deleteTransaction(t.id!);
 
       Get.snackbar(
