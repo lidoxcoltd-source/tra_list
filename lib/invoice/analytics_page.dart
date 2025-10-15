@@ -736,7 +736,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 child: SfCircularChart(
                   legend: const Legend(
                     isVisible: true, // No tr needed for widgets
-                    position: LegendPosition.right,
+                    position: LegendPosition.bottom,
                     overflowMode: LegendItemOverflowMode.wrap,
                     textStyle: TextStyle(fontSize: 11),
                   ),

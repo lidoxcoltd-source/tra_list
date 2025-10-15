@@ -54,9 +54,42 @@ class TransactionService {
       query = query.where('date', isGreaterThanOrEqualTo: startDate);
     }
     if (endDate != null) {
-      query = query.where('date', isLessThanOrEqualTo: endDate);
+      query = query.where('date', isLessThan: endDate);
     }
     if (startAfter != null) query = query.startAfterDocument(startAfter);
     return query.limit(limit).get();
+  }
+
+  static Future<Map<String, double>> getTotals({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final uid = _uidOrThrow();
+    Query<TransactionModel> query = getCollectionRef();
+
+    // Apply date filters if they exist
+    if (startDate != null) {
+      query = query.where('date', isGreaterThanOrEqualTo: startDate);
+    }
+    if (endDate != null) {
+      query = query.where('date', isLessThan: endDate);
+    }
+
+    // Run two separate aggregation queries (one for income, one for expense)
+    // by applying the 'type' filter on the query before aggregation.
+    final incomeAggregateSnapshot = await query
+        .where('type', isEqualTo: 'income')
+        .aggregate(sum('amount'))
+        .get();
+
+    final expenseAggregateSnapshot = await query
+        .where('type', isEqualTo: 'expense')
+        .aggregate(sum('amount'))
+        .get();
+
+    final incomeSum = incomeAggregateSnapshot.getSum('amount') ?? 0.0;
+    final expenseSum = expenseAggregateSnapshot.getSum('amount') ?? 0.0;
+
+    return {'income': incomeSum, 'expense': expenseSum};
   }
 }

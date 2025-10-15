@@ -80,13 +80,6 @@ class TransactionsPage extends GetView<TransactionsController> {
   }
 
   Widget _buildSummaryRow() {
-    final income =
-        'TSH ${TransactionsController.money(controller.currentIncome.value)}';
-    final expense =
-        'TSH ${TransactionsController.money(controller.currentExpense.value)}';
-    final net =
-        'TSH ${TransactionsController.money(controller.currentNet.value.abs())}';
-
     return LayoutBuilder(
       builder: (context, constraints) {
         // Use a Column layout on narrow screens
@@ -95,7 +88,8 @@ class TransactionsPage extends GetView<TransactionsController> {
         final incomeCard = Obx(
           () => _SummaryCard(
             title: 'income'.tr,
-            value: income,
+            value:
+                'TSH ${TransactionsController.money(controller.currentIncome.value)}',
             accent: Colors.green,
             isSelected: controller.summaryFilter.value == SummaryFilter.income,
             onTap: () => controller.setSummaryFilter(SummaryFilter.income),
@@ -105,25 +99,27 @@ class TransactionsPage extends GetView<TransactionsController> {
         final expenseCard = Obx(
           () => _SummaryCard(
             title: 'expenses'.tr,
-            value: expense,
+            value:
+                'TSH ${TransactionsController.money(controller.currentExpense.value)}',
             accent: Colors.red,
             isSelected: controller.summaryFilter.value == SummaryFilter.expense,
             onTap: () => controller.setSummaryFilter(SummaryFilter.expense),
           ),
         );
 
-        final netCard = Obx(
-          () => _SummaryCard(
+        final netCard = Obx(() {
+          final netValue = controller.currentNet.value;
+          final netString =
+              'TSH ${TransactionsController.money(netValue.abs())}';
+          return _SummaryCard(
             title: 'net'.tr,
-            value: (controller.currentNet.value >= 0 ? '' : '-') + net,
-            accent: controller.currentNet.value >= 0
-                ? Colors.green
-                : Colors.orange,
-            currentNet: controller.currentNet.value,
+            value: (netValue >= 0 ? '' : '-') + netString,
+            accent: netValue >= 0 ? Colors.green : Colors.orange,
+            currentNet: netValue,
             isSelected: controller.summaryFilter.value == SummaryFilter.all,
             onTap: () => controller.setSummaryFilter(SummaryFilter.all),
-          ),
-        );
+          );
+        });
 
         if (useVerticalLayout) {
           return Column(
@@ -195,12 +191,8 @@ class TransactionsPage extends GetView<TransactionsController> {
           return false; // Do not dismiss the item
         } else {
           // Delete action
-          return await _confirmDeleteDialog(t);
+          return await controller.confirmDelete(t);
         }
-      },
-      onDismissed: (_) {
-        // Do not await here. The state must be updated synchronously.
-        controller.deleteTransaction(t);
       },
       child: Card(
         // REDESIGN: Cleaner card with no border
@@ -212,7 +204,7 @@ class TransactionsPage extends GetView<TransactionsController> {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _showActions(t),
+          onTap: () => controller.showActions(t),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
@@ -286,101 +278,6 @@ class TransactionsPage extends GetView<TransactionsController> {
     );
   }
 
-  Future<bool?> _confirmDeleteDialog(TransactionModel t) async {
-    // Ask the user to confirm and then delete
-    final confirm = await Get.dialog<bool>(
-      AlertDialog(
-        title: Text('transactions_delete_title'.tr),
-        content: Text('transactions_delete_confirm'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: Text('cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Get.back(result: true),
-            child: Text('delete'.tr, style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    // If true, Dismissible will complete; false cancels
-    return confirm;
-  }
-
-  void _setFilter(FilterPeriod value) async {
-    final now = DateTime.now();
-    DateTime? start;
-    DateTime? end;
-    String title = 'transactions_all_time'.tr;
-
-    switch (value) {
-      case FilterPeriod.today:
-        start = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ); // No tr needed for logic
-        end = start.add(const Duration(days: 1)); // No tr needed for logic
-        title = 'transactions_today'.tr;
-        break;
-      case FilterPeriod.yesterday:
-        final yesterday = now.subtract(const Duration(days: 1));
-        start = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).subtract(const Duration(days: 1));
-        start = DateTime(yesterday.year, yesterday.month, yesterday.day);
-        end = start.add(const Duration(days: 1));
-        title = 'yesterday'.tr;
-        break;
-      case FilterPeriod.week:
-        start = now.subtract(Duration(days: now.weekday - 1));
-        start = DateTime(start.year, start.month, start.day);
-        end = start.add(const Duration(days: 7));
-        title = 'transactions_this_week'.tr;
-        break;
-      case FilterPeriod.month:
-        start = DateTime(now.year, now.month, 1);
-        end = DateTime(now.year, now.month + 1, 1);
-        title = 'transactions_this_month'.tr;
-        break;
-      case FilterPeriod.singleDay:
-        // Use already-selected single-day range if available, otherwise default to today.
-        start =
-            controller.startDate.value ??
-            DateTime(now.year, now.month, now.day);
-        end = start.add(const Duration(days: 1));
-        title = DateFormat.yMMMMd().format(start);
-        break;
-      case FilterPeriod.custom:
-        final range = await showDateRangePicker(
-          context: Get.context!,
-          firstDate: DateTime(2020),
-          lastDate: now.add(const Duration(days: 365)),
-        );
-        if (range != null) {
-          start = range.start;
-          end = range.end.add(const Duration(days: 1)); // inclusive
-          title =
-              '${start.day}/${start.month}/${start.year} - ${range.end.day}/${range.end.month}/${range.end.year}';
-        } else {
-          return; // User cancelled
-        }
-        break;
-      case FilterPeriod.all:
-        break;
-    }
-
-    controller.filter.value = value;
-    controller.startDate.value = start;
-    controller.endDate.value = end;
-    controller.filterTitle.value = title;
-    controller.fetchFirstPage();
-  }
-
   // This widget is no longer used, but I'll leave it here in case you want to
   // re-implement a "Load More" button instead of infinite scrolling.
   Widget _buildLoader() {
@@ -401,41 +298,6 @@ class TransactionsPage extends GetView<TransactionsController> {
                 ),
         ),
       ),
-    );
-  }
-
-  void _showActions(TransactionModel t) {
-    Get.bottomSheet(
-      SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text('edit_transaction_title'.tr),
-              onTap: () {
-                Get.back();
-                Get.to(() => AddTransactionPage(transaction: t))?.then((
-                  result,
-                ) {
-                  if (result == true) controller.fetchFirstPage();
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text('transactions_delete_title'.tr),
-              onTap: () async {
-                Get.back(); // Close bottom sheet
-                final confirm = await _confirmDeleteDialog(t);
-                if (confirm == true) {
-                  await controller.deleteTransaction(t);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-      backgroundColor: Colors.white,
     );
   }
 

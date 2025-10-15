@@ -118,9 +118,18 @@ class TransactionsController extends GetxController {
       );
       _updateStateFromSnapshot(snap, isFirstPage: true);
     } catch (e) {
+      // In case of error, ensure hasMore is false to prevent infinite loops
+      // if the view is not scrollable.
+      hasMore.value = false;
       Get.snackbar('error'.tr, 'Failed to fetch transactions: $e');
     } finally {
       isFetching.value = false;
+      // After the first fetch, check if the content is scrollable.
+      // Also, fetch the totals for the current date range.
+      // If not, and there's more data, fetch the next page.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchMoreIfContentNotScrollable();
+      });
     }
   }
 
@@ -140,6 +149,8 @@ class TransactionsController extends GetxController {
       Get.snackbar('error'.tr, 'Failed to fetch more transactions: $e');
     } finally {
       loadingMore.value = false;
+      // Also check after fetching the next page.
+      await _fetchMoreIfContentNotScrollable();
     }
   }
 
@@ -165,18 +176,45 @@ class TransactionsController extends GetxController {
     _groupTransactions();
   }
 
+  /// Checks if the scrollable content is enough to fill the viewport.
+  /// If not, and if more data is available, it fetches the next page.
+  Future<void> _fetchMoreIfContentNotScrollable() async {
+    // This function is called after a frame is rendered.
+    // We need to wait for the frame to complete before checking scroll extent.
+    await WidgetsBinding.instance.endOfFrame;
+
+    // If the view is not scrollable and there's more data, fetch next page.
+    if (scrollController.hasClients &&
+        scrollController.position.maxScrollExtent <= 0 &&
+        hasMore.value) {
+      await fetchNextPage();
+    }
+  }
+
   void _recalculateTotals() {
-    final totalIncome = allFetchedTransactions
-        .where((t) => t.type == TransactionType.income)
-        .fold<double>(0, (sum, t) => sum + t.amount);
+    // This now only calculates totals for the currently *visible* (filtered) transactions.
+    // The overall totals are fetched by `_fetchAndSetTotals`.
+    // This method is kept for filtering purposes if needed, but the main display
+    // now relies on the more accurate server-side aggregation.
+  }
 
-    final totalExpense = allFetchedTransactions
-        .where((t) => t.type == TransactionType.expense)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-
-    currentIncome.value = totalIncome;
-    currentExpense.value = totalExpense;
-    currentNet.value = totalIncome - totalExpense;
+  Future<void> _fetchAndSetTotals() async {
+    try {
+      final totals = await TransactionService.getTotals(
+        startDate: startDate.value,
+        endDate: endDate.value,
+      );
+      currentIncome.value = totals['income'] ?? 0.0;
+      currentExpense.value = totals['expense'] ?? 0.0;
+      currentNet.value = (totals['income'] ?? 0.0) - (totals['expense'] ?? 0.0);
+    } catch (e) {
+      debugPrint('Failed to fetch totals: $e');
+      Get.snackbar('Error', 'Could not fetch summary totals: $e');
+      // Reset to zero on error to keep UI consistent.
+      currentIncome.value = 0.0;
+      currentExpense.value = 0.0;
+      currentNet.value = 0.0;
+    }
   }
 
   void _groupTransactions() {
@@ -232,7 +270,6 @@ class TransactionsController extends GetxController {
       );
     }
     _groupTransactions();
-    _recalculateTotals(); // Recalculate totals based on the filtered list
   }
 
   void setFilter(FilterPeriod value) async {
@@ -292,7 +329,8 @@ class TransactionsController extends GetxController {
     startDate.value = start;
     endDate.value = end;
     filterTitle.value = title;
-    fetchFirstPage();
+    // Fetch totals and the first page of data concurrently.
+    await Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
   }
 
   void filterBySingleDay(DateTime date) {
@@ -300,7 +338,7 @@ class TransactionsController extends GetxController {
     startDate.value = date;
     endDate.value = date.add(const Duration(days: 1));
     filterTitle.value = DateFormat.yMMMMd().format(date);
-    fetchFirstPage();
+    Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
   }
 
   void clearSingleDayFilter() {
@@ -328,6 +366,50 @@ class TransactionsController extends GetxController {
       summaryFilter.value = newSummaryFilter;
     }
     applyAllFilters();
+  }
+
+  Future<void> showActions(TransactionModel t) async {
+    await Get.bottomSheet(
+      SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: Text('edit_transaction_title'.tr),
+              onTap: () async {
+                Get.back();
+                final result = await Get.to(
+                  () => AddTransactionPage(transaction: t),
+                );
+                if (result == true) {
+                  fetchFirstPage();
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: Text('transactions_delete_title'.tr),
+              onTap: () async {
+                Get.back(); // Close bottom sheet
+                final confirm = await _confirmDeleteDialog();
+                if (confirm == true) {
+                  await deleteTransaction(t);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+      backgroundColor: Colors.white,
+    );
+  }
+
+  Future<bool?> confirmDelete(TransactionModel t) async {
+    final confirm = await _confirmDeleteDialog();
+    if (confirm == true) {
+      await deleteTransaction(t);
+    }
+    return confirm;
   }
 
   Future<void> deleteTransaction(TransactionModel t) async {
@@ -361,6 +443,25 @@ class TransactionsController extends GetxController {
       // If deletion fails, refresh to get the item back
       fetchFirstPage();
     }
+  }
+
+  Future<bool?> _confirmDeleteDialog() async {
+    return await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('transactions_delete_title'.tr),
+        content: Text('transactions_delete_confirm'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('cancel'.tr),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: Text('delete'.tr, style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> exportPdf() async {
