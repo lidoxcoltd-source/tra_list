@@ -179,6 +179,8 @@ class AppTranslations extends Translations {
       'due_today': 'Due Today',
       'overdue_by_days': 'Overdue by @days days',
       'due_in_days': 'Due in @days days',
+      'jobs_select_to_view': 'Select a job to view details',
+      'jobs_add_new': 'Add New Job',
 
       // Validation
       'validation_required': 'This field is required',
@@ -419,6 +421,8 @@ class AppTranslations extends Translations {
       'due_today': 'Inakamilika Leo',
       'overdue_by_days': 'Imechelewa kwa siku @days',
       'due_in_days': 'Zimebaki siku @days',
+      'jobs_select_to_view': 'Chagua kazi kuona maelezo',
+      'jobs_add_new': 'Sajili Kazi Mpya',
 
       // Uthibitishaji
       'validation_required': 'Sehemu hii inahitajika',
