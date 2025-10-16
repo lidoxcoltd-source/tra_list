@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:tra_list/invoice/transaction_form.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
 import 'package:tra_list/invoice/transaction_excel_export.dart'; // Add this import
@@ -23,59 +24,128 @@ class TransactionsPage extends GetView<TransactionsController> {
     // Initialize date formatting for the current locale.
     initializeDateFormatting(Get.locale?.toString());
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 850;
+        if (isDesktop) {
+          return _buildDesktopLayout(context);
+        } else {
+          return _buildMobileLayout(context);
+        }
+      },
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F8),
       body: RefreshIndicator(
-        // Keep RefreshIndicator at the top level
         onRefresh: controller.fetchFirstPage,
         child: CustomScrollView(
-          controller:
-              controller.scrollController, // Assign the scroll controller
+          controller: controller.scrollController,
           slivers: [
             _buildSliverAppBar(context),
             _buildFilterChipsSliver(),
-            _buildTransactionList(),
+            _buildTransactionListSliver(),
           ],
         ),
       ),
-      // NEW: Replaced two FABs with a cleaner SpeedDial FAB.
-      floatingActionButton: Obx(
-        () => SpeedDial(
-          icon: Icons.add,
-          activeIcon: Icons.close,
-          backgroundColor: controller.brandColor.value,
-          foregroundColor: Colors.white,
-          overlayColor: Colors.black,
-          overlayOpacity: 0.4,
-          spacing: 12,
-          children: [
-            SpeedDialChild(
-              child: const Icon(Icons.arrow_downward, color: Colors.white),
-              backgroundColor: Colors.red.shade500,
-              label: 'expense'.tr,
-              onTap: () async {
-                final result = await Get.to(
-                  () =>
-                      AddTransactionPage(initialType: TransactionType.expense),
-                );
-                if (result == true) controller.fetchFirstPage();
-              },
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.arrow_upward, color: Colors.white),
-              backgroundColor: Colors.green.shade600,
-              label: 'income'.tr,
-              onTap: () async {
-                final result = await Get.to(
-                  () => AddTransactionPage(initialType: TransactionType.income),
-                );
-                if (result == true) controller.fetchFirstPage();
-              },
-            ),
-          ],
-        ),
-      ),
+      floatingActionButton: _buildSpeedDialFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F8),
+      appBar: _buildDesktopAppBar(),
+      body: Row(
+        children: [
+          // Left Panel
+          Container(
+            width: 320,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(right: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Obx(() {
+              if (controller.showAddForm.value) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TransactionForm(
+                    initialType: controller.formInitialType.value,
+                    onSave: controller.hideAddTransactionForm,
+                    onCancel: controller.hideAddTransactionForm,
+                  ),
+                );
+              } else {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildSummaryRow(),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildFilterChipsPanel(),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildDesktopActionButtons(),
+                    ),
+                    const Spacer(),
+                  ],
+                );
+              }
+            }),
+          ),
+          // Right Panel
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: controller.fetchFirstPage,
+              child: _buildTransactionListDesktop(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  SpeedDial _buildSpeedDialFab() {
+    return SpeedDial(
+      icon: Icons.add,
+      activeIcon: Icons.close,
+      backgroundColor: controller.brandColor.value,
+      foregroundColor: Colors.white,
+      overlayColor: Colors.black,
+      overlayOpacity: 0.4,
+      spacing: 12,
+      children: [
+        SpeedDialChild(
+          child: const Icon(Icons.arrow_downward, color: Colors.white),
+          backgroundColor: Colors.red.shade500,
+          label: 'expense'.tr,
+          onTap: () async {
+            final result = await Get.to(
+              () => AddTransactionPage(initialType: TransactionType.expense),
+            );
+            if (result == true) controller.fetchFirstPage();
+          },
+        ),
+        SpeedDialChild(
+          child: const Icon(Icons.arrow_upward, color: Colors.white),
+          backgroundColor: Colors.green.shade600,
+          label: 'income'.tr,
+          onTap: () async {
+            final result = await Get.to(
+              () => AddTransactionPage(initialType: TransactionType.income),
+            );
+            if (result == true) controller.fetchFirstPage();
+          },
+        ),
+      ],
     );
   }
 
@@ -301,6 +371,65 @@ class TransactionsPage extends GetView<TransactionsController> {
     );
   }
 
+  AppBar _buildDesktopAppBar() {
+    return AppBar(
+      elevation: 1,
+      backgroundColor: controller.brandColor.value,
+      foregroundColor: Colors.white,
+      title: Obx(
+        () => controller.isSearching.value
+            ? Hero(
+                tag: 'search_field',
+                child: TextField(
+                  controller: controller.searchController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: '${'search'.tr}...',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                    border: InputBorder.none,
+                  ),
+                ),
+              )
+            : Text(
+                '${'transactions_title'.tr} - ${controller.filterTitle.value}',
+              ),
+      ),
+      actions: _buildAppBarActions(),
+    );
+  }
+
+  Widget _buildDesktopActionButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          icon: const Icon(Icons.arrow_upward),
+          label: Text('transactions_add_income'.tr),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade600,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          onPressed: () =>
+              controller.showAddTransactionForm(TransactionType.income),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.arrow_downward),
+          label: Text('transactions_add_expense'.tr),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red.shade500,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          onPressed: () =>
+              controller.showAddTransactionForm(TransactionType.expense),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSliverAppBar(BuildContext context) {
     // Make the expanded height adaptive to the screen size.
     final screenWidth = MediaQuery.of(context).size.width;
@@ -347,171 +476,7 @@ class TransactionsPage extends GetView<TransactionsController> {
                 ),
               )
             : Text('transactions_title'.tr), // No tr needed for variables
-        actions: [
-          // Show a compact clear action in the toolbar when single-day filter is active
-          if (controller.filter.value == FilterPeriod.singleDay &&
-              !controller.isSearching.value)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: TextButton.icon(
-                onPressed: controller.clearSingleDayFilter,
-                icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                label: Text(
-                  'clear'.tr,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ),
-          IconButton(
-            tooltip: 'search'.tr,
-            onPressed: controller.toggleSearch,
-            icon: Hero(
-              tag: 'search_icon',
-              child: Icon(
-                controller.isSearching.value ? Icons.close : Icons.search,
-              ),
-            ),
-          ),
-          if (!controller.isSearching.value)
-            PopupMenuButton<SortOption>(
-              tooltip: 'Sort by'.tr,
-              icon: const Icon(Icons.sort),
-              onSelected: (newSortOption) {
-                if (controller.sortOption.value != newSortOption) {
-                  controller.sortOption.value = newSortOption;
-                  controller.applyAllFilters(); // Re-sort and re-group the list
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  enabled: false,
-                  child: Text(
-                    'Sort by'.tr,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                CheckedPopupMenuItem(
-                  value: SortOption.dateDesc,
-                  checked: controller.sortOption.value == SortOption.dateDesc,
-                  child: Text('Date (Newest First)'.tr),
-                ),
-                CheckedPopupMenuItem(
-                  value: SortOption.dateAsc,
-                  checked: controller.sortOption.value == SortOption.dateAsc,
-                  child: Text('Date (Oldest First)'.tr),
-                ),
-                CheckedPopupMenuItem(
-                  value: SortOption.amountDesc,
-                  checked: controller.sortOption.value == SortOption.amountDesc,
-                  child: Text('Amount (Highest First)'.tr),
-                ),
-                CheckedPopupMenuItem(
-                  value: SortOption.amountAsc,
-                  checked: controller.sortOption.value == SortOption.amountAsc,
-                  child: Text('Amount (Lowest First)'.tr),
-                ),
-              ],
-            ),
-          if (!controller.isSearching.value)
-            IconButton(
-              tooltip: 'transactions_export_pdf'.tr,
-              onPressed:
-                  controller.transactions.isEmpty || controller.isPdfBusy.value
-                  ? null
-                  : controller.exportPdf,
-              icon: controller.isPdfBusy.value
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ), // No tr needed for widgets
-                    )
-                  : const Icon(Icons.picture_as_pdf_outlined),
-            ),
-          if (!controller.isSearching.value)
-            IconButton(
-              tooltip: 'Export as Excel'.tr,
-              onPressed:
-                  controller.transactions.isEmpty ||
-                      controller.isExcelBusy.value
-                  ? null
-                  : controller.exportExcel,
-              icon: controller.isExcelBusy.value
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    ) // No tr needed for widgets
-                  : const Icon(Icons.table_chart_outlined),
-            ),
-          if (!controller.isSearching.value)
-            PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'refresh') controller.fetchFirstPage();
-                if (v == 'clear_filters')
-                  controller.setFilter(FilterPeriod.all);
-                if (v == 'export_excel') controller.exportExcel();
-                if (v == 'export_pdf') controller.exportPdf();
-                if (v == 'analytics') {
-                  Get.to(() => const AnalyticsPage());
-                }
-              }, // No tr needed for logic
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'refresh', child: Text('refresh'.tr)),
-                PopupMenuItem(
-                  value: 'clear_filters',
-                  child: Text('transactions_clear_filters'.tr),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'export_pdf',
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.picture_as_pdf_outlined,
-                        size: 20,
-                      ), // No tr needed for widgets
-                      const SizedBox(width: 8), // No tr needed for widgets
-                      Text('Export PDF'.tr),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'export_excel',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.table_chart_outlined, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Export Excel'.tr),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'analytics',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.analytics_outlined, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Analytics'.tr),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-        ],
+        actions: _buildAppBarActions(),
         flexibleSpace: FlexibleSpaceBar(
           background: Stack(
             children: [
@@ -563,6 +528,169 @@ class TransactionsPage extends GetView<TransactionsController> {
     );
   }
 
+  List<Widget> _buildAppBarActions() {
+    return [
+      // Show a compact clear action in the toolbar when single-day filter is active
+      if (controller.filter.value == FilterPeriod.singleDay &&
+          !controller.isSearching.value)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: TextButton.icon(
+            onPressed: controller.clearSingleDayFilter,
+            icon: const Icon(Icons.close, color: Colors.white, size: 18),
+            label: Text(
+              'clear'.tr,
+              style: const TextStyle(color: Colors.white),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+      IconButton(
+        tooltip: 'search'.tr,
+        onPressed: controller.toggleSearch,
+        icon: Hero(
+          tag: 'search_icon',
+          child: Icon(
+            controller.isSearching.value ? Icons.close : Icons.search,
+          ),
+        ),
+      ),
+      if (!controller.isSearching.value)
+        PopupMenuButton<SortOption>(
+          tooltip: 'Sort by'.tr,
+          icon: const Icon(Icons.sort),
+          onSelected: (newSortOption) {
+            if (controller.sortOption.value != newSortOption) {
+              controller.sortOption.value = newSortOption;
+              controller.applyAllFilters(); // Re-sort and re-group the list
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              enabled: false,
+              child: Text(
+                'Sort by'.tr,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            CheckedPopupMenuItem(
+              value: SortOption.dateDesc,
+              checked: controller.sortOption.value == SortOption.dateDesc,
+              child: Text('Date (Newest First)'.tr),
+            ),
+            CheckedPopupMenuItem(
+              value: SortOption.dateAsc,
+              checked: controller.sortOption.value == SortOption.dateAsc,
+              child: Text('Date (Oldest First)'.tr),
+            ),
+            CheckedPopupMenuItem(
+              value: SortOption.amountDesc,
+              checked: controller.sortOption.value == SortOption.amountDesc,
+              child: Text('Amount (Highest First)'.tr),
+            ),
+            CheckedPopupMenuItem(
+              value: SortOption.amountAsc,
+              checked: controller.sortOption.value == SortOption.amountAsc,
+              child: Text('Amount (Lowest First)'.tr),
+            ),
+          ],
+        ),
+      if (!controller.isSearching.value)
+        IconButton(
+          tooltip: 'transactions_export_pdf'.tr,
+          onPressed:
+              controller.transactions.isEmpty || controller.isPdfBusy.value
+              ? null
+              : controller.exportPdf,
+          icon: controller.isPdfBusy.value
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ), // No tr needed for widgets
+                )
+              : const Icon(Icons.picture_as_pdf_outlined),
+        ),
+      if (!controller.isSearching.value)
+        IconButton(
+          tooltip: 'Export as Excel'.tr,
+          onPressed:
+              controller.transactions.isEmpty || controller.isExcelBusy.value
+              ? null
+              : controller.exportExcel,
+          icon: controller.isExcelBusy.value
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ) // No tr needed for widgets
+              : const Icon(Icons.table_chart_outlined),
+        ),
+      if (!controller.isSearching.value)
+        PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'refresh') controller.fetchFirstPage();
+            if (v == 'clear_filters') controller.setFilter(FilterPeriod.all);
+            if (v == 'export_excel') controller.exportExcel();
+            if (v == 'export_pdf') controller.exportPdf();
+            if (v == 'analytics') {
+              Get.to(() => const AnalyticsPage());
+            }
+          }, // No tr needed for logic
+          itemBuilder: (context) => [
+            PopupMenuItem(value: 'refresh', child: Text('refresh'.tr)),
+            PopupMenuItem(
+              value: 'clear_filters',
+              child: Text('transactions_clear_filters'.tr),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'export_pdf',
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.picture_as_pdf_outlined,
+                    size: 20,
+                  ), // No tr needed for widgets
+                  const SizedBox(width: 8), // No tr needed for widgets
+                  Text('Export PDF'.tr),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'export_excel',
+              child: Row(
+                children: [
+                  const Icon(Icons.table_chart_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Export Excel'.tr),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'analytics',
+              child: Row(
+                children: [
+                  const Icon(Icons.analytics_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Analytics'.tr),
+                ],
+              ),
+            ),
+          ],
+        ),
+    ];
+  }
+
   Widget _buildFilterChipsSliver() {
     return SliverPersistentHeader(
       pinned: true,
@@ -574,36 +702,34 @@ class TransactionsPage extends GetView<TransactionsController> {
             color: controller.brandColor.value, // Match app bar color
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8.0,
-              runSpacing: 4.0,
-              alignment: WrapAlignment.start,
-              children: [
-                _buildFilterChip(FilterPeriod.all, 'transactions_all_time'.tr),
-                _buildFilterChip(FilterPeriod.today, 'transactions_today'.tr),
-                _buildFilterChip(FilterPeriod.yesterday, 'yesterday'.tr),
-                _buildFilterChip(
-                  FilterPeriod.week,
-                  'transactions_this_week'.tr,
-                ),
-                _buildFilterChip(
-                  FilterPeriod.month,
-                  'transactions_this_month'.tr,
-                ),
-                ActionChip(
-                  avatar: const Icon(Icons.calendar_today, size: 16),
-                  label: Text('transactions_custom_range'.tr),
-                  onPressed: () => controller.setFilter(FilterPeriod.custom),
-                ),
-              ],
-            ),
+            child: _buildFilterChipsPanel(),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTransactionList() {
+  Widget _buildFilterChipsPanel() {
+    return Wrap(
+      spacing: 8.0,
+      runSpacing: 4.0,
+      alignment: WrapAlignment.start,
+      children: [
+        _buildFilterChip(FilterPeriod.all, 'transactions_all_time'.tr),
+        _buildFilterChip(FilterPeriod.today, 'transactions_today'.tr),
+        _buildFilterChip(FilterPeriod.yesterday, 'yesterday'.tr),
+        _buildFilterChip(FilterPeriod.week, 'transactions_this_week'.tr),
+        _buildFilterChip(FilterPeriod.month, 'transactions_this_month'.tr),
+        ActionChip(
+          avatar: const Icon(Icons.calendar_today, size: 16),
+          label: Text('transactions_custom_range'.tr),
+          onPressed: () => controller.setFilter(FilterPeriod.custom),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTransactionListSliver() {
     return Obx(
       () => SliverPadding(
         padding: const EdgeInsets.fromLTRB(
@@ -666,6 +792,58 @@ class TransactionsPage extends GetView<TransactionsController> {
     );
   }
 
+  Widget _buildTransactionListDesktop() {
+    return Obx(() {
+      if (controller.isFetching.value && controller.transactions.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (controller.transactions.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 60,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                controller.searchController.text.isNotEmpty
+                    ? '${'transactions_no_transactions'.tr} for "${controller.searchController.text}"'
+                    : 'transactions_no_transactions'.tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+              ),
+            ],
+          ),
+        );
+      }
+      return ListView.builder(
+        controller: controller.scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+        itemCount: controller.groupedTransactions.length,
+        itemBuilder: (context, index) {
+          final entry = controller.groupedTransactions.entries.elementAt(index);
+          final date = entry.key;
+          final transactionsInGroup = entry.value;
+          return _TransactionGroup(
+            onHeaderTap: () => controller.filterBySingleDay(date),
+            header: TransactionsController.formatDateHeader(date),
+            children: transactionsInGroup
+                .map(
+                  (t) => _buildTransactionCard(
+                    t,
+                    controller.allFetchedTransactions.indexOf(t),
+                  ),
+                )
+                .toList(),
+          );
+        },
+      );
+    });
+  }
+
   Widget _buildFilterChip(FilterPeriod p, String label) {
     final selected = controller.filter.value == p;
     return ChoiceChip(
@@ -685,6 +863,7 @@ class TransactionsPage extends GetView<TransactionsController> {
 
 // NEW: A custom Sliver widget to group a header and a list of children.
 class _TransactionGroup extends StatelessWidget {
+  // Can be used for both sliver and non-sliver lists
   final String header;
   final List<Widget> children;
   final VoidCallback onHeaderTap;
@@ -697,6 +876,33 @@ class _TransactionGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If the parent is a regular ListView, use a Column.
+    // If it's a CustomScrollView, use SliverMainAxisGroup.
+    final isSliver =
+        context.findAncestorWidgetOfExactType<CustomScrollView>() != null;
+
+    final headerWidget = InkWell(
+      onTap: onHeaderTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 20, bottom: 8),
+        child: Text(
+          header,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: Colors.grey.shade700,
+          ),
+        ),
+      ),
+    );
+
+    if (!isSliver) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [headerWidget, ...children],
+      );
+    }
+
     return SliverMainAxisGroup(
       slivers: [
         SliverPersistentHeader(

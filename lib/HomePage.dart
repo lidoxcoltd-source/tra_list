@@ -40,14 +40,20 @@ class HomePage extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'logout',
-                child: const Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Sign Out'),
-                  ],
+                child: TextButton(
+                  onPressed: () {
+                    final loginController = Get.find<LoginController>();
+                    loginController.signOut();
+                  },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Sign Out'),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -73,115 +79,135 @@ class HomePage extends StatelessWidget {
 
               // Menu Options
               Expanded(
-                child: GridView.count(
-                  crossAxisCount: MediaQuery.of(context).size.width > 800
-                      ? 3
-                      : 1,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 2,
-                  children: [
-                    // Create New Receipt
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.add_business,
-                      title: 'home_create_receipt'.tr,
-                      subtitle: 'home_create_receipt_sub'.tr,
-                      color: const Color(0xFF4CAF50),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.addReceipt);
-                      },
-                    ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    int crossAxisCount;
+                    double childAspectRatio;
 
-                    // View All Receipts
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.list_alt,
-                      title: 'home_view_receipts'.tr,
-                      subtitle: 'home_view_receipts_sub'.tr,
-                      color: const Color(0xFF2196F3),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.receiptsList);
-                      },
-                    ),
+                    if (width > 1200) {
+                      crossAxisCount = 4;
+                      childAspectRatio = 1.8;
+                    } else if (width > 800) {
+                      crossAxisCount = 3;
+                      childAspectRatio = 1.6;
+                    } else if (width > 500) {
+                      crossAxisCount = 2;
+                      childAspectRatio = 1.8;
+                    } else {
+                      crossAxisCount = 1;
+                      childAspectRatio = 2.5;
+                    }
 
-                    // View Invoices
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.receipt_long,
-                      title: 'home_view_invoices'.tr,
-                      subtitle: 'home_view_invoices_sub'.tr,
-                      color: const Color(0xFF3F51B5),
-                      onTap: () => Get.toNamed(AppRoutes.invoicesList),
-                    ),
+                    return GridView.count(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: childAspectRatio,
+                      children: [
+                        // Create New Receipt
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.add_business,
+                          title: 'home_create_receipt'.tr,
+                          subtitle: 'home_create_receipt_sub'.tr,
+                          color: const Color(0xFF4CAF50),
+                          onTap: () {
+                            Get.toNamed(AppRoutes.addReceipt);
+                          },
+                        ),
 
-                    // Generate Invoice
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.receipt,
-                      title: 'home_generate_invoice'.tr,
-                      subtitle: 'home_generate_invoice_sub'.tr,
-                      color: const Color(0xFF8D6E63),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.invoice); // use named route
-                      },
-                    ),
+                        // View All Receipts
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.list_alt,
+                          title: 'home_view_receipts'.tr,
+                          subtitle: 'home_view_receipts_sub'.tr,
+                          color: const Color(0xFF2196F3),
+                          onTap: () {
+                            Get.toNamed(AppRoutes.receiptsList);
+                          },
+                        ),
 
-                    // Expense & Income Tracker
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.track_changes,
-                      title: 'home_finance_tracker'.tr,
-                      subtitle: 'home_finance_tracker_sub'.tr,
-                      color: const Color(0xFFFFA000),
-                      onTap: () => Get.toNamed(AppRoutes.transactions),
-                    ),
+                        // View Invoices
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.receipt_long,
+                          title: 'home_view_invoices'.tr,
+                          subtitle: 'home_view_invoices_sub'.tr,
+                          color: const Color(0xFF3F51B5),
+                          onTap: () => Get.toNamed(AppRoutes.invoicesList),
+                        ),
 
-                    // Manage Jobs
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.work_history_outlined,
-                      title: 'home_manage_jobs'.tr,
-                      subtitle: 'home_manage_jobs_sub'.tr,
-                      color: const Color(0xFF795548),
-                      onTap: () {
-                        Get.toNamed(AppRoutes.jobs);
-                      },
-                    ),
-                    // Analytics & Insights
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.analytics_outlined,
-                      title: 'home_analytics'.tr,
-                      subtitle: 'home_analytics_sub'.tr,
-                      color: const Color(0xFF00897B), // Teal color
-                      onTap: () {
-                        Get.toNamed(AppRoutes.analytics);
-                      },
-                    ),
+                        // Generate Invoice
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.receipt,
+                          title: 'home_generate_invoice'.tr,
+                          subtitle: 'home_generate_invoice_sub'.tr,
+                          color: const Color(0xFF8D6E63),
+                          onTap: () {
+                            Get.toNamed(AppRoutes.invoice); // use named route
+                          },
+                        ),
 
-                    // Manage Categories
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.category_outlined,
-                      title: 'home_manage_categories'.tr,
-                      subtitle: 'home_manage_categories_sub'.tr,
-                      color: const Color(0xFF673AB7),
-                      onTap: () => Get.toNamed(AppRoutes.categories),
-                    ),
+                        // Expense & Income Tracker
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.track_changes,
+                          title: 'home_finance_tracker'.tr,
+                          subtitle: 'home_finance_tracker_sub'.tr,
+                          color: const Color(0xFFFFA000),
+                          onTap: () => Get.toNamed(AppRoutes.transactions),
+                        ),
 
-                    // Settings/Info
-                    _buildMenuCard(
-                      context,
-                      icon: Icons.info_outline,
-                      title: 'home_about'.tr,
-                      subtitle: 'home_about_sub'.tr,
-                      color: const Color(0xFF9C27B0),
-                      onTap: () {
-                        _showAboutDialog(context);
-                      },
-                    ),
-                  ],
+                        // Manage Jobs
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.work_history_outlined,
+                          title: 'home_manage_jobs'.tr,
+                          subtitle: 'home_manage_jobs_sub'.tr,
+                          color: const Color(0xFF795548),
+                          onTap: () {
+                            Get.toNamed(AppRoutes.jobs);
+                          },
+                        ),
+                        // Analytics & Insights
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.analytics_outlined,
+                          title: 'home_analytics'.tr,
+                          subtitle: 'home_analytics_sub'.tr,
+                          color: const Color(0xFF00897B), // Teal color
+                          onTap: () {
+                            Get.toNamed(AppRoutes.analytics);
+                          },
+                        ),
+
+                        // Manage Categories
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.category_outlined,
+                          title: 'home_manage_categories'.tr,
+                          subtitle: 'home_manage_categories_sub'.tr,
+                          color: const Color(0xFF673AB7),
+                          onTap: () => Get.toNamed(AppRoutes.categories),
+                        ),
+
+                        // Settings/Info
+                        _buildMenuCard(
+                          context,
+                          icon: Icons.info_outline,
+                          title: 'home_about'.tr,
+                          subtitle: 'home_about_sub'.tr,
+                          color: const Color(0xFF9C27B0),
+                          onTap: () {
+                            _showAboutDialog(context);
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],

@@ -8,19 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 class JobCard extends StatelessWidget {
   final Job job;
-  // final VoidCallback onToggleImportant;
-  // final VoidCallback onMarkComplete;
-  // final VoidCallback onDelete;
-  // final VoidCallback onEdit;
-
-  const JobCard({
-    super.key,
-    required this.job,
-    // required this.onToggleImportant,
-    // required this.onMarkComplete,
-    // required this.onDelete,
-    // required this.onEdit,
-  });
+  const JobCard({super.key, required this.job});
 
   Color _statusColor() {
     if (job.isCompleted) return Colors.blueGrey;
@@ -71,174 +59,246 @@ class JobCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
     final c = Get.find<JobController>();
+    final double paymentProgress = (job.totalAmount > 0)
+        ? (job.paid / job.totalAmount).clamp(0, 1)
+        : 0;
+
     return Card(
-      child: ListTile(
-        leading: Icon(Icons.work, color: _statusColor()),
-        title: Text(
-          '${job.customerName} • ${job.jobType}',
-          style: theme.textTheme.titleMedium,
-        ),
-        subtitle: Column(
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.1),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: _statusColor(), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8.0,
-              runSpacing: 4.0,
+            // --- Header: Title, Status, and Actions ---
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InkWell(
-                  onTap: () => _launchWhatsApp(job.phonePrimary),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Text(
-                    job.phonePrimary,
-                    style: TextStyle(
-                      color: theme.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
+                if (job.isImportant)
+                  Icon(Icons.star, color: Colors.amber.shade600, size: 20),
+                if (job.isImportant) const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(job.customerName, style: textTheme.titleLarge),
+                      const SizedBox(height: 2),
+                      Text(job.jobType, style: textTheme.bodyMedium),
+                    ],
                   ),
                 ),
-                if (job.phoneSecondary != null &&
-                    job.phoneSecondary!.isNotEmpty)
-                  InkWell(
-                    onTap: () => _launchWhatsApp(job.phoneSecondary!),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Text(
-                      '| ${job.phoneSecondary}',
-                      style: TextStyle(
-                        color: theme.primaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+                const SizedBox(width: 8),
+                _buildPopupMenu(c, context),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // --- Status Badge ---
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _statusColor().withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _statusText().toUpperCase(),
+                style: textTheme.labelMedium?.copyWith(
+                  color: _statusColor(),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const Divider(height: 24),
+
+            // --- Financials ---
+            _buildStatRow(
+              context,
+              'Total',
+              'TSH ${job.totalAmount.toStringAsFixed(0)}',
+              'Balance',
+              'TSH ${job.balance.toStringAsFixed(0)}',
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.play_circle_outline,
-                  size: 14,
-                  color: Colors.grey.shade600,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    '${'start_date'.tr}: ${DateFormat.yMd().format(job.startDate)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.flag_outlined,
-                  size: 14,
-                  color: Colors.grey.shade600,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    '${'due_date'.tr}: ${DateFormat.yMd().format(job.dueDate)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                  ),
-                ),
-              ],
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: paymentProgress,
+                minHeight: 8,
+                backgroundColor: Colors.grey.shade300,
+                valueColor: AlwaysStoppedAnimation<Color>(_statusColor()),
+              ),
             ),
             const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Chip(
-                  label: Text(_statusText()),
-                  backgroundColor: _statusColor().withOpacity(.12),
-                  labelStyle: TextStyle(color: _statusColor()),
-                  side: BorderSide(color: _statusColor()),
-                ),
-                Chip(
-                  label: Text('${'paid'.tr}: ${job.paid.toStringAsFixed(2)}'),
-                ),
-                Chip(
-                  label: Text(
-                    '${'balance'.tr}: ${job.balance.toStringAsFixed(2)}',
-                  ),
-                  backgroundColor: job.paidInFull
-                      ? Colors.green.withOpacity(.12)
-                      : null,
-                  labelStyle: job.paidInFull
-                      ? const TextStyle(color: Colors.green)
-                      : null,
-                ),
-                if (job.isImportant)
-                  Chip(
-                    avatar: const Icon(
-                      Icons.star,
-                      size: 18,
-                      color: Colors.amber,
-                    ),
-                    label: Text('jobs_important'.tr),
-                  ),
-              ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${(paymentProgress * 100).toStringAsFixed(0)}% Paid',
+                style: textTheme.labelSmall?.copyWith(color: Colors.grey[600]),
+              ),
+            ),
+            const Divider(height: 24),
+
+            // --- Dates ---
+            _buildStatRow(
+              context,
+              'Start Date',
+              DateFormat.yMMMd().format(job.startDate),
+              'Due Date',
+              DateFormat.yMMMd().format(job.dueDate),
             ),
           ],
         ),
-        trailing: Wrap(
-          spacing: 4,
-          children: [
-            IconButton(
-              tooltip: 'jobs_important'.tr,
-              icon: Icon(
-                job.isImportant ? Icons.star : Icons.star_border,
-                color: job.isImportant ? Colors.amber : null,
-              ),
-              onPressed: () => c.toggleImportant(job.id),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(
+    BuildContext context,
+    String label1,
+    String value1,
+    String label2,
+    String value2,
+  ) {
+    return Row(
+      children: [
+        Expanded(child: _buildStat(context, label1, value1)),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildStat(
+            context,
+            label2,
+            value2,
+            alignment: CrossAxisAlignment.end,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStat(
+    BuildContext context,
+    String label,
+    String value, {
+    CrossAxisAlignment alignment = CrossAxisAlignment.start,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: alignment,
+      children: [
+        Text(
+          label.tr,
+          style: textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 2),
+        Text(value, style: textTheme.titleMedium),
+      ],
+    );
+  }
+
+  Widget _buildPopupMenu(JobController c, BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'More actions'.tr,
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) async {
+        switch (value) {
+          case 'edit':
+            Get.to(() => AddJobPage(job: job));
+            break;
+          case 'toggle_important':
+            c.toggleImportant(job.id);
+            break;
+          case 'record_payment':
+            c.recordPaymentAsTransaction(job);
+            break;
+          case 'send_reminder':
+            c.sendPaymentReminder(job);
+            break;
+          case 'mark_complete':
+            c.markCompleted(job.id, value: !job.isCompleted);
+            break;
+          case 'delete':
+            if (await c.confirmAndDeleteJob(job.id)) {
+              c.deleteJob(job.id);
+            }
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'edit',
+          child: ListTile(
+            leading: const Icon(Icons.edit),
+            title: Text('edit'.tr),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'toggle_important',
+          child: ListTile(
+            leading: Icon(
+              job.isImportant ? Icons.star : Icons.star_border,
+              color: Colors.amber.shade700,
             ),
-            IconButton(
-              tooltip: job.paymentRecorded
-                  ? 'Payment already recorded'.tr
-                  : 'record_payment_in_transactions'.tr,
-              icon: Icon(
-                job.paymentRecorded
-                    ? Icons.check_circle
-                    : Icons.add_card_outlined,
+            title: Text('jobs_important'.tr),
+          ),
+        ),
+        if (!job.isCompleted)
+          PopupMenuItem(
+            value: 'mark_complete',
+            child: ListTile(
+              leading: const Icon(Icons.check_circle, color: Colors.green),
+              title: Text('mark_complete'.tr),
+            ),
+          ),
+        if (job.isCompleted)
+          PopupMenuItem(
+            value: 'mark_complete',
+            child: ListTile(
+              leading: const Icon(Icons.undo),
+              title: Text('Mark as Active'.tr),
+            ),
+          ),
+        const PopupMenuDivider(),
+        if (job.advancePaid > 0)
+          PopupMenuItem(
+            value: 'record_payment',
+            enabled: !job.paymentRecorded,
+            child: ListTile(
+              leading: Icon(
+                job.paymentRecorded ? Icons.check_circle : Icons.add_card,
                 color: job.paymentRecorded ? Colors.green : null,
               ),
-              onPressed: job.paymentRecorded
-                  ? null
-                  : () => c.recordPaymentAsTransaction(job),
+              title: Text('record_payment_in_transactions'.tr),
             ),
-            if (job.isOverdue && job.balance > 0)
-              IconButton(
-                tooltip: 'send_payment_reminder'.tr,
-                icon: Icon(
-                  Icons.notification_add_outlined,
-                  color: Colors.blue.shade700,
-                ),
-                onPressed: () => c.sendPaymentReminder(job),
+          ),
+        if (job.isOverdue && job.balance > 0)
+          PopupMenuItem(
+            value: 'send_reminder',
+            child: ListTile(
+              leading: Icon(
+                Icons.notification_add,
+                color: Colors.blue.shade700,
               ),
-            IconButton(
-              tooltip: 'edit'.tr,
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => Get.to(() => AddJobPage(job: job)),
+              title: Text('send_payment_reminder'.tr),
             ),
-            IconButton(
-              tooltip: 'mark_complete'.tr,
-              icon: Icon(
-                job.isCompleted ? Icons.undo : Icons.check_circle,
-                color: job.isCompleted ? Colors.blueGrey : Colors.green,
-              ),
-              onPressed: () => c.markCompleted(job.id, value: !job.isCompleted),
-            ),
-            IconButton(
-              tooltip: 'delete_job'.tr,
-              icon: const Icon(Icons.delete, color: Colors.redAccent),
-              onPressed: () async {
-                if (await c.confirmAndDeleteJob(job.id)) c.deleteJob(job.id);
-              },
-            ),
-          ],
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: const Icon(Icons.delete, color: Colors.red),
+            title: Text('delete'.tr, style: const TextStyle(color: Colors.red)),
+          ),
         ),
-        isThreeLine: true,
-      ),
+      ],
     );
   }
 }

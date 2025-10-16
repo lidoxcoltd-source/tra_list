@@ -47,6 +47,10 @@ class TransactionsController extends GetxController {
   final RxBool isFetching = false.obs;
   final RxBool isSearching = false.obs;
 
+  // Desktop UI State
+  final RxBool showAddForm = false.obs;
+  final Rx<TransactionType?> formInitialType = Rx<TransactionType?>(null);
+
   // Controllers
   final ScrollController scrollController = ScrollController();
   final TextEditingController searchController = TextEditingController();
@@ -99,6 +103,17 @@ class TransactionsController extends GetxController {
     } catch (e) {
       debugPrint('Failed to load profile colors: $e');
     }
+  }
+
+  void showAddTransactionForm(TransactionType type) {
+    formInitialType.value = type;
+    showAddForm.value = true;
+  }
+
+  void hideAddTransactionForm() {
+    showAddForm.value = false;
+    formInitialType.value = null;
+    fetchFirstPage(); // Refresh list after form is closed
   }
 
   Future<void> fetchFirstPage() async {
