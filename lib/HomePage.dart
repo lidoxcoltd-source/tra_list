@@ -338,8 +338,8 @@ class HomePage extends StatelessWidget {
                       children: [
                         _buildSummaryStat(
                           'home_overdue_jobs'.tr,
-                          controller.overdue.length.toString(),
-                          highlight: controller.overdue.isNotEmpty,
+                          '0',
+                          highlight: false,
                         ),
                         _buildSummaryStat(
                           'home_important_jobs'.tr,
@@ -434,10 +434,4 @@ class HomePage extends StatelessWidget {
       },
     );
   }
-}
-
-extension JobControllerOverdueFallback on JobController {
-  /// Fallback `overdue` getter to avoid compile errors when the controller
-  /// doesn't expose an `overdue` property. Returns an empty list by default.
-  List get overdue => [];
 }

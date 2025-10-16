@@ -120,7 +120,6 @@ class _TransactionFormState extends State<TransactionForm> {
           flex: 2,
           child: Obx(
             () => ElevatedButton.icon(
-              // Obx is kept for brandColor reactivity
               onPressed: widget.isSaving ? null : _save,
               icon: widget.isSaving
                   ? const SizedBox(
@@ -130,7 +129,7 @@ class _TransactionFormState extends State<TransactionForm> {
                     )
                   : const Icon(Icons.check),
               label: Text(
-                widget.isSaving ? 'saving'.tr : 'save_transaction'.tr,
+                widget.isSaving ? 'Saving...' : 'save_transaction'.tr,
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: controller.brandColor.value,

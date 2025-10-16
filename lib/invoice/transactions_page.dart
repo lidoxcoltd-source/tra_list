@@ -100,21 +100,21 @@ class _TransactionsPageState extends State<TransactionsPage> {
               } else {
                 return Column(
                   children: [
+                    // Moved summary and filters to the top
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: _buildSummaryRow(),
                     ),
-                    const Divider(height: 1),
+                    Divider(height: 1, color: Colors.white.withOpacity(0.1)),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: _buildFilterChipsPanel(),
                     ),
-                    const Divider(height: 1),
+                    Divider(height: 1, color: Colors.white.withOpacity(0.1)),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: _buildDesktopActionButtons(),
                     ),
-                    const Spacer(),
                   ],
                 );
               }
@@ -444,8 +444,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          onPressed: () =>
-              controller.showAddTransactionForm(TransactionType.income),
+          onPressed: () async {
+            final result = await Get.to(
+              () =>
+                  const AddTransactionPage(initialType: TransactionType.income),
+            );
+            if (result == true) controller.fetchFirstPage();
+          },
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
@@ -456,8 +461,14 @@ class _TransactionsPageState extends State<TransactionsPage> {
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          onPressed: () =>
-              controller.showAddTransactionForm(TransactionType.expense),
+          onPressed: () async {
+            final result = await Get.to(
+              () => const AddTransactionPage(
+                initialType: TransactionType.expense,
+              ),
+            );
+            if (result == true) controller.fetchFirstPage();
+          },
         ),
       ],
     );

@@ -51,6 +51,9 @@ class AppTranslations extends Translations {
       'home_jobs_overview': 'Jobs Overview',
       'home_active_jobs': 'Active Jobs',
       'home_due_soon': 'Due Soon',
+      'home_completed_jobs': 'Completed',
+      'home_overdue_jobs': 'Overdue',
+      'home_important_jobs': 'Important',
 
       'home_profile': 'Profile',
       'home_sign_out': 'Sign Out',
@@ -293,6 +296,9 @@ class AppTranslations extends Translations {
       'home_jobs_overview': 'Muhtasari wa Kazi',
       'home_active_jobs': 'Kazi Zinazoendelea',
       'home_due_soon': 'Zinakaribia Kukamilika',
+      'home_completed_jobs': 'Zilizokamilika',
+      'home_overdue_jobs': 'Zilizochelewa',
+      'home_important_jobs': 'Muhimu',
       'home_profile': 'Wasifu',
       'home_sign_out': 'Toka Nje',
 

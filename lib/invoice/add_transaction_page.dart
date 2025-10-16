@@ -52,14 +52,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             setState(() => _isSaving = true);
             try {
               await saveAction(); // Execute the save logic from the form
-              Get.snackbar(
-                'success'.tr,
-                'Transaction saved successfully'.tr,
-                snackPosition: SnackPosition.BOTTOM,
-                backgroundColor: Colors.green,
-                colorText: Colors.white,
-              );
-              Get.back(result: true);
+              // The controller now handles the snackbar and navigation.
+              // The onSave in the form will trigger the controller's save, which then closes the page.
+              // For mobile, we need to explicitly close.
+              if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
+              Get.back(result: true); // This was missing.
             } finally {
               if (mounted) setState(() => _isSaving = false);
             }

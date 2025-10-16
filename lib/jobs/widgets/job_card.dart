@@ -98,6 +98,13 @@ class JobCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (job.phonePrimary.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.message),
+                    color: Colors.green,
+                    tooltip: 'Chat on WhatsApp',
+                    onPressed: () => _launchWhatsApp(job.phonePrimary),
+                  ),
                 _buildPopupMenu(c, context),
               ],
             ),
@@ -290,6 +297,14 @@ class JobCard extends StatelessWidget {
                 color: Colors.blue.shade700,
               ),
               title: Text('send_payment_reminder'.tr),
+            ),
+          ),
+        if (job.phonePrimary.isNotEmpty)
+          PopupMenuItem(
+            value: 'whatsapp',
+            child: ListTile(
+              leading: const Icon(Icons.message, color: Colors.green),
+              title: Text('Chat on WhatsApp'.tr),
             ),
           ),
         const PopupMenuDivider(),
