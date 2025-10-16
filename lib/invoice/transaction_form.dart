@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:tra_list/invoice/category_model.dart';
+import 'package:tra_list/invoice/transaction_service.dart';
+import 'package:tra_list/invoice/category_service.dart';
 import 'package:tra_list/invoice/add_transaction_controller.dart';
 import 'package:tra_list/invoice/advance_invoice_page.dart';
 import 'package:tra_list/invoice/transaction_model.dart';
@@ -210,48 +213,110 @@ class _TransactionFormState extends State<TransactionForm> {
   }
 
   Widget _buildCategorySelector() {
-    return Obx(() {
-      final categories = controller.isExpense.value
-          ? controller.expenseCategories
-          : controller.incomeCategories;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('category'.tr, style: Get.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          controller.categoriesLoading.value
-              ? const Center(child: CircularProgressIndicator())
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ...categories.map((cat) {
-                      final selected =
-                          controller.selectedCategory.value == cat.name;
-                      return ChoiceChip(
-                        label: Text(cat.name),
-                        selected: selected,
-                        onSelected: (_) =>
-                            controller.selectedCategory.value = cat.name,
-                        selectedColor: controller.brandColor.value.withOpacity(
-                          0.8,
-                        ),
-                        backgroundColor: Colors.grey.shade200,
-                        labelStyle: TextStyle(
-                          color: selected ? Colors.white : Colors.black87,
-                        ),
-                      );
-                    }).toList(),
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 18),
-                      label: Text('Add'.tr),
-                      onPressed: _showAddCategoryDialog,
-                    ),
-                  ],
-                ),
-        ],
-      );
+    return Obx(
+      () => TextFormField(
+        key: ValueKey(controller.selectedCategory.value), // Rebuild on change
+        initialValue: controller.selectedCategory.value.isEmpty
+            ? null
+            : controller.selectedCategory.value,
+        readOnly: true,
+        onTap: _showSearchableCategoryPicker,
+        decoration: InputDecoration(
+          labelText: 'category'.tr,
+          prefixIcon: const Icon(Icons.category_outlined),
+          suffixIcon: const Icon(Icons.arrow_drop_down),
+        ),
+        validator: (v) =>
+            (v == null || v.isEmpty) ? 'Category is required' : null,
+      ),
+    );
+  }
+
+  Future<void> _showSearchableCategoryPicker() async {
+    final searchController = TextEditingController();
+    final RxList<CategoryModel> filteredCategories = <CategoryModel>[].obs;
+
+    final allCategories = controller.isExpense.value
+        ? controller.expenseCategories
+        : controller.incomeCategories;
+    filteredCategories.assignAll(allCategories);
+
+    searchController.addListener(() {
+      final query = searchController.text.toLowerCase();
+      if (query.isEmpty) {
+        filteredCategories.assignAll(allCategories);
+      } else {
+        filteredCategories.assignAll(
+          allCategories.where((c) => c.name.toLowerCase().contains(query)),
+        );
+      }
     });
+
+    await Get.bottomSheet(
+      Container(
+        height: Get.height * 0.7,
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: TextField(
+                controller: searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: '${'search'.tr} ${'categories'.tr}',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'add_category_title'.tr,
+                    onPressed: () {
+                      Get.back(); // Close search sheet first
+                      _showAddCategoryDialog();
+                    },
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Obx(
+                () => filteredCategories.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No categories found. Try adding one.',
+                          style: Get.textTheme.bodyMedium,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: filteredCategories.length,
+                        itemBuilder: (context, index) {
+                          final category = filteredCategories[index];
+                          return ListTile(
+                            title: Text(category.name),
+                            onTap: () {
+                              controller.selectedCategory.value = category.name;
+                              Get.back();
+                            },
+                            onLongPress: () {
+                              Get.back(); // Close search sheet first
+                              _showCategoryActions(category);
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
+    );
   }
 
   Widget _buildDateField() {
@@ -302,6 +367,141 @@ class _TransactionFormState extends State<TransactionForm> {
     if (newCategoryName != null && newCategoryName.isNotEmpty) {
       await controller.addNewCategory(newCategoryName);
     }
+  }
+
+  /// Shows a dialog to edit or delete a category.
+  void _showCategoryActions(CategoryModel category) {
+    Get.bottomSheet(
+      SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: Text('Edit "${category.name}"'),
+              onTap: () {
+                Get.back(); // Close the bottom sheet
+                _showEditCategoryDialog(category);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: Text(
+                'Delete "${category.name}"',
+                style: const TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Get.back(); // Close the bottom sheet
+                _confirmDeleteCategory(category);
+              },
+            ),
+          ],
+        ),
+      ),
+      backgroundColor: Colors.white,
+    );
+  }
+
+  /// Shows a dialog to edit an existing category's name.
+  Future<void> _showEditCategoryDialog(CategoryModel category) async {
+    final nameController = TextEditingController(text: category.name);
+
+    final newName = await Get.dialog<String>(
+      AlertDialog(
+        title: Text('Edit Category'.tr),
+        content: TextField(
+          controller: nameController,
+          decoration: InputDecoration(labelText: 'category_name'.tr),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: Text('cancel'.tr)),
+          ElevatedButton(
+            onPressed: () => Get.back(result: nameController.text.trim()),
+            child: Text('save'.tr),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != category.name) {
+      try {
+        await CategoryService.updateCategory(category.id!, newName);
+        // If the edited category was selected, update the selection
+        if (controller.selectedCategory.value == category.name) {
+          controller.selectedCategory.value = newName;
+        }
+        await controller.loadCategories(); // Refresh the list
+        Get.snackbar('Success', 'Category updated successfully');
+      } catch (e) {
+        Get.snackbar('Error', 'Failed to update category: $e');
+      }
+    }
+  }
+
+  /// Confirms and handles the deletion of a category.
+  Future<void> _confirmDeleteCategory(CategoryModel category) async {
+    // 1. Check if the category is in use
+    final isInUse = await _isCategoryInUse(category.name);
+
+    // 2. If in use, show an error and stop.
+    if (isInUse) {
+      Get.snackbar(
+        'Cannot Delete',
+        'Category "${category.name}" is used by existing transactions.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    // 3. If not in use, ask for confirmation.
+    final confirm = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('Delete Category'.tr),
+        content: Text(
+          'Are you sure you want to delete "${category.name}"? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('cancel'.tr),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    // 4. If confirmed, proceed with deletion.
+    if (confirm == true) {
+      try {
+        await CategoryService.deleteCategory(category.id!);
+        // If the deleted category was selected, clear the selection
+        if (controller.selectedCategory.value == category.name) {
+          controller.selectedCategory.value = '';
+        }
+        await controller.loadCategories(); // Refresh the list
+        Get.snackbar(
+          'Success',
+          'Category "${category.name}" has been deleted.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } catch (e) {
+        Get.snackbar('Error', 'Failed to delete category: $e');
+      }
+    }
+  }
+
+  /// Fallback helper to check whether any transaction uses a category.
+  /// Currently TransactionService does not expose a static isCategoryInUse method,
+  /// so this returns false by default; replace with real logic if you have a
+  /// way to query transactions (e.g., TransactionService.getAllTransactions()).
+  Future<bool> _isCategoryInUse(String categoryName) async {
+    // TODO: Implement a real check against your transactions storage.
+    return false;
   }
 }
 

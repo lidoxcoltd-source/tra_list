@@ -23,24 +23,13 @@ class TransactionsPage extends StatefulWidget {
 
 class _TransactionsPageState extends State<TransactionsPage> {
   final TransactionsController controller = Get.put(TransactionsController());
-  bool _isDesktopSaving = false;
 
   @override
   Widget build(BuildContext context) {
     // Initialize controller
     // Initialize date formatting for the current locale.
     initializeDateFormatting(Get.locale?.toString());
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 850;
-        if (isDesktop) {
-          return _buildDesktopLayout(context);
-        } else {
-          return _buildMobileLayout(context);
-        }
-      },
-    );
+    return _buildMobileLayout(context);
   }
 
   Widget _buildMobileLayout(BuildContext context) {
@@ -59,76 +48,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
       floatingActionButton: _buildSpeedDialFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-    );
-  }
-
-  Widget _buildDesktopLayout(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
-      appBar: _buildDesktopAppBar(),
-      body: Row(
-        children: [
-          // Left Panel
-          Container(
-            width: 320,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(right: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: Obx(() {
-              if (controller.showAddForm.value) {
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TransactionForm(
-                    transaction: controller.editingTransaction.value,
-                    initialType: controller.formInitialType.value,
-                    isSaving: _isDesktopSaving,
-                    onSave: (saveAction) async {
-                      setState(() => _isDesktopSaving = true);
-                      try {
-                        await saveAction();
-                        controller.hideAddTransactionForm();
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isDesktopSaving = false);
-                        }
-                      }
-                    },
-                    onCancel: controller.hideAddTransactionForm,
-                  ),
-                );
-              } else {
-                return Column(
-                  children: [
-                    // Moved summary and filters to the top
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildSummaryRow(),
-                    ),
-                    Divider(height: 1, color: Colors.white.withOpacity(0.1)),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildFilterChipsPanel(),
-                    ),
-                    Divider(height: 1, color: Colors.white.withOpacity(0.1)),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: _buildDesktopActionButtons(),
-                    ),
-                  ],
-                );
-              }
-            }),
-          ),
-          // Right Panel
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: controller.fetchFirstPage,
-              child: _buildTransactionListDesktop(),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -281,16 +200,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           // Edit action
-          // For desktop, we can use the form on the left.
-          if (Get.width > 850) {
-            controller.editTransactionOnDesktop(t);
-          } else {
-            final result = await Get.to(
-              () => AddTransactionPage(transaction: t),
-            );
-            // Only refresh if the transaction was actually saved.
-            if (result == true) controller.fetchFirstPage();
-          }
+          final result = await Get.to(() => AddTransactionPage(transaction: t));
+          // Only refresh if the transaction was actually saved.
+          if (result == true) controller.fetchFirstPage();
           return false; // Do not dismiss the item
         } else {
           // Delete action
@@ -401,76 +313,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 ),
         ),
       ),
-    );
-  }
-
-  AppBar _buildDesktopAppBar() {
-    return AppBar(
-      elevation: 1,
-      backgroundColor: controller.brandColor.value,
-      foregroundColor: Colors.white,
-      title: Obx(
-        () => controller.isSearching.value
-            ? Hero(
-                tag: 'search_field',
-                child: TextField(
-                  controller: controller.searchController,
-                  autofocus: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: '${'search'.tr}...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                    border: InputBorder.none,
-                  ),
-                ),
-              )
-            : Text(
-                '${'transactions_title'.tr} - ${controller.filterTitle.value}',
-              ),
-      ),
-      actions: _buildAppBarActions(),
-    );
-  }
-
-  Widget _buildDesktopActionButtons() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ElevatedButton.icon(
-          icon: const Icon(Icons.arrow_upward),
-          label: Text('transactions_add_income'.tr),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green.shade600,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          onPressed: () async {
-            final result = await Get.to(
-              () =>
-                  const AddTransactionPage(initialType: TransactionType.income),
-            );
-            if (result == true) controller.fetchFirstPage();
-          },
-        ),
-        const SizedBox(height: 12),
-        ElevatedButton.icon(
-          icon: const Icon(Icons.arrow_downward),
-          label: Text('transactions_add_expense'.tr),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade500,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-          onPressed: () async {
-            final result = await Get.to(
-              () => const AddTransactionPage(
-                initialType: TransactionType.expense,
-              ),
-            );
-            if (result == true) controller.fetchFirstPage();
-          },
-        ),
-      ],
     );
   }
 
@@ -834,58 +676,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
               ),
       ),
     );
-  }
-
-  Widget _buildTransactionListDesktop() {
-    return Obx(() {
-      if (controller.isFetching.value && controller.transactions.isEmpty) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      if (controller.transactions.isEmpty) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.receipt_long_outlined,
-                size: 60,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                controller.searchController.text.isNotEmpty
-                    ? '${'transactions_no_transactions'.tr} for "${controller.searchController.text}"'
-                    : 'transactions_no_transactions'.tr,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-              ),
-            ],
-          ),
-        );
-      }
-      return ListView.builder(
-        controller: controller.scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-        itemCount: controller.groupedTransactions.length,
-        itemBuilder: (context, index) {
-          final entry = controller.groupedTransactions.entries.elementAt(index);
-          final date = entry.key;
-          final transactionsInGroup = entry.value;
-          return _TransactionGroup(
-            onHeaderTap: () => controller.filterBySingleDay(date),
-            header: TransactionsController.formatDateHeader(date),
-            children: transactionsInGroup
-                .map(
-                  (t) => _buildTransactionCard(
-                    t,
-                    controller.allFetchedTransactions.indexOf(t),
-                  ),
-                )
-                .toList(),
-          );
-        },
-      );
-    });
   }
 
   Widget _buildFilterChip(FilterPeriod p, String label) {

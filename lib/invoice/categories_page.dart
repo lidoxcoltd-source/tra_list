@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'category_model.dart';
 import 'category_service.dart';
 import 'transaction_model.dart';
+import 'transaction_service.dart';
 
 class CategoriesPage extends StatelessWidget {
   const CategoriesPage({super.key});
@@ -87,13 +88,41 @@ class CategoriesPage extends StatelessWidget {
     Get.dialog(
       AlertDialog(
         title: Text('Delete Category'.tr),
-        content: Text('Are you sure you want to delete "${category.name}"?'),
+        content: Text(
+          'Are you sure you want to delete "${category.name}"? This cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
           TextButton(
             onPressed: () async {
-              await CategoryService.deleteCategory(category.id!);
-              Get.back(); // No tr needed for logic
+              Get.back(); // Close the dialog first
+
+              // 1. Check if the category is in use
+              final txQuery = await FirebaseFirestore.instance
+                  .collection('transactions')
+                  .where('category', isEqualTo: category.name)
+                  .limit(1)
+                  .get();
+              final isInUse = txQuery.docs.isNotEmpty;
+
+              // 2. If in use, show a snackbar and stop.
+              if (isInUse) {
+                Get.snackbar(
+                  'Cannot Delete',
+                  'Category "${category.name}" is being used by one or more transactions.',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  colorText: Colors.white,
+                );
+              } else {
+                // 3. If not in use, proceed with deletion.
+                await CategoryService.deleteCategory(category.id!);
+                Get.snackbar(
+                  'Success',
+                  'Category "${category.name}" has been deleted.',
+                  snackPosition: SnackPosition.BOTTOM,
+                );
+              }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),

@@ -22,8 +22,8 @@ class _AddJobPageState extends State<AddJobPage> {
   final _jobType = TextEditingController();
   final _phone1 = TextEditingController();
   final _phone2 = TextEditingController();
-  final _total = TextEditingController(text: '0');
-  final _advance = TextEditingController(text: '0');
+  final _total = TextEditingController();
+  final _advance = TextEditingController();
   final _description = TextEditingController(); // NEW
   DateTime? _startDate;
   DateTime? _dueDate;
@@ -65,10 +65,6 @@ class _AddJobPageState extends State<AddJobPage> {
       _dueDate = j.dueDate;
       _important = j.isImportant;
       _paidInFull = j.advancePaid >= j.totalAmount;
-    } else {
-      // Default formatted zeros
-      _total.text = _moneyFmt.format(0);
-      _advance.text = _moneyFmt.format(0);
     }
   }
 
@@ -485,6 +481,7 @@ class _AddJobPageState extends State<AddJobPage> {
                             decoration: InputDecoration(
                               labelText: 'total_amount'.tr,
                               prefixIcon: const Icon(Icons.attach_money),
+                              hintText: 'e.g. 150000',
                               filled: true,
                             ),
                             keyboardType: const TextInputType.numberWithOptions(
@@ -504,6 +501,7 @@ class _AddJobPageState extends State<AddJobPage> {
                             decoration: InputDecoration(
                               labelText: 'advance_paid'.tr,
                               prefixIcon: const Icon(Icons.payments_outlined),
+                              hintText: 'e.g. 50000',
                               filled: true,
                             ),
                             keyboardType: const TextInputType.numberWithOptions(

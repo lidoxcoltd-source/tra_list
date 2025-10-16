@@ -211,22 +211,29 @@ class AddTransactionController extends GetxController {
   }
 
   Future<void> addNewCategory(String newCategoryName) async {
-    final newCategory = CategoryModel(
-      name: newCategoryName,
-      type: isExpense.value ? TransactionType.expense : TransactionType.income,
-    );
+    try {
+      final newCategory = CategoryModel(
+        name: newCategoryName,
+        type: isExpense.value
+            ? TransactionType.expense
+            : TransactionType.income,
+      );
 
-    if (isExpense.value) {
-      expenseCategories.add(newCategory);
-    } else {
-      incomeCategories.add(newCategory);
-    }
-    selectedCategory.value = newCategoryName;
+      // Optimistically update the UI
+      if (isExpense.value) {
+        expenseCategories.add(newCategory);
+      } else {
+        incomeCategories.add(newCategory);
+      }
+      selectedCategory.value = newCategoryName;
 
-    if (isOnline.value) {
+      // Persist to the database
       await CategoryService.addCategory(newCategory);
-    } else {
-      await OfflineService.saveCategoryOffline(newCategory);
+      Get.snackbar('Success', 'Category added successfully');
+    } catch (e) {
+      debugPrint('Failed to add category: $e');
+      Get.snackbar('Error', 'Failed to add category');
+      await loadCategories(); // Reload from DB to revert optimistic update on failure
     }
   }
 
