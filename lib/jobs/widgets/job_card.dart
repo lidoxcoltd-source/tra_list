@@ -76,7 +76,9 @@ class JobCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // add this
+          crossAxisAlignment:
+              CrossAxisAlignment.start, // optional: keeps content aligned
           children: [
             // --- Header: Title, Status, and Actions ---
             Row(
