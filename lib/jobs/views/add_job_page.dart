@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../controllers/job_controller.dart';
 import '../models/job.dart';
+import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
+import 'package:tra_list/services/profile_service.dart';
 
 class AddJobPage extends StatefulWidget {
   final Job? job;
@@ -135,11 +137,10 @@ class _AddJobPageState extends State<AddJobPage> {
   String _formatAmount(double v) => _moneyFmt.format(v);
 
   Future<void> _onSave() async {
-    setState(() => _triedSave = true); // NEW: trigger date errors
+    setState(() => _triedSave = true);
     if (!_form.currentState!.validate() ||
         _startDate == null ||
         _dueDate == null) {
-      // Keep the snackbar you already had for dates
       if (_startDate == null || _dueDate == null) {
         Get.snackbar('error'.tr, 'validation_required'.tr);
       }
@@ -153,7 +154,7 @@ class _AddJobPageState extends State<AddJobPage> {
       return;
     }
 
-    setState(() => _saving = true); // NEW: start loading
+    setState(() => _saving = true);
     try {
       final newJobData = Job(
         id: _isEditing ? widget.job!.id : null,
@@ -182,10 +183,172 @@ class _AddJobPageState extends State<AddJobPage> {
         await _c.recordPaymentAsTransaction(newJobData);
       }
 
+      // If advance paid, run PDF flow and close inside it.
+      if (adv > 0) {
+        if (mounted) setState(() => _saving = false);
+        await _offerAdvanceReceipt(newJobData); // Will close page at the end
+        return; // prevent double Get.back()
+      }
+
+      // No advance -> just close
       Get.back();
     } finally {
-      if (mounted) setState(() => _saving = false); // NEW: stop loading
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Map<String, dynamic> _normalizeCompany(Map<String, dynamic>? raw) {
+    final m = (raw ?? {}).map((k, v) => MapEntry(k.toString(), v));
+    String joinAddr(List parts) => parts
+        .where((e) => (e?.toString().trim().isNotEmpty ?? false))
+        .join(', ');
+
+    return {
+      'name': m['name'] ?? m['companyName'] ?? m['businessName'] ?? '',
+      'address':
+          m['address'] ??
+          joinAddr([m['street'], m['city'], m['region'], m['country']]),
+      'phone': m['phone'] ?? m['phoneNumber'] ?? m['tel'] ?? '',
+      'email': m['email'] ?? '',
+      'taxId': m['taxId'] ?? m['tin'] ?? m['vat'] ?? '',
+      'logoUrl': m['logoUrl'] ?? m['logo'] ?? m['logoURL'] ?? '',
+      'website': m['website'] ?? m['site'] ?? '',
+      'handle':
+          m['handle'] ?? m['social'] ?? m['instagram'] ?? m['facebook'] ?? '',
+      'beneficiary': m['beneficiary'] ?? m['accountName'] ?? '',
+      'bank': m['bank'] ?? m['bankName'] ?? '',
+      'account': m['account'] ?? m['accountNo'] ?? m['accountNumber'] ?? '',
+      'swift': m['swift'] ?? m['swiftCode'] ?? '',
+      'colors':
+          m['colors'] is Map
+                ? m['colors']
+                : {
+                    // optional brand colors if you store hex strings
+                    if (m['brandColor'] != null)
+                      'brand':
+                          int.tryParse(
+                            m['brandColor'].toString().replaceFirst(
+                              '#',
+                              '0xFF',
+                            ),
+                          ) ??
+                          null,
+                    if (m['accentColor'] != null)
+                      'accent':
+                          int.tryParse(
+                            m['accentColor'].toString().replaceFirst(
+                              '#',
+                              '0xFF',
+                            ),
+                          ) ??
+                          null,
+                    if (m['footerColor'] != null)
+                      'footer':
+                          int.tryParse(
+                            m['footerColor'].toString().replaceFirst(
+                              '#',
+                              '0xFF',
+                            ),
+                          ) ??
+                          null,
+                  }
+            ..removeWhere((k, v) => v == null),
+    }..removeWhere((k, v) => v == null);
+  }
+
+  // Build data map for your AdvancePaymentPdf (now pulls and normalizes company)
+  Future<Map<String, dynamic>> _buildAdvancePdfData(Job j) async {
+    final profile = await ProfileService.loadOrCreate();
+    final company = _normalizeCompany((profile ?? {}) as Map<String, dynamic>?);
+
+    final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final due = j.dueDate != null
+        ? DateFormat('yyyy-MM-dd').format(j.dueDate!)
+        : '';
+    final desc = _description.text.trim();
+    final lineDesc = [
+      if (j.jobType.isNotEmpty) j.jobType,
+      if (desc.isNotEmpty) desc,
+    ].join(' - ');
+
+    return {
+      'company': company,
+      'client': {
+        'name': j.customerName,
+        'address': [
+          j.phonePrimary,
+          if ((j.phoneSecondary ?? '').isNotEmpty) j.phoneSecondary,
+        ].join(' / '),
+      },
+      'invoice': {
+        'number': (j.id ?? DateTime.now().millisecondsSinceEpoch).toString(),
+        'issueDate': now,
+        'advanceDueDate': due,
+        'paymentMethod': _paidInFull ? 'Full (Advance 100%)' : 'Advance',
+        'notes': desc.isEmpty ? 'This is computer generated document.' : desc,
+      },
+      'items': [
+        {
+          'description': lineDesc.isEmpty ? 'Service' : lineDesc,
+          'qty': 1,
+          'unit': j.totalAmount,
+          'amount': j.totalAmount,
+        },
+      ],
+      'subtotal': j.totalAmount,
+      'tax': 0,
+      'total': j.totalAmount,
+      'advancePaid': j.advancePaid,
+    };
+  }
+
+  Future<void> _offerAdvanceReceipt(Job job) async {
+    final data = await _buildAdvancePdfData(job);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Advance payment receipt'),
+        content: const Text('Generate receipt now?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'skip'),
+            child: const Text('Later'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: const Text('Save PDF'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'print'),
+            child: const Text('Print'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (choice == 'print') {
+      await AdvancePaymentPdf.generate(data);
+    } else if (choice == 'save') {
+      final safeClient = job.customerName.replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]+'),
+        '_',
+      );
+      final ts = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final fileName = 'advance_invoice_${safeClient}_$ts.pdf';
+      final path = await AdvancePaymentPdf.generateAndSave(
+        data,
+        fileName: fileName,
+      );
+      Get.snackbar(
+        'Saved',
+        'PDF saved to $path',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+    // Either way (print, save, or later), close the page now.
+    Get.back();
   }
 
   // Helper: required field label with red asterisk
