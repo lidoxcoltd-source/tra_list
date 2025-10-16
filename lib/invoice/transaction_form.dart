@@ -9,13 +9,15 @@ import 'package:tra_list/invoice/transaction_model.dart';
 class TransactionForm extends StatefulWidget {
   final TransactionModel? transaction;
   final TransactionType? initialType;
-  final VoidCallback onSave;
+  final Future<void> Function(Future<void> Function() saveAction) onSave;
   final VoidCallback onCancel;
+  final bool isSaving;
 
   const TransactionForm({
     super.key,
     this.transaction,
     this.initialType,
+    this.isSaving = false,
     required this.onSave,
     required this.onCancel,
   });
@@ -44,15 +46,17 @@ class _TransactionFormState extends State<TransactionForm> {
 
   @override
   void dispose() {
-    final tag = widget.transaction?.id ?? 'new_transaction';
-    Get.delete<AddTransactionController>(tag: tag);
+    // Avoid deleting the controller during intermediate rebuilds (e.g., when isSaving toggles).
+    // Let GetX SmartManagement clean it up when the page is actually popped.
+    // final tag = widget.transaction?.id ?? 'new_transaction';
+    // Get.delete<AddTransactionController>(tag: tag);
     super.dispose();
   }
 
   Future<void> _save() async {
+    debugPrint('TransactionForm._save called');
     if (_formKey.currentState!.validate()) {
-      await controller.save();
-      widget.onSave();
+      await widget.onSave(controller.save);
     }
   }
 
@@ -116,15 +120,18 @@ class _TransactionFormState extends State<TransactionForm> {
           flex: 2,
           child: Obx(
             () => ElevatedButton.icon(
-              onPressed: controller.busy.value ? null : _save,
-              icon: controller.busy.value
+              // Obx is kept for brandColor reactivity
+              onPressed: widget.isSaving ? null : _save,
+              icon: widget.isSaving
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.check),
-              label: Text('save_transaction'.tr),
+              label: Text(
+                widget.isSaving ? 'saving'.tr : 'save_transaction'.tr,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: controller.brandColor.value,
                 foregroundColor: Colors.white,
@@ -296,5 +303,36 @@ class _TransactionFormState extends State<TransactionForm> {
     if (newCategoryName != null && newCategoryName.isNotEmpty) {
       await controller.addNewCategory(newCategoryName);
     }
+  }
+}
+
+class AddTransactionPage extends StatefulWidget {
+  const AddTransactionPage({super.key});
+  @override
+  State<AddTransactionPage> createState() => _AddTransactionPageState();
+}
+
+class _AddTransactionPageState extends State<AddTransactionPage> {
+  bool isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return TransactionForm(
+      isSaving: isSaving,
+      onCancel: () => Navigator.of(context).pop(),
+      onSave: (saveAction) async {
+        setState(() => isSaving = true);
+        try {
+          await saveAction(); // IMPORTANT: actually perform the save
+          Get.snackbar('Success', 'Transaction saved');
+          Navigator.of(context).pop();
+        } catch (e) {
+          debugPrint('Save failed: $e');
+          Get.snackbar('Error', 'Failed to save');
+        } finally {
+          if (mounted) setState(() => isSaving = false);
+        }
+      },
+    );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -12,11 +13,11 @@ import 'transaction_service.dart';
 
 class AddTransactionController extends GetxController {
   // Transaction Data
-  final RxBool isExpense = true.obs;
   final descC = TextEditingController();
   final amountC = TextEditingController();
-  final RxnString selectedCategory = RxnString(null);
-  final Rx<DateTime> selectedDate = DateTime.now().obs;
+  final isExpense = true.obs;
+  final selectedCategory = ''.obs;
+  final selectedDate = DateTime.now().obs;
 
   // UI State
   final RxBool busy = false.obs;
@@ -230,58 +231,40 @@ class AddTransactionController extends GetxController {
   }
 
   Future<void> save() async {
-    busy.value = true;
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) throw Exception('User not signed in');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not authenticated.');
 
-      final model = TransactionModel(
+      final amount = double.parse(amountC.text.replaceAll(',', ''));
+      final transaction = TransactionModel(
         id: _originalTransaction?.id,
+        uid: user.uid,
+        description: descC.text.trim(),
+        amount: amount,
         type: isExpense.value
             ? TransactionType.expense
             : TransactionType.income,
-        description: descC.text.trim(),
-        amount: double.tryParse(amountC.text.replaceAll(',', '')) ?? 0.0,
+        category: selectedCategory.value,
         date: selectedDate.value,
-        category: selectedCategory.value ?? 'Uncategorized',
-        uid: uid,
       );
 
-      if (isOnline.value) {
-        if (_originalTransaction == null) {
-          await TransactionService.saveTransaction(model);
-        } else {
-          await TransactionService.updateTransaction(model.id!, model);
-        }
-        Get.snackbar(
-          'success'.tr,
-          'Transaction saved successfully'.tr,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
+      if (_originalTransaction != null &&
+          (_originalTransaction!.id ?? '').isNotEmpty) {
+        // Use TransactionService to update
+        await TransactionService.updateTransaction(
+          _originalTransaction!.id!,
+          transaction,
         );
       } else {
-        await OfflineService.saveTransactionOffline(model);
-        Get.snackbar(
-          'Saved Offline'.tr,
-          'Transaction saved offline and will sync when connection is restored'
-              .tr,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.orange,
-          colorText: Colors.white,
-        );
+        // Use TransactionService to save a new transaction
+        await TransactionService.saveTransaction(transaction);
       }
-      Get.back(result: true);
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to save transaction: $e',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    } finally {
-      busy.value = false;
+    } on FirebaseException catch (e) {
+      debugPrint('Firestore save failed: ${e.code} ${e.message}');
+      rethrow;
+    } catch (e, st) {
+      debugPrint('Save error: $e\n$st');
+      rethrow;
     }
   }
 }

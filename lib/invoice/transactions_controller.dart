@@ -50,6 +50,7 @@ class TransactionsController extends GetxController {
   // Desktop UI State
   final RxBool showAddForm = false.obs;
   final Rx<TransactionType?> formInitialType = Rx<TransactionType?>(null);
+  final Rx<TransactionModel?> editingTransaction = Rx<TransactionModel?>(null);
 
   // Controllers
   final ScrollController scrollController = ScrollController();
@@ -72,7 +73,8 @@ class TransactionsController extends GetxController {
     endDate.value = startDate.value!.add(const Duration(days: 1));
 
     loadProfileColors();
-    fetchFirstPage();
+    // Fetch totals and the first page of data concurrently.
+    Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
 
     scrollController.addListener(() {
       if (scrollController.position.pixels >=
@@ -107,12 +109,26 @@ class TransactionsController extends GetxController {
 
   void showAddTransactionForm(TransactionType type) {
     formInitialType.value = type;
+    editingTransaction.value = null; // Ensure we're not editing
+    showAddForm.value = true;
+  }
+
+  void editTransactionOnDesktop(TransactionModel transaction) {
+    editingTransaction.value = transaction;
     showAddForm.value = true;
   }
 
   void hideAddTransactionForm() {
+    editingTransaction.value = null;
     showAddForm.value = false;
     formInitialType.value = null;
+    Get.snackbar(
+      'success'.tr,
+      'Transaction saved successfully'.tr,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.green,
+      colorText: Colors.white,
+    );
     fetchFirstPage(); // Refresh list after form is closed
   }
 
@@ -427,35 +443,59 @@ class TransactionsController extends GetxController {
   }
 
   Future<void> deleteTransaction(TransactionModel t) async {
-    try {
-      if (t.id == null) return;
-      // Optimistic deletion from UI
-      final index = allFetchedTransactions.indexWhere(
-        (item) => item.id == t.id,
-      );
-      if (index != -1) {
-        allFetchedTransactions.removeAt(index);
-        applyAllFilters();
-        _recalculateTotals();
+    if (t.id == null) return;
+
+    // Store the transaction and its original index for undo
+    final index = allFetchedTransactions.indexWhere((item) => item.id == t.id);
+    if (index == -1) return;
+    final removedTransaction = allFetchedTransactions[index];
+
+    // Optimistic deletion from UI
+    allFetchedTransactions.removeAt(index);
+    applyAllFilters();
+    _recalculateTotals();
+
+    // Show snackbar with Undo action
+    // Use GetSnackBar so we can react to status changes (CLOSED) instead of the
+    // nonexistent `onClosed` parameter on Get.snackbar.
+    bool _undoPressed = false;
+    Get.showSnackbar(
+      GetSnackBar(
+        titleText: Text(
+          'transactions_deleted_success'.tr,
+          style: const TextStyle(color: Colors.white),
+        ),
+        messageText: Text(
+          'You can undo this action.'.tr,
+          style: const TextStyle(color: Colors.white),
+        ),
+        snackPosition: SnackPosition.BOTTOM,
+        mainButton: TextButton(
+          onPressed: () {
+            // Undo action: re-insert the transaction and close the snackbar
+            if (Get.isSnackbarOpen) Get.back();
+            _undoPressed = true;
+            allFetchedTransactions.insert(index, removedTransaction);
+            applyAllFilters();
+            _recalculateTotals();
+          },
+          child: Text('undo'.tr, style: const TextStyle(color: Colors.white)),
+        ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+    // After the snackbar duration, if the user didn't undo, perform deletion.
+    Future.delayed(const Duration(seconds: 5), () async {
+      if (!_undoPressed) {
+        try {
+          await TransactionService.deleteTransaction(t.id!);
+        } catch (e) {
+          Get.snackbar('error'.tr, 'Failed to delete transaction: $e');
+          // If deletion fails, refresh to get the item back
+          fetchFirstPage();
+        }
       }
-
-      // Perform actual deletion
-      await TransactionService.deleteTransaction(t.id!);
-
-      Get.snackbar(
-        'success'.tr,
-        'transactions_deleted_success'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      Get.snackbar(
-        'error'.tr,
-        'Failed to delete transaction: $e',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      // If deletion fails, refresh to get the item back
-      fetchFirstPage();
-    }
+    });
   }
 
   Future<bool?> _confirmDeleteDialog() async {

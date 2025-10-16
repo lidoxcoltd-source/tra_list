@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:tra_list/invoice/transaction_form.dart';
+import 'package:tra_list/invoice/transaction_form.dart' hide AddTransactionPage;
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
 import 'package:tra_list/invoice/transaction_excel_export.dart'; // Add this import
@@ -14,13 +14,20 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'analytics_page.dart';
 import 'transactions_controller.dart';
 
-class TransactionsPage extends GetView<TransactionsController> {
+class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
+
+  @override
+  State<TransactionsPage> createState() => _TransactionsPageState();
+}
+
+class _TransactionsPageState extends State<TransactionsPage> {
+  final TransactionsController controller = Get.put(TransactionsController());
+  bool _isDesktopSaving = false;
 
   @override
   Widget build(BuildContext context) {
     // Initialize controller
-    Get.put(TransactionsController());
     // Initialize date formatting for the current locale.
     initializeDateFormatting(Get.locale?.toString());
 
@@ -73,8 +80,20 @@ class TransactionsPage extends GetView<TransactionsController> {
                 return Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TransactionForm(
+                    transaction: controller.editingTransaction.value,
                     initialType: controller.formInitialType.value,
-                    onSave: controller.hideAddTransactionForm,
+                    isSaving: _isDesktopSaving,
+                    onSave: (saveAction) async {
+                      setState(() => _isDesktopSaving = true);
+                      try {
+                        await saveAction();
+                        controller.hideAddTransactionForm();
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isDesktopSaving = false);
+                        }
+                      }
+                    },
                     onCancel: controller.hideAddTransactionForm,
                   ),
                 );
@@ -113,40 +132,48 @@ class TransactionsPage extends GetView<TransactionsController> {
     );
   }
 
-  SpeedDial _buildSpeedDialFab() {
-    return SpeedDial(
-      icon: Icons.add,
-      activeIcon: Icons.close,
-      backgroundColor: controller.brandColor.value,
-      foregroundColor: Colors.white,
-      overlayColor: Colors.black,
-      overlayOpacity: 0.4,
-      spacing: 12,
-      children: [
-        SpeedDialChild(
-          child: const Icon(Icons.arrow_downward, color: Colors.white),
-          backgroundColor: Colors.red.shade500,
-          label: 'expense'.tr,
-          onTap: () async {
-            final result = await Get.to(
-              () => AddTransactionPage(initialType: TransactionType.expense),
-            );
-            if (result == true) controller.fetchFirstPage();
-          },
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.arrow_upward, color: Colors.white),
-          backgroundColor: Colors.green.shade600,
-          label: 'income'.tr,
-          onTap: () async {
-            final result = await Get.to(
-              () => AddTransactionPage(initialType: TransactionType.income),
-            );
-            if (result == true) controller.fetchFirstPage();
-          },
-        ),
-      ],
+  Obx _buildSpeedDialFab() {
+    // Use Obx to rebuild the FAB when brandColor changes.
+    return Obx(
+      () => SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: controller.brandColor.value,
+        foregroundColor: Colors.white,
+        overlayColor: Colors.black,
+        overlayOpacity: 0.4,
+        spacing: 12,
+        children: _getSpeedDialChildren(),
+      ),
     );
+  }
+
+  List<SpeedDialChild> _getSpeedDialChildren() {
+    return [
+      SpeedDialChild(
+        child: const Icon(Icons.arrow_downward, color: Colors.white),
+        backgroundColor: Colors.red.shade500,
+        label: 'expense'.tr,
+        onTap: () async {
+          final result = await Get.to(
+            () =>
+                const AddTransactionPage(initialType: TransactionType.expense),
+          );
+          if (result == true) controller.fetchFirstPage();
+        },
+      ),
+      SpeedDialChild(
+        child: const Icon(Icons.arrow_upward, color: Colors.white),
+        backgroundColor: Colors.green.shade600,
+        label: 'income'.tr,
+        onTap: () async {
+          final result = await Get.to(
+            () => const AddTransactionPage(initialType: TransactionType.income),
+          );
+          if (result == true) controller.fetchFirstPage();
+        },
+      ),
+    ];
   }
 
   Widget _buildSummaryRow() {
@@ -254,10 +281,16 @@ class TransactionsPage extends GetView<TransactionsController> {
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           // Edit action
-          Get.to(() => AddTransactionPage(transaction: t))?.then((result) {
+          // For desktop, we can use the form on the left.
+          if (Get.width > 850) {
+            controller.editTransactionOnDesktop(t);
+          } else {
+            final result = await Get.to(
+              () => AddTransactionPage(transaction: t),
+            );
             // Only refresh if the transaction was actually saved.
             if (result == true) controller.fetchFirstPage();
-          });
+          }
           return false; // Do not dismiss the item
         } else {
           // Delete action

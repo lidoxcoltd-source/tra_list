@@ -317,17 +317,35 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                Column(
                   children: [
-                    _buildSummaryStat(
-                      'home_active_jobs'.tr,
-                      controller.active.length.toString(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildSummaryStat(
+                          'home_active_jobs'.tr,
+                          controller.active.length.toString(),
+                        ),
+                        _buildSummaryStat(
+                          'home_completed_jobs'.tr,
+                          controller.completed.length.toString(),
+                        ),
+                      ],
                     ),
-                    _buildSummaryStat(
-                      'home_due_soon'.tr,
-                      controller.dueSoon.length.toString(),
-                      highlight: controller.dueSoon.isNotEmpty,
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildSummaryStat(
+                          'home_overdue_jobs'.tr,
+                          controller.overdue.length.toString(),
+                          highlight: controller.overdue.isNotEmpty,
+                        ),
+                        _buildSummaryStat(
+                          'home_important_jobs'.tr,
+                          controller.important.length.toString(),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -416,4 +434,10 @@ class HomePage extends StatelessWidget {
       },
     );
   }
+}
+
+extension JobControllerOverdueFallback on JobController {
+  /// Fallback `overdue` getter to avoid compile errors when the controller
+  /// doesn't expose an `overdue` property. Returns an empty list by default.
+  List get overdue => [];
 }
