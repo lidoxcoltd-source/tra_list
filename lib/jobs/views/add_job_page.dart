@@ -65,6 +65,9 @@ class _AddJobPageState extends State<AddJobPage> {
       _dueDate = j.dueDate;
       _important = j.isImportant;
       _paidInFull = j.advancePaid >= j.totalAmount;
+    } else {
+      _advance.text = _moneyFmt.format(0);
+      _startDate = DateTime.now();
     }
   }
 
@@ -171,23 +174,11 @@ class _AddJobPageState extends State<AddJobPage> {
 
       if (_isEditing) {
         await _c.updateJob(newJobData);
+        if (mounted) Navigator.of(context).pop();
       } else {
         await _c.addJob(newJobData);
+        if (mounted) Navigator.of(context).pop();
       }
-
-      if (newJobData.advancePaid > 0 && !newJobData.paymentRecorded) {
-        await _c.recordPaymentAsTransaction(newJobData);
-      }
-
-      // If advance paid, run PDF flow and close inside it.
-      if (adv > 0) {
-        if (mounted) setState(() => _saving = false);
-        await _offerAdvanceReceipt(newJobData); // Will close page at the end
-        return; // prevent double Get.back()
-      }
-
-      // No advance -> just close
-      Get.back();
     } finally {
       if (mounted) setState(() => _saving = false);
     }

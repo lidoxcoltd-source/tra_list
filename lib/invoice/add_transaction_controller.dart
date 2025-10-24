@@ -38,6 +38,9 @@ class AddTransactionController extends GetxController {
   // Original transaction for editing
   final TransactionModel? _originalTransaction;
 
+  // Helper to know if we are creating a new transaction or editing an existing one.
+  bool get isNewTransaction => _originalTransaction == null;
+
   AddTransactionController({
     TransactionModel? transaction,
     TransactionType? initialType,

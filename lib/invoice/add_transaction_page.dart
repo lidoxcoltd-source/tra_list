@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tra_list/invoice/add_transaction_controller.dart';
 import 'package:tra_list/invoice/transaction_form.dart';
 import 'transaction_model.dart';
 
@@ -14,7 +15,23 @@ class AddTransactionPage extends StatefulWidget {
 }
 
 class _AddTransactionPageState extends State<AddTransactionPage> {
+  late final AddTransactionController controller;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Create a unique controller instance for this page.
+    // It will be automatically disposed by GetX when the page is popped.
+    controller = Get.put(
+      AddTransactionController(
+        transaction: widget.transaction,
+        initialType: widget.initialType,
+      ),
+      // Use a unique tag to prevent conflicts if multiple forms are open.
+      tag: 'transaction_form_${widget.transaction?.id ?? 'new'}',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +62,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: TransactionForm(
-          transaction: widget.transaction,
-          initialType: widget.initialType,
+          controller: controller, // Pass the controller instance directly.
           isSaving: _isSaving, // Pass saving state to the form
           onSave: (saveAction) async {
             setState(() => _isSaving = true);

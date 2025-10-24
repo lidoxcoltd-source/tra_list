@@ -9,63 +9,33 @@ import 'package:tra_list/invoice/add_transaction_controller.dart';
 import 'package:tra_list/invoice/advance_invoice_page.dart';
 import 'package:tra_list/invoice/transaction_model.dart';
 
-class TransactionForm extends StatefulWidget {
-  final TransactionModel? transaction;
-  final TransactionType? initialType;
+class TransactionForm extends StatelessWidget {
+  final AddTransactionController controller;
   final Future<void> Function(Future<void> Function() saveAction) onSave;
   final VoidCallback onCancel;
   final bool isSaving;
 
   const TransactionForm({
     super.key,
-    this.transaction,
-    this.initialType,
+    required this.controller,
     this.isSaving = false,
     required this.onSave,
     required this.onCancel,
   });
 
-  @override
-  State<TransactionForm> createState() => _TransactionFormState();
-}
-
-class _TransactionFormState extends State<TransactionForm> {
-  late final AddTransactionController controller;
-  final _formKey = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    super.initState();
-    // Use a unique tag to manage the controller instance for this form
-    final tag = widget.transaction?.id ?? 'new_transaction';
-    controller = Get.put(
-      AddTransactionController(
-        transaction: widget.transaction,
-        initialType: widget.initialType,
-      ),
-      tag: tag,
-    );
-  }
-
-  @override
-  void dispose() {
-    // Avoid deleting the controller during intermediate rebuilds (e.g., when isSaving toggles).
-    // Let GetX SmartManagement clean it up when the page is actually popped.
-    // final tag = widget.transaction?.id ?? 'new_transaction';
-    // Get.delete<AddTransactionController>(tag: tag);
-    super.dispose();
-  }
-
   Future<void> _save() async {
     debugPrint('TransactionForm._save called');
-    if (_formKey.currentState!.validate()) {
-      await widget.onSave(controller.save);
+    if (_formKey.currentState?.validate() ?? false) {
+      await onSave(controller.save);
     }
   }
 
+  // Use a final GlobalKey here for a StatelessWidget.
+  static final _formKey = GlobalKey<FormState>();
+
   @override
   Widget build(BuildContext context) {
-    final isNew = widget.transaction == null;
+    final isNew = controller.isNewTransaction;
 
     return Form(
       key: _formKey,
@@ -102,7 +72,7 @@ class _TransactionFormState extends State<TransactionForm> {
         ),
         IconButton(
           icon: const Icon(Icons.close),
-          onPressed: widget.onCancel,
+          onPressed: onCancel,
           tooltip: 'cancel'.tr,
         ),
       ],
@@ -113,27 +83,22 @@ class _TransactionFormState extends State<TransactionForm> {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
-            onPressed: widget.onCancel,
-            child: Text('cancel'.tr),
-          ),
+          child: OutlinedButton(onPressed: onCancel, child: Text('cancel'.tr)),
         ),
         const SizedBox(width: 8),
         Expanded(
           flex: 2,
           child: Obx(
             () => ElevatedButton.icon(
-              onPressed: widget.isSaving ? null : _save,
-              icon: widget.isSaving
+              onPressed: isSaving ? null : _save,
+              icon: isSaving
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: const CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.check),
-              label: Text(
-                widget.isSaving ? 'Saving...' : 'save_transaction'.tr,
-              ),
+              label: Text(isSaving ? 'Saving...' : 'save_transaction'.tr),
               style: ElevatedButton.styleFrom(
                 backgroundColor: controller.brandColor.value,
                 foregroundColor: Colors.white,
@@ -441,7 +406,7 @@ class _TransactionFormState extends State<TransactionForm> {
   /// Confirms and handles the deletion of a category.
   Future<void> _confirmDeleteCategory(CategoryModel category) async {
     // 1. Check if the category is in use
-    final isInUse = await _isCategoryInUse(category.name);
+    final isInUse = await TransactionService.isCategoryInUse(category.name);
 
     // 2. If in use, show an error and stop.
     if (isInUse) {
@@ -493,45 +458,5 @@ class _TransactionFormState extends State<TransactionForm> {
         Get.snackbar('Error', 'Failed to delete category: $e');
       }
     }
-  }
-
-  /// Fallback helper to check whether any transaction uses a category.
-  /// Currently TransactionService does not expose a static isCategoryInUse method,
-  /// so this returns false by default; replace with real logic if you have a
-  /// way to query transactions (e.g., TransactionService.getAllTransactions()).
-  Future<bool> _isCategoryInUse(String categoryName) async {
-    // TODO: Implement a real check against your transactions storage.
-    return false;
-  }
-}
-
-class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key});
-  @override
-  State<AddTransactionPage> createState() => _AddTransactionPageState();
-}
-
-class _AddTransactionPageState extends State<AddTransactionPage> {
-  bool isSaving = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return TransactionForm(
-      isSaving: isSaving,
-      onCancel: () => Navigator.of(context).pop(),
-      onSave: (saveAction) async {
-        setState(() => isSaving = true);
-        try {
-          await saveAction(); // IMPORTANT: actually perform the save
-          Get.snackbar('Success', 'Transaction saved');
-          Navigator.of(context).pop();
-        } catch (e) {
-          debugPrint('Save failed: $e');
-          Get.snackbar('Error', 'Failed to save');
-        } finally {
-          if (mounted) setState(() => isSaving = false);
-        }
-      },
-    );
   }
 }

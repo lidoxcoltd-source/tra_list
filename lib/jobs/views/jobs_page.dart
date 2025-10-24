@@ -25,7 +25,7 @@ class _JobsPageState extends State<JobsPage>
   void initState() {
     super.initState();
     c = Get.put(JobController());
-    tab = TabController(length: 4, vsync: this);
+    tab = TabController(length: 5, vsync: this, initialIndex: 1);
   }
 
   @override
@@ -157,10 +157,19 @@ class _JobsPageState extends State<JobsPage>
                   isScrollable: true,
                   labelPadding: const EdgeInsets.symmetric(horizontal: 16),
                   tabs: [
-                    Tab(text: '${'jobs_all'.tr} (${c.all.length})'),
-                    Tab(text: '${'jobs_active'.tr} (${c.active.length})'),
-                    Tab(text: '${'jobs_completed'.tr} (${c.completed.length})'),
-                    Tab(text: '${'jobs_important'.tr} (${c.important.length})'),
+                    Tab(text: '${'jobs_all'.tr} (${c.all.length})'), // Index 0
+                    Tab(
+                      text: '${'jobs_active'.tr} (${c.active.length})',
+                    ), // Index 1
+                    Tab(
+                      text: '${'jobs_completed'.tr} (${c.completed.length})',
+                    ), // Index 2
+                    Tab(
+                      text: '${'jobs_important'.tr} (${c.important.length})',
+                    ), // Index 3
+                    Tab(
+                      text: '${'jobs_out_of_time'.tr} (${c.outOfTime.length})',
+                    ), // Index 4
                   ],
                 ),
               ),
@@ -173,7 +182,7 @@ class _JobsPageState extends State<JobsPage>
           return const Center(child: CircularProgressIndicator());
         }
 
-        final lists = [c.all, c.active, c.completed, c.important];
+        final lists = [c.all, c.active, c.completed, c.important, c.outOfTime];
 
         Widget buildEmpty() {
           return Center(

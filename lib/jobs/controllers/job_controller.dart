@@ -305,13 +305,16 @@ class JobController extends GetxController {
   }
 
   List<Job> get all => _sortedAndFilteredJobs;
-  List<Job> get active =>
-      _sortedAndFilteredJobs.where((j) => !j.isCompleted).toList();
-  List<Job> get completed =>
-      _sortedAndFilteredJobs.where((j) => j.isCompleted).toList();
+  List<Job> get active => jobs.where((j) => !j.isCompleted).toList();
+  List<Job> get completed => jobs.where((j) => j.isCompleted).toList();
   List<Job> get important => _sortedAndFilteredJobs
       .where((j) => j.isImportant && !j.isCompleted)
       .toList();
+  List<Job> get outOfTime {
+    final now = DateTime.now();
+    return jobs.where((j) => !j.isCompleted && j.isOverdue).toList();
+  }
+
   List<Job> get dueSoon =>
       active.where((j) => j.dueDanger || j.dueWarning || j.dueToday).toList();
 }

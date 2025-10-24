@@ -92,4 +92,18 @@ class TransactionService {
 
     return {'income': incomeSum, 'expense': expenseSum};
   }
+
+  /// Checks if a category is currently used by any transaction.
+  static Future<bool> isCategoryInUse(String categoryName) async {
+    try {
+      final query = getCollectionRef()
+          .where('category', isEqualTo: categoryName)
+          .limit(1);
+      final snapshot = await query.get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      // On error, assume it's in use to be safe.
+      return true;
+    }
+  }
 }
