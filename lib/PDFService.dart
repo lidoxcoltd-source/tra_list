@@ -58,11 +58,11 @@ class PDFService {
       }
 
       // -------- Helpers --------
-      const double fontScale = 1.1; // was 1.3
+      const double fontScale = 1.2; // was 1.3
       // Slightly lighter text colors
-      final PdfColor textColor = PdfColor(0.36, 0.36, 0.36); // was 0.28
-      final PdfColor textColorBold = PdfColor(0.32, 0.32, 0.32); // was 0.22
-      const double kLetterSpacing = 0.1; // was 0.2
+      final PdfColor textColor = PdfColor(0.28, 0.28, 0.28); // was 0.28
+      final PdfColor textColorBold = PdfColor(0.22, 0.22, 0.22); // was 0.22
+      const double kLetterSpacing = 0.2; // was 0.2
 
       String money(num? v) {
         final amount = (v ?? 0).toDouble();
@@ -143,7 +143,7 @@ class PDFService {
                 // Company
                 pw.Text(
                   (company['name'] ?? 'LIDOX ENTERPRISES').toString(),
-                  style: t12(true),
+                  style: t14(true),
                   textAlign: pw.TextAlign.center,
                 ),
 
@@ -183,7 +183,7 @@ class PDFService {
                   textAlign: pw.TextAlign.center,
                 ),
 
-                pw.SizedBox(height: 15), // Increased from 15
+                pw.SizedBox(height: 13), // Increased from 15
                 // Customer (arranged)
                 pw.Text(
                   'CUSTOMER NAME: ${((customer['name'] ?? '') as String).toUpperCase()}',
@@ -215,7 +215,7 @@ class PDFService {
                   textAlign: pw.TextAlign.left,
                 ),
 
-                pw.SizedBox(height: 15), // Increased from 15
+                pw.SizedBox(height: 13), // Increased from 15
                 // Receipt meta (arranged)
                 pw.Row(
                   children: [
@@ -263,7 +263,7 @@ class PDFService {
                     ),
                   ],
                 ),
-                pw.SizedBox(height: 15), // Increased from 15
+                pw.SizedBox(height: 13), // Increased from 15
                 dashedLine(),
                 pw.SizedBox(height: 10), // Increased from 15
                 pw.Row(
@@ -280,7 +280,7 @@ class PDFService {
                 ),
                 pw.SizedBox(height: 10),
                 dashedLine(),
-                pw.SizedBox(height: 15), // Increased from 15
+                pw.SizedBox(height: 13), // Increased from 15
                 // 1) All item descriptions first
                 ...items.map((it) {
                   final desc = (it['description'] ?? 'BRANDING').toString();
