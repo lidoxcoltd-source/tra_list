@@ -94,7 +94,7 @@ class AppRoutes {
     GetPage(
       name: viewReceipt,
       page: () => ReceiptViewPage(),
-      middlewares: [AuthMiddleware()],
+      // Public route: no AuthMiddleware
       transition: Transition.rightToLeft,
     ),
     GetPage(name: invoice, page: () => const InvoicePage()),

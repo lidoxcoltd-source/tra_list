@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/LocalStorageService.dart';
+import 'package:flutter/services.dart';
 import 'package:tra_list/QRCodeService.dart';
 
 class ReceiptViewController extends GetxController {
@@ -213,163 +214,171 @@ class ReceiptViewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: Text('Receipt ${Get.parameters['id'] ?? ''}'),
-        backgroundColor: const Color(0xFFFFE500),
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        actions: [
-          // QR Code button
-          IconButton(
-            onPressed: () {
-              final receiptId = Get.parameters['id'];
-              if (receiptId != null && receiptId.isNotEmpty) {
-                _showQRDialog(context, receiptId);
-              }
-            },
-            icon: const Icon(Icons.qr_code),
-            tooltip: 'Show QR Code',
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'share':
-                  controller.shareReceiptUrl();
-                  break;
-                case 'copy':
-                  controller.copyReceiptUrl();
-                  break;
-                case 'qr':
-                  final receiptId = Get.parameters['id'];
-                  if (receiptId != null && receiptId.isNotEmpty) {
-                    _showQRDialog(context, receiptId);
-                  }
-                  break;
-                case 'reload':
-                  controller.loadReceipt();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'qr',
-                child: Row(
-                  children: [
-                    Icon(Icons.qr_code),
-                    SizedBox(width: 8),
-                    Text('Show QR Code'),
-                  ],
+    return WillPopScope(
+      onWillPop: () async {
+        SystemNavigator.pop();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text('Receipt ${Get.parameters['id'] ?? ''}'),
+          backgroundColor: const Color(0xFFFFE500),
+          foregroundColor: Colors.black87,
+          elevation: 0,
+          actions: [
+            // QR Code button
+            IconButton(
+              onPressed: () {
+                final receiptId = Get.parameters['id'];
+                if (receiptId != null && receiptId.isNotEmpty) {
+                  _showQRDialog(context, receiptId);
+                }
+              },
+              icon: const Icon(Icons.qr_code),
+              tooltip: 'Show QR Code',
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'share':
+                    controller.shareReceiptUrl();
+                    break;
+                  case 'copy':
+                    controller.copyReceiptUrl();
+                    break;
+                  case 'qr':
+                    final receiptId = Get.parameters['id'];
+                    if (receiptId != null && receiptId.isNotEmpty) {
+                      _showQRDialog(context, receiptId);
+                    }
+                    break;
+                  case 'reload':
+                    controller.loadReceipt();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'qr',
+                  child: Row(
+                    children: [
+                      Icon(Icons.qr_code),
+                      SizedBox(width: 8),
+                      Text('Show QR Code'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'share',
-                child: Row(
-                  children: [
-                    Icon(Icons.share),
-                    SizedBox(width: 8),
-                    Text('Share URL'),
-                  ],
+                const PopupMenuItem(
+                  value: 'share',
+                  child: Row(
+                    children: [
+                      Icon(Icons.share),
+                      SizedBox(width: 8),
+                      Text('Share URL'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'copy',
-                child: Row(
-                  children: [
-                    Icon(Icons.copy),
-                    SizedBox(width: 8),
-                    Text('Copy URL'),
-                  ],
+                const PopupMenuItem(
+                  value: 'copy',
+                  child: Row(
+                    children: [
+                      Icon(Icons.copy),
+                      SizedBox(width: 8),
+                      Text('Copy URL'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'reload',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh),
-                    SizedBox(width: 8),
-                    Text('Reload'),
-                  ],
+                const PopupMenuItem(
+                  value: 'reload',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh),
+                      SizedBox(width: 8),
+                      Text('Reload'),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: Obx(() {
-        if (controller.isLoading.value) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Loading receipt...'),
               ],
             ),
-          );
-        }
-
-        if (controller.errorMessage.value.isNotEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
+          ],
+        ),
+        body: Obx(() {
+          if (controller.isLoading.value) {
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.red.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Receipt Not Found',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.red.shade600,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    controller.errorMessage.value,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: controller.loadReceipt,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Try Again'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      OutlinedButton.icon(
-                        onPressed: () => Get.offAllNamed('/'),
-                        icon: const Icon(Icons.home),
-                        label: const Text('Go Home'),
-                      ),
-                    ],
-                  ),
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading receipt...'),
                 ],
               ),
-            ),
-          );
-        }
+            );
+          }
 
-        if (controller.receiptData.value != null) {
-          return ReceiptPage(data: controller.receiptData.value!);
-        }
+          if (controller.errorMessage.value.isNotEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Receipt Not Found',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: Colors.red.shade600,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      controller.errorMessage.value,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: controller.loadReceipt,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Try Again'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        OutlinedButton.icon(
+                          onPressed: () => Get.offAllNamed('/'),
+                          icon: const Icon(Icons.home),
+                          label: const Text('Go Home'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
 
-        return const Center(child: Text('No receipt data available'));
-      }),
+          if (controller.receiptData.value != null) {
+            return ReceiptPage(data: controller.receiptData.value!);
+          }
+
+          return const Center(child: Text('No receipt data available'));
+        }),
+      ),
     );
   }
 }
