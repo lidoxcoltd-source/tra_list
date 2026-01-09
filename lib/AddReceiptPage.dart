@@ -11,7 +11,8 @@ import 'services/profile_service.dart';
 import 'dart:html' as html show window;
 
 class AddReceiptPage extends StatefulWidget {
-  const AddReceiptPage({super.key});
+  final ReceiptData? receiptData;
+  const AddReceiptPage({super.key, this.receiptData});
 
   @override
   State<AddReceiptPage> createState() => _AddReceiptPageState();
@@ -60,6 +61,9 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   final _taxController = TextEditingController(text: '0.00');
   final _totalInclTaxController = TextEditingController();
 
+  late final FocusNode _itemAmountFocusNode;
+  late final FocusNode _taxFocusNode;
+
   // Dynamic colors from profile
   Color _brandColor = const Color(0xFF1976D2);
   Color _accentColor = const Color(0xFFFFA000);
@@ -70,9 +74,76 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   void initState() {
     super.initState();
     _loadProfileColors();
-    _setCurrentDateTime();
-    _generateReceiptNumber();
-    _generateVerificationCode();
+
+    _itemAmountFocusNode = FocusNode();
+    _taxFocusNode = FocusNode();
+    _itemAmountFocusNode.addListener(_onItemAmountFocusChange);
+    _taxFocusNode.addListener(_onTaxFocusChange);
+
+    if (widget.receiptData != null) {
+      _loadDataFromReceipt(widget.receiptData!);
+    } else {
+      _setCurrentDateTime();
+      _generateReceiptNumber();
+      _generateVerificationCode();
+      _generateZNumber();
+    }
+  }
+
+  void _onItemAmountFocusChange() {
+    if (_itemAmountFocusNode.hasFocus) {
+      _itemAmountController.text = _itemAmountController.text.replaceAll(',', '');
+    } else {
+      final value = double.tryParse(_itemAmountController.text) ?? 0.0;
+      _itemAmountController.text = _formatNumberValue(value);
+    }
+  }
+
+  void _onTaxFocusChange() {
+    if (_taxFocusNode.hasFocus) {
+      _taxController.text = _taxController.text.replaceAll(',', '');
+    } else {
+      final value = double.tryParse(_taxController.text) ?? 0.0;
+      _taxController.text = _formatNumberValue(value);
+    }
+  }
+
+  void _loadDataFromReceipt(ReceiptData data) {
+    // Company
+    _companyNameController.text = data.company.name;
+    _companyAddressController.text = data.company.addressLine;
+    _companyMobileController.text = data.company.mobile;
+    _companyTinController.text = data.company.tin;
+    _companyVrnController.text = data.company.vrn;
+    _companySerialController.text = data.company.serialNo;
+    _companyUimController.text = data.company.uim;
+    _companyTaxOfficeController.text = data.company.taxOffice;
+
+    // Customer
+    _customerNameController.text = data.customer.name;
+    _customerIdTypeController.text = data.customer.idType;
+    _customerIdNoController.text = data.customer.idNo;
+    _customerMobileController.text = data.customer.mobile;
+
+    // Meta
+    _receiptNoController.text = data.meta.receiptNo;
+    _zNumberController.text = data.meta.zNumber;
+    _receiptDateController.text = data.meta.receiptDate;
+    _receiptTimeController.text = data.meta.receiptTime;
+    _verificationCodeController.text = data.verificationCode;
+
+    // Items (assuming one item for now as the form is simple)
+    if (data.items.isNotEmpty) {
+      final item = data.items.first;
+      _itemDescriptionController.text = item.description;
+      _itemQtyController.text = item.qty.toString();
+      _itemAmountController.text = _formatNumberValue(item.amount);
+    }
+
+    // Totals
+    _totalExclTaxController.text = _formatNumberValue(data.totalExclTax);
+    _taxController.text = _formatNumberValue(data.tax);
+    _totalInclTaxController.text = _formatNumberValue(data.totalInclTax);
   }
 
   void _setCurrentDateTime() {
@@ -128,12 +199,32 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     _verificationCodeController.text = codeList.join();
   }
 
-  void _calculateTotals() {
-    final amount = double.tryParse(_itemAmountController.text) ?? 0.0;
-    final tax = double.tryParse(_taxController.text) ?? 0.0;
+  void _generateZNumber() {
+    final random = Random();
+    final part1 = (random.nextInt(99) + 1).toString().padLeft(3, '0');
+    final part2 = random.nextInt(1000).toString().padLeft(3, '0');
+    _zNumberController.text = '$part1/$part2';
+  }
 
-    _totalExclTaxController.text = amount.toStringAsFixed(2);
-    _totalInclTaxController.text = (amount + tax).toStringAsFixed(2);
+  String _formatNumberValue(double value) {
+    final parts = value.toStringAsFixed(2).split('.');
+    final wholePart = parts[0];
+    final decimalPart = parts[1];
+
+    final formattedWholePart = wholePart.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+
+    return '$formattedWholePart.$decimalPart';
+  }
+
+  void _calculateTotals() {
+    final amount = double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0;
+    final tax = double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0;
+
+    _totalExclTaxController.text = _formatNumberValue(amount);
+    _totalInclTaxController.text = _formatNumberValue(amount + tax);
   }
 
   Future<void> _saveReceiptData() async {
@@ -169,12 +260,12 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           {
             'description': _itemDescriptionController.text,
             'qty': int.tryParse(_itemQtyController.text) ?? 1,
-            'amount': double.tryParse(_itemAmountController.text) ?? 0.0,
+            'amount': double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0,
           },
         ],
-        'totalExclTax': double.tryParse(_totalExclTaxController.text) ?? 0.0,
-        'tax': double.tryParse(_taxController.text) ?? 0.0,
-        'totalInclTax': double.tryParse(_totalInclTaxController.text) ?? 0.0,
+        'totalExclTax': double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ?? 0.0,
+        'tax': double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
+        'totalInclTax': double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ?? 0.0,
         'verificationCode': _verificationCodeController.text,
         'createdAt': DateTime.now().toIso8601String(),
       };
@@ -310,12 +401,12 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
         LineItem(
           description: _itemDescriptionController.text,
           qty: int.tryParse(_itemQtyController.text) ?? 1,
-          amount: double.tryParse(_itemAmountController.text) ?? 0.0,
+          amount: double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0,
         ),
       ],
-      totalExclTax: double.tryParse(_totalExclTaxController.text) ?? 0.0,
-      tax: double.tryParse(_taxController.text) ?? 0.0,
-      totalInclTax: double.tryParse(_totalInclTaxController.text) ?? 0.0,
+      totalExclTax: double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ?? 0.0,
+      tax: double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
+      totalInclTax: double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ?? 0.0,
       verificationCode: _verificationCodeController.text,
       qr: const AssetImage('assets/frame.png'),
     );
@@ -591,6 +682,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     _itemAmountController,
                     'Amount (TZS)',
                     Icons.attach_money,
+                    focusNode: _itemAmountFocusNode,
                     keyboardType: TextInputType.number,
                     required: true,
                     onChanged: (value) => _calculateTotals(),
@@ -612,6 +704,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     _taxController,
                     'Tax Amount',
                     Icons.percent,
+                    focusNode: _taxFocusNode,
                     keyboardType: TextInputType.number,
                     onChanged: (value) => _calculateTotals(),
                   ),
@@ -707,11 +800,13 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     bool readOnly = false,
     TextInputType? keyboardType,
     Function(String)? onChanged,
+    FocusNode? focusNode,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
         readOnly: readOnly,
         keyboardType: keyboardType,
         onChanged: onChanged,
@@ -771,6 +866,10 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     _taxController.dispose();
     _totalInclTaxController.dispose();
     _scrollController.dispose();
+    _itemAmountFocusNode.removeListener(_onItemAmountFocusChange);
+    _taxFocusNode.removeListener(_onTaxFocusChange);
+    _itemAmountFocusNode.dispose();
+    _taxFocusNode.dispose();
     super.dispose();
   }
 

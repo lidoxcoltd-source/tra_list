@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tra_list/HomePage.dart';
 import 'package:tra_list/AddReceiptPage.dart';
+import 'package:tra_list/ReceiptsListPage.dart';
 import 'package:tra_list/invoice/categories_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';

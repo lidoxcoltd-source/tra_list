@@ -12,7 +12,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/profile_service.dart';
 
 class InvoicePage extends StatefulWidget {
-  const InvoicePage({super.key});
+  final DocumentSnapshot<Map<String, dynamic>>? invoice;
+  const InvoicePage({super.key, this.invoice});
 
   @override
   State<InvoicePage> createState() => _InvoicePageState();
@@ -50,6 +51,30 @@ class _InvoicePageState extends State<InvoicePage> {
     super.initState();
     // fetch profile from Firestore and load colors
     _loadCompanyAndColors();
+
+    if (widget.invoice != null) {
+      final data = widget.invoice!.data();
+      if (data != null) {
+        final invoiceData = data['invoice'] as Map<String, dynamic>? ?? {};
+        final clientData = data['client'] as Map<String, dynamic>? ?? {};
+        final itemsData = data['items'] as List<dynamic>? ?? [];
+
+        _clientController.text = clientData['name'] ?? '';
+        _invoiceNoController.text = invoiceData['number'] ?? '';
+        _issueDateController.text = invoiceData['issueDate'] ?? _fmtDate(DateTime.now());
+        _dueDateController.text = invoiceData['dueDate'] ?? _fmtDate(DateTime.now());
+
+        _items.clear();
+        _items.addAll(itemsData.map((item) {
+          final itemMap = item as Map<String, dynamic>;
+          return {
+            'desc': itemMap['description'] ?? '',
+            'qty': itemMap['qty'] ?? 1,
+            'unit': itemMap['unit'] ?? 0.0,
+          };
+        }));
+      }
+    }
   }
 
   @override
@@ -566,7 +591,7 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   // Try saving to Firestore; return docRef or null if permission denied.
-  Future<DocumentReference<Map<String, dynamic>>?> _trySaveToFirestore(
+  Future<void> _trySaveToFirestore(
     Map<String, dynamic> data,
     String kind,
   ) async {
@@ -574,7 +599,7 @@ class _InvoicePageState extends State<InvoicePage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         Get.snackbar('Sign in required', 'Please sign in to save to cloud');
-        return null;
+        return;
       }
 
       final col = FirebaseFirestore.instance
@@ -582,16 +607,26 @@ class _InvoicePageState extends State<InvoicePage> {
           .doc(user.uid)
           .collection('invoices');
 
-      final docRef = col.doc();
-      debugPrint('Saving to ${docRef.path}');
-      await docRef.set({
-        ...data,
-        'kind': kind, // invoice | proforma | delivery | reminder
-        'id': docRef.id,
-        'uid': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      return docRef;
+      if (widget.invoice != null) {
+        // Update existing document
+        debugPrint('Updating ${widget.invoice!.id}');
+        await col.doc(widget.invoice!.id).update({
+          ...data,
+          'kind': kind,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Create new document
+        final docRef = col.doc();
+        debugPrint('Saving to ${docRef.path}');
+        await docRef.set({
+          ...data,
+          'kind': kind,
+          'id': docRef.id,
+          'uid': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
         Get.snackbar(
@@ -601,7 +636,7 @@ class _InvoicePageState extends State<InvoicePage> {
           backgroundColor: Colors.orange,
           colorText: Colors.white,
         );
-        return null;
+        return;
       }
       rethrow;
     }

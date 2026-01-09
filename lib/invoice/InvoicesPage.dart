@@ -306,6 +306,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                                   },
                                               menuChildren: [
                                                 MenuItemButton(
+                                                  leadingIcon: const Icon(Icons.edit_outlined),
+                                                  child: const Text('Edit'),
+                                                  onPressed: () => _editInvoice(doc),
+                                                ),
+                                                const Divider(),
+                                                MenuItemButton(
                                                   leadingIcon: const Icon(
                                                     Icons.visibility_outlined,
                                                   ),
@@ -692,6 +698,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _editInvoice(DocumentSnapshot<Map<String, dynamic>> doc) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => invoice_page.InvoicePage(invoice: doc)),
     );
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'ReceiptPage.dart';
+import 'package:printing/printing.dart';
 import 'AddReceiptPage.dart';
+import 'PDFService.dart';
+import 'ReceiptPage.dart';
 
 class ReceiptsListPage extends StatelessWidget {
   const ReceiptsListPage({super.key});
@@ -259,6 +261,22 @@ class ReceiptsListPage extends StatelessWidget {
                   fontFamily: 'monospace',
                 ),
               ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    onPressed: () => _editReceipt(context, data),
+                    tooltip: 'Edit',
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.download, color: Colors.green),
+                    onPressed: () => _downloadReceipt(context, data),
+                    tooltip: 'Download',
+                  ),
+                ],
+              )
             ],
           ),
         ),
@@ -266,8 +284,10 @@ class ReceiptsListPage extends StatelessWidget {
     );
   }
 
-  void _viewReceipt(BuildContext context, Map<String, dynamic> data) {
-    try {
+  void _editReceipt(BuildContext context, Map<String, dynamic> data) {
+    // TODO: Implement edit functionality
+    print('Edit receipt: ${data['meta']?['receiptNo']}');
+     try {
       final company = data['company'] as Map<String, dynamic>? ?? {};
       final customer = data['customer'] as Map<String, dynamic>? ?? {};
       final meta = data['meta'] as Map<String, dynamic>? ?? {};
@@ -314,8 +334,77 @@ class ReceiptsListPage extends StatelessWidget {
 
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => ReceiptPage(data: receiptData)),
+        MaterialPageRoute(builder: (context) => AddReceiptPage(receiptData: receiptData)),
       );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading receipt for editing: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _downloadReceipt(BuildContext context, Map<String, dynamic> data) {
+    PDFService.generatePDF(data);
+  }
+
+  void _viewReceipt(BuildContext context, Map<String, dynamic> data, {bool download = false}) async {
+    try {
+      final company = data['company'] as Map<String, dynamic>? ?? {};
+      final customer = data['customer'] as Map<String, dynamic>? ?? {};
+      final meta = data['meta'] as Map<String, dynamic>? ?? {};
+      final items = data['items'] as List? ?? [];
+
+      final receiptData = ReceiptData(
+        company: CompanyInfo(
+          name: company['name'] ?? '',
+          addressLine: company['addressLine'] ?? '',
+          mobile: company['mobile'] ?? '',
+          tin: company['tin'] ?? '',
+          vrn: company['vrn'] ?? '',
+          serialNo: company['serialNo'] ?? '',
+          uim: company['uim'] ?? '',
+          taxOffice: company['taxOffice'] ?? '',
+          logo: const AssetImage('assets/tra-logo.png'),
+        ),
+        customer: CustomerInfo(
+          name: customer['name'] ?? '',
+          idType: customer['idType'] ?? '',
+          idNo: customer['idNo'] ?? '',
+          mobile: customer['mobile'] ?? '',
+        ),
+        meta: ReceiptMeta(
+          receiptNo: meta['receiptNo'] ?? '',
+          zNumber: meta['zNumber'] ?? '',
+          receiptDate: meta['receiptDate'] ?? '',
+          receiptTime: meta['receiptTime'] ?? '',
+        ),
+        items: items.map((item) {
+          final itemData = item as Map<String, dynamic>;
+          return LineItem(
+            description: itemData['description'] ?? '',
+            qty: itemData['qty'] ?? 1,
+            amount: (itemData['amount'] ?? 0.0).toDouble(),
+          );
+        }).toList(),
+        totalExclTax: (data['totalExclTax'] ?? 0.0).toDouble(),
+        tax: (data['tax'] ?? 0.0).toDouble(),
+        totalInclTax: (data['totalInclTax'] ?? 0.0).toDouble(),
+        verificationCode: data['verificationCode'] ?? '',
+        qr: const AssetImage('assets/frame.png'),
+      );
+
+      if (download) {
+        final bytes = await buildReceiptPdf(receiptData);
+        await Printing.sharePdf(bytes: bytes, filename: 'receipt_${receiptData.meta.receiptNo}.pdf');
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ReceiptPage(data: receiptData)),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
