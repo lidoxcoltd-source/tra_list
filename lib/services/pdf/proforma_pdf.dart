@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -66,12 +66,20 @@ class ProformaPdf {
     try {
       final url = (company['logoUrl'] ?? '').toString();
       if (url.isNotEmpty) {
-        logo = await networkImage(url);
+        final bundle = NetworkAssetBundle(Uri.parse(url));
+        final bytes = (await bundle.load(url)).buffer.asUint8List();
+        logo = pw.MemoryImage(bytes);
       } else {
         final b = await rootBundle.load('assets/lidox_logo.png');
         logo = pw.MemoryImage(b.buffer.asUint8List());
       }
-    } catch (_) {}
+    } catch (e) {
+      print(
+        'Failed to load network image for PDF, falling back to local asset: $e',
+      );
+      final b = await rootBundle.load('assets/lidox_logo.png');
+      logo = pw.MemoryImage(b.buffer.asUint8List());
+    }
 
     pw.ImageProvider? socialIcons;
     try {

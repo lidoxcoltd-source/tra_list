@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -54,21 +54,21 @@ class AdvancePaymentPdf {
     return {...data, 'company': profile ?? <String, dynamic>{}};
   }
 
-  static Future<Uint8List> _buildPdfBytes(
-    Map<String, dynamic> data,
-  ) async {
+  static Future<Uint8List> _buildPdfBytes(Map<String, dynamic> data) async {
     final pdf = pw.Document();
 
     final company = (data['company'] as Map?)?.cast<String, dynamic>() ?? {};
     final client = (data['client'] as Map?)?.cast<String, dynamic>() ?? {};
     final invoice = (data['invoice'] as Map?)?.cast<String, dynamic>() ?? {};
-    final items = (data['items'] as List?)
+    final items =
+        (data['items'] as List?)
             ?.cast<Map>()
             .map((e) => e.cast<String, dynamic>())
             .toList() ??
         const <Map<String, dynamic>>[];
 
-    final subtotal = (data['subtotal'] as num?)?.toDouble() ??
+    final subtotal =
+        (data['subtotal'] as num?)?.toDouble() ??
         items.fold<double>(
           0,
           (sum, it) =>
@@ -86,12 +86,20 @@ class AdvancePaymentPdf {
     try {
       final url = (company['logoUrl'] ?? '').toString();
       if (url.isNotEmpty) {
-        logo = await networkImage(url);
+        final bundle = NetworkAssetBundle(Uri.parse(url));
+        final bytes = (await bundle.load(url)).buffer.asUint8List();
+        logo = pw.MemoryImage(bytes);
       } else {
         final bytes = await rootBundle.load('assets/lidox_logo.png');
         logo = pw.MemoryImage(bytes.buffer.asUint8List());
       }
-    } catch (_) {}
+    } catch (e) {
+      print(
+        'Failed to load network image for PDF, falling back to local asset: $e',
+      );
+      final bytes = await rootBundle.load('assets/lidox_logo.png');
+      logo = pw.MemoryImage(bytes.buffer.asUint8List());
+    }
 
     pw.ImageProvider? socialIcons;
     try {
@@ -138,10 +146,7 @@ class AdvancePaymentPdf {
                       children: [
                         pw.Text('ADVANCE INVOICE', style: t.h1),
                         pw.SizedBox(height: 6),
-                        pw.Text(
-                          company['name']?.toString() ?? '',
-                          style: t.h2,
-                        ),
+                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
                         pw.Text(
                           company['address']?.toString() ?? '',
                           style: t.small,
@@ -155,10 +160,7 @@ class AdvancePaymentPdf {
                         if (company['email'] != null)
                           pw.Text(company['email'].toString(), style: t.small),
                         if (company['phone'] != null)
-                          pw.Text(
-                            'Tel: ${company['phone']}',
-                            style: t.small,
-                          ),
+                          pw.Text('Tel: ${company['phone']}', style: t.small),
                       ],
                     ),
                   ],
@@ -192,7 +194,10 @@ class AdvancePaymentPdf {
                             ],
                           ),
                           if (client['address'] != null)
-                            pw.Text(client['address'].toString(), style: t.small)
+                            pw.Text(
+                              client['address'].toString(),
+                              style: t.small,
+                            ),
                         ],
                       ),
                     ),
@@ -231,13 +236,16 @@ class AdvancePaymentPdf {
                 pw.SizedBox(height: 18),
                 _tableHeader(t, brandColor),
                 ...items.map((it) {
-                  final qty = (it['qty'] as num?)?.toDouble() ??
+                  final qty =
+                      (it['qty'] as num?)?.toDouble() ??
                       (it['quantity'] as num?)?.toDouble() ??
                       0;
-                  final unit = (it['unit'] as num?)?.toDouble() ??
+                  final unit =
+                      (it['unit'] as num?)?.toDouble() ??
                       (it['unitPrice'] as num?)?.toDouble() ??
                       0;
-                  final amount = (it['amount'] as num?)?.toDouble() ??
+                  final amount =
+                      (it['amount'] as num?)?.toDouble() ??
                       (it['total'] as num?)?.toDouble() ??
                       (qty * unit);
                   return _row(
@@ -302,12 +310,7 @@ class AdvancePaymentPdf {
                             accent: true,
                           ),
                           pw.Divider(),
-                          _totalLine(
-                            t,
-                            'Balance Due',
-                            balance,
-                            bold: true,
-                          ),
+                          _totalLine(t, 'Balance Due', balance, bold: true),
                         ],
                       ),
                     ),
@@ -427,8 +430,8 @@ class AdvancePaymentPdf {
     final style = bold
         ? t.h3Bold
         : accent
-            ? t.smallRedBold
-            : t.smallBold;
+        ? t.smallRedBold
+        : t.smallBold;
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
@@ -567,38 +570,34 @@ class _Theme {
   pw.TextStyle get h3Bold =>
       pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold);
   pw.TextStyle get header => pw.TextStyle(
-        fontSize: 10,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.white,
-      );
+    fontSize: 10,
+    fontWeight: pw.FontWeight.bold,
+    color: PdfColors.white,
+  );
   pw.TextStyle get medium => pw.TextStyle(fontSize: 10, color: PdfColors.black);
   pw.TextStyle get mediumBold => pw.TextStyle(
-        fontSize: 10,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.black,
-      );
+    fontSize: 10,
+    fontWeight: pw.FontWeight.bold,
+    color: PdfColors.black,
+  );
   pw.TextStyle get small => pw.TextStyle(fontSize: 9, color: PdfColors.black);
   pw.TextStyle get smallBold => pw.TextStyle(
-        fontSize: 9,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.black,
-      );
+    fontSize: 9,
+    fontWeight: pw.FontWeight.bold,
+    color: PdfColors.black,
+  );
   pw.TextStyle get smallGrey =>
       pw.TextStyle(fontSize: 9, color: PdfColors.grey700);
-  pw.TextStyle get redBold => pw.TextStyle(
-        fontSize: 12,
-        fontWeight: pw.FontWeight.bold,
-        color: accent,
-      );
+  pw.TextStyle get redBold =>
+      pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: accent);
   pw.TextStyle get smallWhite =>
       pw.TextStyle(fontSize: 9, color: PdfColors.white);
-  pw.TextStyle get smallRed =>
-      pw.TextStyle(fontSize: 9, color: PdfColors.red);
+  pw.TextStyle get smallRed => pw.TextStyle(fontSize: 9, color: PdfColors.red);
   pw.TextStyle get smallRedBold => pw.TextStyle(
-        fontSize: 9,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.red,
-      );
+    fontSize: 9,
+    fontWeight: pw.FontWeight.bold,
+    color: PdfColors.red,
+  );
 
   static String money(num v) {
     final s = v.toStringAsFixed(0);

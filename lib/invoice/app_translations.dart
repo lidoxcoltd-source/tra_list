@@ -27,6 +27,7 @@ class AppTranslations extends Translations {
       'date': 'Date',
       'close': 'Close',
       'Add': 'Add',
+      'quotation': 'Quotation',
 
       // Home Page
       'home_title': 'TRA Receipt System',
@@ -273,6 +274,7 @@ class AppTranslations extends Translations {
       'date': 'Tarehe',
       'close': 'Funga',
       'Add': 'Ongeza',
+      'quotation': 'Nukuu',
 
       // Home Page
       'home_title': 'Mfumo wa Risiti wa TRA',

@@ -17,6 +17,7 @@ import 'package:tra_list/LoginPage.dart';
 import 'invoice/InvoicePage.dart';
 import 'invoice/InvoicesPage.dart';
 import 'invoice/transactions_page.dart';
+import 'invoice/quotation_page.dart';
 
 class AuthMiddleware extends GetMiddleware {
   @override
@@ -52,6 +53,7 @@ class AppRoutes {
   static const String categories = '/categories';
   static const String analytics = '/analytics';
   static const String jobs = '/jobs';
+  static const String quotation = '/quotation';
   static const String clientCredit = '/client-credit';
 
   // Helper method to generate receipt URL
@@ -121,6 +123,12 @@ class AppRoutes {
     GetPage(
       name: jobs,
       page: () => const JobsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: quotation,
+      page: () => const QuotationPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

@@ -8,9 +8,11 @@ import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
 import 'package:tra_list/services/pdf/proforma_pdf.dart';
 import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
+import 'package:tra_list/services/pdf/quotation_pdf.dart';
 
 import 'InvoicePage.dart' as invoice_page;
 import 'advance_invoice_page.dart';
+import 'quotation_page.dart';
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -89,6 +91,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
         title: const Text('My Documents'),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            tooltip: 'New Quotation',
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const QuotationPage()));
+            },
+            icon: const Icon(Icons.request_quote),
+          ),
           IconButton(
             tooltip: 'New Advance Invoice',
             onPressed: () {
@@ -306,9 +317,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                                   },
                                               menuChildren: [
                                                 MenuItemButton(
-                                                  leadingIcon: const Icon(Icons.edit_outlined),
+                                                  leadingIcon: const Icon(
+                                                    Icons.edit_outlined,
+                                                  ),
                                                   child: const Text('Edit'),
-                                                  onPressed: () => _editInvoice(doc),
+                                                  onPressed: () =>
+                                                      _editInvoice(doc),
                                                 ),
                                                 const Divider(),
                                                 MenuItemButton(
@@ -344,6 +358,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
                                                       onPressed: () => _savePdf(
                                                         data,
                                                         'invoice',
+                                                      ),
+                                                    ),
+                                                    MenuItemButton(
+                                                      child: const Text(
+                                                        'Quotation',
+                                                      ),
+                                                      onPressed: () => _savePdf(
+                                                        data,
+                                                        'quotation',
                                                       ),
                                                     ),
                                                     MenuItemButton(
@@ -554,6 +577,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
   IconData _getIconForKind(String kind) {
     return switch (kind) {
       'proforma' => Icons.request_quote_outlined,
+      'quotation' => Icons.request_quote,
       'delivery' => Icons.local_shipping_outlined,
       'reminder' => Icons.alarm_on_outlined,
       'advance' => Icons.payments_outlined,
@@ -564,6 +588,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
   String _getTitleForKind(String kind) {
     return switch (kind) {
       'proforma' => 'Proforma',
+      'quotation' => 'Quotation',
       'delivery' => 'Delivery Note',
       'reminder' => 'Reminder',
       'advance' => 'Advance Payment Invoice',
@@ -593,6 +618,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
             PaymentReminderPdf.generateAndSave(clean, fileName: fileName),
         'advance': () =>
             AdvancePaymentPdf.generateAndSave(clean, fileName: fileName),
+        'quotation': () =>
+            QuotationPdf.generateAndSave(clean, fileName: fileName),
       }[kind]!).call();
 
       Get.snackbar(
@@ -620,6 +647,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
         'delivery': () => DeliveryNotePdf.generate(data),
         'reminder': () => PaymentReminderPdf.generate(data),
         'advance': () => AdvancePaymentPdf.generate(data),
+        'quotation': () => QuotationPdf.generate(data),
       }[kind]!).call();
     } catch (e) {
       Get.snackbar(
