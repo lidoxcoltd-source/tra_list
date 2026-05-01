@@ -226,10 +226,14 @@ class LoginPage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.receipt_long,
-                    size: 60,
-                    color: Colors.black87,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/mjas.png',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
 
@@ -237,7 +241,7 @@ class LoginPage extends StatelessWidget {
 
                 // Title
                 const Text(
-                  'TRA Receipt System',
+                  'MJASILIAMALI POS',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

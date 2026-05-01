@@ -9,6 +9,7 @@ class QRCodeService {
     double size = 200.0,
     Color foregroundColor = Colors.black,
     Color backgroundColor = Colors.white,
+    bool showLogo = true,
   }) {
     final receiptUrl = _getReceiptUrl(receiptId);
 
@@ -20,8 +21,10 @@ class QRCodeService {
       backgroundColor: backgroundColor,
       errorCorrectionLevel: QrErrorCorrectLevel.M,
       gapless: false,
-      embeddedImage: const AssetImage('assets/tra-logo.png'),
-      embeddedImageStyle: const QrEmbeddedImageStyle(size: Size(40, 40)),
+      embeddedImage: showLogo ? const AssetImage('assets/tra-logo.png') : null,
+      embeddedImageStyle: showLogo
+          ? const QrEmbeddedImageStyle(size: Size(40, 40))
+          : null,
     );
   }
 
@@ -83,7 +86,7 @@ class QRCodeService {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            generateReceiptQR(receiptId: receiptId, size: 250),
+            generateReceiptQR(receiptId: receiptId, size: 250, showLogo: false),
             const SizedBox(height: 16),
             Text(
               'Scan to view receipt online',

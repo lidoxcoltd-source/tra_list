@@ -358,14 +358,17 @@ class ReceiptPage extends StatelessWidget {
                     children: [
                       Text(
                         'RECEIPT VERIFICATION CODE',
-                        style: textSmall.copyWith(color: Colors.grey.shade700),
+                        style: textSmall.copyWith(color: Colors.black),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         d.verificationCode,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
                       GestureDetector(
                         onTap: () {
                           if (d.verificationCode.isNotEmpty) {
@@ -377,23 +380,30 @@ class ReceiptPage extends StatelessWidget {
                           }
                         },
                         child: Container(
-                          width: 120,
-                          height: 120,
+                          width: 156,
+                          height: 156,
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
+                            border: Border.all(color: Colors.black, width: 1.6),
                             borderRadius: BorderRadius.circular(8),
                             color: Colors.white,
                           ),
                           child: d.verificationCode.isNotEmpty
                               ? QRCodeService.generateReceiptQR(
                                   receiptId: d.verificationCode,
-                                  size: 120,
+                                  size: 148,
+                                  foregroundColor: Colors.black,
+                                  backgroundColor: Colors.white,
+                                  showLogo: false,
                                 )
                               : d.qr != null
                               ? Image(image: d.qr!, fit: BoxFit.cover)
                               : const Center(
-                                  child: Icon(Icons.qr_code, size: 72),
+                                  child: Icon(
+                                    Icons.qr_code,
+                                    size: 90,
+                                    color: Colors.black,
+                                  ),
                                 ),
                         ),
                       ),
@@ -401,7 +411,7 @@ class ReceiptPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Center(
                   child: Text('*** END OF LEGAL RECEIPT ***', style: textMuted),
                 ),

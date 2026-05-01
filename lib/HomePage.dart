@@ -4,27 +4,175 @@ import 'package:tra_list/jobs/controllers/job_controller.dart';
 import 'package:tra_list/invoice/transactions_page.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/pages/ProfilePage.dart';
+import 'package:tra_list/services/profile_service.dart';
 import 'LoginPage.dart';
 import 'invoice/InvoicePage.dart';
+import 'services/subscription_controller.dart';
+import 'subscription_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  static const Color _brandDeep = Color(0xFF0E3A4C);
+  static const Color _brandPrimary = Color(0xFF176B87);
+  static const Color _brandAccent = Color(0xFF64CCC5);
+
+  final SubscriptionController subscriptionController = Get.put(
+    SubscriptionController(),
+  );
+  String subscriptionBadge = '';
+  bool isSubscribed = false;
+  bool isTrial = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadSubscriptionStatus();
+  }
+
+  Future<void> _loadSubscriptionStatus() async {
+    final badge = await subscriptionController.getUserSubscriptionBadge();
+    final subscribed = await subscriptionController.isSubscribed();
+    final trial = await subscriptionController.isUserInTrial();
+    setState(() {
+      subscriptionBadge = badge;
+      isSubscribed = subscribed;
+      isTrial = trial;
+    });
+  }
+
+  final jobController = Get.put(JobController());
+  String userRole = 'user';
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      setState(() {
+        userRole = profile['role']?.toString() ?? 'user';
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        userRole = 'user';
+        loading = false;
+      });
+    }
+  }
+
+  bool get _hasAccess =>
+      isSubscribed ||
+      isTrial ||
+      userRole == 'superadmin' ||
+      userRole == 'admin';
+
+  void _handleRestrictedTap(VoidCallback action) {
+    if (_hasAccess) {
+      action();
+    } else {
+      _showSubscriptionRequiredDialog();
+    }
+  }
+
+  void _showSubscriptionRequiredDialog() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, color: _brandPrimary),
+            SizedBox(width: 8),
+            Text('Unahitaji Kujiunga'),
+          ],
+        ),
+        content: const Text(
+          'Huduma Hii inapatikana kwa watumiaji waliyojisajili. Jiandikishe sasa au anza jaribio la bure ili kuendelea.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Get.back();
+              Get.toNamed(
+                AppRoutes.subscription,
+              )?.then((_) => _loadSubscriptionStatus());
+            },
+            icon: const Icon(Icons.verified_user),
+            label: const Text('JIUNGE SASA'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _brandPrimary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+      barrierDismissible: true,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Ensure JobController is available for the summary widget.
-    // Get.put is safe to call multiple times; it won't create a new instance.
-    final jobController = Get.put(JobController());
+    final theme = Theme.of(context);
+
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'home_title'.tr,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+        backgroundColor: _brandDeep,
+        foregroundColor: Colors.white,
+        title: Row(
+          children: [
+            Text(
+              'home_title'.tr,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (subscriptionBadge.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isSubscribed
+                      ? const Color(0xFF1C7C54)
+                      : isTrial
+                      ? const Color(0xFFD68B1A)
+                      : const Color(0xFF5F7280),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  subscriptionBadge,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
         ),
-        backgroundColor: const Color(0xFF1976D2),
         elevation: 4,
         actions: [
           IconButton(
@@ -65,153 +213,201 @@ class HomePage extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF5F5F5), Color(0xFFE8EAF6)],
+            colors: [_brandDeep, _brandPrimary, _brandAccent],
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header Section
-              _buildJobsSummaryCard(context, jobController),
-              const SizedBox(height: 20),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -120,
+              left: -80,
+              child: _buildGlowCircle(const Color(0x33FFFFFF), 260),
+            ),
+            Positioned(
+              bottom: -80,
+              right: -50,
+              child: _buildGlowCircle(const Color(0x22FFFFFF), 220),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildJobsSummaryCard(context, jobController),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          int crossAxisCount;
+                          double childAspectRatio;
 
-              // Menu Options
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    int crossAxisCount;
-                    double childAspectRatio;
+                          if (width > 1200) {
+                            crossAxisCount = 4;
+                            childAspectRatio = 1.8;
+                          } else if (width > 800) {
+                            crossAxisCount = 3;
+                            childAspectRatio = 1.55;
+                          } else if (width > 500) {
+                            crossAxisCount = 2;
+                            childAspectRatio = 1.75;
+                          } else {
+                            crossAxisCount = 1;
+                            childAspectRatio = 2.35;
+                          }
 
-                    if (width > 1200) {
-                      crossAxisCount = 4;
-                      childAspectRatio = 1.8;
-                    } else if (width > 800) {
-                      crossAxisCount = 3;
-                      childAspectRatio = 1.6;
-                    } else if (width > 500) {
-                      crossAxisCount = 2;
-                      childAspectRatio = 1.8;
-                    } else {
-                      crossAxisCount = 1;
-                      childAspectRatio = 2.5;
-                    }
+                          final List<Widget> menuCards = [];
+                          if (userRole == 'superadmin') {
+                            menuCards.addAll([
+                              _buildMenuCard(
+                                context,
+                                icon: Icons.add_business,
+                                title: 'home_create_receipt'.tr,
+                                subtitle: 'home_create_receipt_sub'.tr,
+                                color: const Color(0xFF1C7C54),
+                                onTap: () {
+                                  _handleRestrictedTap(() {
+                                    Get.toNamed(AppRoutes.addReceipt);
+                                  });
+                                },
+                              ),
+                              _buildMenuCard(
+                                context,
+                                icon: Icons.list_alt,
+                                title: 'home_view_receipts'.tr,
+                                subtitle: 'home_view_receipts_sub'.tr,
+                                color: const Color(0xFF1C6EA4),
+                                onTap: () {
+                                  _handleRestrictedTap(() {
+                                    Get.toNamed(AppRoutes.receiptsList);
+                                  });
+                                },
+                              ),
+                            ]);
+                          }
 
-                    return GridView.count(
-                      crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: childAspectRatio,
-                      children: [
-                        // Create New Receipt
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.add_business,
-                          title: 'home_create_receipt'.tr,
-                          subtitle: 'home_create_receipt_sub'.tr,
-                          color: const Color(0xFF4CAF50),
-                          onTap: () {
-                            Get.toNamed(AppRoutes.addReceipt);
-                          },
-                        ),
+                          menuCards.add(
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.verified_user,
+                              title: isSubscribed
+                                  ? 'Subscription Active'
+                                  : isTrial
+                                  ? 'Trial Active'
+                                  : 'Subscribe for 1 Year',
+                              subtitle: isSubscribed
+                                  ? 'Thank you for subscribing!'
+                                  : isTrial
+                                  ? 'Trial period in progress'
+                                  : 'Activate your annual subscription or start a free trial',
+                              color: isSubscribed
+                                  ? const Color(0xFF1C7C54)
+                                  : isTrial
+                                  ? const Color(0xFFD68B1A)
+                                  : _brandPrimary,
+                              onTap: () {
+                                Get.toNamed(
+                                  AppRoutes.subscription,
+                                )?.then((_) => _loadSubscriptionStatus());
+                              },
+                            ),
+                          );
 
-                        // View All Receipts
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.list_alt,
-                          title: 'home_view_receipts'.tr,
-                          subtitle: 'home_view_receipts_sub'.tr,
-                          color: const Color(0xFF2196F3),
-                          onTap: () {
-                            Get.toNamed(AppRoutes.receiptsList);
-                          },
-                        ),
+                          menuCards.addAll([
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.receipt_long,
+                              title: 'home_view_invoices'.tr,
+                              subtitle: 'home_view_invoices_sub'.tr,
+                              color: const Color(0xFF2F5FA3),
+                              onTap: () => _handleRestrictedTap(
+                                () => Get.toNamed(AppRoutes.invoicesList),
+                              ),
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.receipt,
+                              title: 'home_generate_invoice'.tr,
+                              subtitle: 'home_generate_invoice_sub'.tr,
+                              color: const Color(0xFF4C8AA7),
+                              onTap: () {
+                                _handleRestrictedTap(() {
+                                  Get.toNamed(AppRoutes.invoice);
+                                });
+                              },
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.track_changes,
+                              title: 'home_finance_tracker'.tr,
+                              subtitle: 'home_finance_tracker_sub'.tr,
+                              color: const Color(0xFFDB8B28),
+                              onTap: () => _handleRestrictedTap(
+                                () => Get.toNamed(AppRoutes.transactions),
+                              ),
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.work_history_outlined,
+                              title: 'home_manage_jobs'.tr,
+                              subtitle: 'home_manage_jobs_sub'.tr,
+                              color: const Color(0xFF455F71),
+                              onTap: () {
+                                _handleRestrictedTap(() {
+                                  Get.toNamed(AppRoutes.jobs);
+                                });
+                              },
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.analytics_outlined,
+                              title: 'home_analytics'.tr,
+                              subtitle: 'home_analytics_sub'.tr,
+                              color: const Color(0xFF1A7A7C),
+                              onTap: () {
+                                _handleRestrictedTap(() {
+                                  Get.toNamed(AppRoutes.analytics);
+                                });
+                              },
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.category_outlined,
+                              title: 'home_manage_categories'.tr,
+                              subtitle: 'home_manage_categories_sub'.tr,
+                              color: const Color(0xFF2E6A8D),
+                              onTap: () => _handleRestrictedTap(
+                                () => Get.toNamed(AppRoutes.categories),
+                              ),
+                            ),
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.info_outline,
+                              title: 'home_about'.tr,
+                              subtitle: 'home_about_sub'.tr,
+                              color: const Color(0xFF366488),
+                              onTap: () {
+                                _showAboutDialog(context);
+                              },
+                            ),
+                          ]);
 
-                        // View Invoices
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.receipt_long,
-                          title: 'home_view_invoices'.tr,
-                          subtitle: 'home_view_invoices_sub'.tr,
-                          color: const Color(0xFF3F51B5),
-                          onTap: () => Get.toNamed(AppRoutes.invoicesList),
-                        ),
-
-                        // Generate Invoice
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.receipt,
-                          title: 'home_generate_invoice'.tr,
-                          subtitle: 'home_generate_invoice_sub'.tr,
-                          color: const Color(0xFF8D6E63),
-                          onTap: () {
-                            Get.toNamed(AppRoutes.invoice); // use named route
-                          },
-                        ),
-
-                        // Expense & Income Tracker
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.track_changes,
-                          title: 'home_finance_tracker'.tr,
-                          subtitle: 'home_finance_tracker_sub'.tr,
-                          color: const Color(0xFFFFA000),
-                          onTap: () => Get.toNamed(AppRoutes.transactions),
-                        ),
-
-                        // Manage Jobs
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.work_history_outlined,
-                          title: 'home_manage_jobs'.tr,
-                          subtitle: 'home_manage_jobs_sub'.tr,
-                          color: const Color(0xFF795548),
-                          onTap: () {
-                            Get.toNamed(AppRoutes.jobs);
-                          },
-                        ),
-                        // Analytics & Insights
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.analytics_outlined,
-                          title: 'home_analytics'.tr,
-                          subtitle: 'home_analytics_sub'.tr,
-                          color: const Color(0xFF00897B), // Teal color
-                          onTap: () {
-                            Get.toNamed(AppRoutes.analytics);
-                          },
-                        ),
-
-                        // Manage Categories
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.category_outlined,
-                          title: 'home_manage_categories'.tr,
-                          subtitle: 'home_manage_categories_sub'.tr,
-                          color: const Color(0xFF673AB7),
-                          onTap: () => Get.toNamed(AppRoutes.categories),
-                        ),
-
-                        // Settings/Info
-                        _buildMenuCard(
-                          context,
-                          icon: Icons.info_outline,
-                          title: 'home_about'.tr,
-                          subtitle: 'home_about_sub'.tr,
-                          color: const Color(0xFF9C27B0),
-                          onTap: () {
-                            _showAboutDialog(context);
-                          },
-                        ),
-                      ],
-                    );
-                  },
+                          return GridView.count(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: childAspectRatio,
+                            children: menuCards,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -226,31 +422,41 @@ class HomePage extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 8,
+      shadowColor: Colors.black.withOpacity(0.2),
+      color: Colors.white.withOpacity(0.96),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
-              colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+              colors: [color.withOpacity(0.16), color.withOpacity(0.06)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
+            border: Border.all(color: color.withOpacity(0.25)),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 40, color: color),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 32, color: color),
+              ),
               const SizedBox(height: 12),
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
                   color: color,
                 ),
                 textAlign: TextAlign.center,
@@ -258,7 +464,11 @@ class HomePage extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.blueGrey.shade700,
+                  height: 1.3,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -270,20 +480,18 @@ class HomePage extends StatelessWidget {
 
   Widget _buildJobsSummaryCard(BuildContext context, JobController controller) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 10,
+      shadowColor: Colors.black.withOpacity(0.25),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
-        onTap: () => Get.toNamed(AppRoutes.jobs),
-        borderRadius: BorderRadius.circular(12),
+        onTap: () => _handleRestrictedTap(() => Get.toNamed(AppRoutes.jobs)),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF795548).withOpacity(0.8),
-                const Color(0xFF5D4037).withOpacity(0.9),
-              ],
+            borderRadius: BorderRadius.circular(18),
+            gradient: const LinearGradient(
+              colors: [_brandDeep, _brandPrimary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -381,6 +589,14 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  Widget _buildGlowCircle(Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+
   void _showAboutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -393,7 +609,7 @@ class HomePage extends StatelessWidget {
             children: [
               Icon(Icons.info_outline, color: const Color(0xFF1976D2)),
               const SizedBox(width: 8),
-              const Text('About TRA Receipt System'),
+              const Text('About Mjasi POS'),
             ],
           ),
           content: const Column(
@@ -401,12 +617,12 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'TRA Receipt Management System',
+                'Mjasi POS',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
               Text(
-                'This application helps manage receipt generation and storage for Tanzania Revenue Authority compliance.',
+                'Mjasi POS is a powerful point of sale system designed to help businesses manage their sales, inventory, and customer data efficiently. With an intuitive interface and robust features, Mjasi POS is the perfect solution for businesses of all sizes.',
               ),
               SizedBox(height: 16),
               Text('Features:', style: TextStyle(fontWeight: FontWeight.bold)),

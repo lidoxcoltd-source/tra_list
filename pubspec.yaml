@@ -48,6 +48,7 @@ flutter:
 
   # Optional: add real images if you want to show them in the UI
   assets:
+    - assets/mjas.png
     - assets/lidox_logo.png
     - assets/logo.png # Your company or app logo
     - assets/qr.png # QR code image

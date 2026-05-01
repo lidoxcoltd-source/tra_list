@@ -1,32 +1,32 @@
 {
-    "name": "TRA Receipt Verification",
-    "short_name": "TRA Receipt",
+    "name": "Mjasi POS",
+    "short_name": "Mjasi POS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#FFE500",
-    "description": "TRA Receipt Verification System - Verify and print legal receipts",
+    "description": "Mjasi POS is a point of sale system designed for small and medium-sized businesses. It offers a user-friendly interface, inventory management, sales tracking, and customer management features. With Mjasi POS, businesses can streamline their operations and provide a seamless shopping experience for their customers.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "assets/tra-logo.png",
+            "src": "assets/mjas.png",
             "sizes": "192x192",
             "type": "image/png"
         },
         {
-            "src": "assets/tra-logo.png",
+            "src": "assets/mjas.png",
             "sizes": "512x512",
             "type": "image/png"
         },
         {
-            "src": "assets/tra-logo.png",
+            "src": "assets/mjas.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "assets/tra-logo.png",
+            "src": "assets/mjas.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"

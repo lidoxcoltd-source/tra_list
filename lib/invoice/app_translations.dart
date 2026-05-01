@@ -30,7 +30,7 @@ class AppTranslations extends Translations {
       'quotation': 'Quotation',
 
       // Home Page
-      'home_title': 'TRA Receipt System',
+      'home_title': 'Mjasi POS ',
       'home_create_receipt': 'Create New Receipt',
       'home_create_receipt_sub': 'Generate a new receipt with customer details',
       'home_view_receipts': 'View All Receipts',
@@ -60,7 +60,7 @@ class AppTranslations extends Translations {
       'home_sign_out': 'Sign Out',
 
       // Login Page
-      'login_title': 'TRA Receipt System',
+      'login_title': 'Mjasi POS',
       'login_subtitle': 'Sign in to continue',
       'login_email': 'Email Address',
       'login_password': 'Password',
@@ -277,7 +277,7 @@ class AppTranslations extends Translations {
       'quotation': 'Nukuu',
 
       // Home Page
-      'home_title': 'Mfumo wa Risiti wa TRA',
+      'home_title': 'Mjasi POS ',
       'home_create_receipt': 'Tengeneza Risiti Mpya',
       'home_create_receipt_sub': 'Tengeneza risiti mpya na maelezo ya mteja',
       'home_view_receipts': 'Angalia Risiti Zote',
