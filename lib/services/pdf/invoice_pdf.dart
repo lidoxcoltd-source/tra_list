@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'pdf_saver.dart' as pdf_saver;
+import 'package:tra_list/services/company_logo_service.dart';
 import '../profile_service.dart'; // <-- add
 
 class InvoicePdf {
@@ -67,11 +68,9 @@ class InvoicePdf {
 
     pw.ImageProvider? logo;
     try {
-      final url = (company['logoUrl'] ?? '').toString();
-      if (url.isNotEmpty) {
-        final bundle = NetworkAssetBundle(Uri.parse(url));
-        final bytes = (await bundle.load(url)).buffer.asUint8List();
-        logo = pw.MemoryImage(bytes);
+      final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
+      if (logoBytes != null) {
+        logo = pw.MemoryImage(logoBytes);
       } else {
         final bytes = await rootBundle.load('assets/lidox_logo.png');
         logo = pw.MemoryImage(bytes.buffer.asUint8List());

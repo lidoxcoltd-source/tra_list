@@ -9,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:tra_list/invoice/language_controller.dart';
+import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:get/get.dart';
 
@@ -28,7 +29,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final langController = Get.find<LanguageController>();
+  final LanguageController langController =
+      Get.isRegistered<LanguageController>()
+      ? Get.find<LanguageController>()
+      : Get.put(LanguageController());
 
   final nameC = TextEditingController();
   final addressC = TextEditingController();
@@ -52,8 +56,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Logo/image
   String? logoUrl;
+  String logoSource = 'firebase'; // firebase | local
   Uint8List? pickedBytes;
   String? pickedExt;
+  Uint8List? localLogoBytes;
 
   // Upload state
   double? uploadProgress;
@@ -97,6 +103,9 @@ class _ProfilePageState extends State<ProfilePage> {
           0xFF000000 | (colors['footer'] as int? ?? 0x424242),
         );
         logoUrl = (data['logoUrl']?.toString().trim() ?? '');
+        logoSource = (data['logoSource']?.toString().trim().isNotEmpty ?? false)
+            ? data['logoSource'].toString().trim().toLowerCase()
+            : 'firebase';
 
         // Load language from profile
         final langCode = data['language']?.toString();
@@ -110,6 +119,16 @@ class _ProfilePageState extends State<ProfilePage> {
           }
         }
       });
+
+      localLogoBytes = await CompanyLogoService.loadLocalLogoBytes();
+      final sourceFromApp = await CompanyLogoService.getLogoSource(
+        fallback: logoSource,
+      );
+      if (mounted) {
+        setState(() {
+          logoSource = sourceFromApp.toLowerCase();
+        });
+      }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -376,8 +395,11 @@ class _ProfilePageState extends State<ProfilePage> {
     final radius = BorderRadius.circular(10);
     return InkWell(
       onTap: () {
-        if (pickedBytes != null || (logoUrl ?? '').isNotEmpty)
+        if (pickedBytes != null ||
+            (logoSource == 'local' && localLogoBytes != null) ||
+            (logoUrl ?? '').isNotEmpty) {
           _showFullScreenPreview();
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -394,6 +416,11 @@ class _ProfilePageState extends State<ProfilePage> {
     if (pickedBytes != null) {
       return InteractiveViewer(
         child: Image.memory(pickedBytes!, fit: BoxFit.contain),
+      );
+    }
+    if (logoSource == 'local' && localLogoBytes != null) {
+      return InteractiveViewer(
+        child: Image.memory(localLogoBytes!, fit: BoxFit.contain),
       );
     }
     if ((logoUrl ?? '').isNotEmpty) {
@@ -592,6 +619,27 @@ class _ProfilePageState extends State<ProfilePage> {
             child: _previewWidget(),
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Use Firebase Logo'),
+                selected: logoSource == 'firebase',
+                onSelected: busy
+                    ? null
+                    : (_) => setState(() => logoSource = 'firebase'),
+              ),
+              ChoiceChip(
+                label: const Text('Use Local App Logo'),
+                selected: logoSource == 'local',
+                onSelected: busy
+                    ? null
+                    : (_) => setState(() => logoSource = 'local'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               ElevatedButton.icon(
@@ -599,7 +647,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ? null
                     : _chooseImage,
                 icon: const Icon(Icons.add_a_photo),
-                label: const Text('Choose'),
+                label: const Text('Choose Image'),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
@@ -607,10 +655,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     ? () => setState(() => pickedBytes = null)
                     : null,
                 icon: const Icon(Icons.clear),
-                label: const Text('Clear'),
+                label: const Text('Clear Picked'),
               ),
               const SizedBox(width: 8),
-              if ((logoUrl ?? '').isNotEmpty)
+              if ((logoUrl ?? '').isNotEmpty && logoSource == 'firebase')
                 TextButton.icon(
                   onPressed: () =>
                       Clipboard.setData(ClipboardData(text: logoUrl ?? '')),
@@ -618,7 +666,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   label: const Text('Copy URL'),
                 ),
               const Spacer(),
-              if (!kIsWeb && (logoUrl ?? '').isNotEmpty)
+              if (!kIsWeb &&
+                  (logoUrl ?? '').isNotEmpty &&
+                  logoSource == 'firebase')
                 TextButton.icon(
                   onPressed: () async {
                     final fixed =
@@ -628,6 +678,18 @@ class _ProfilePageState extends State<ProfilePage> {
                   },
                   icon: const Icon(Icons.build_circle_outlined),
                   label: const Text('Repair URL'),
+                ),
+              if (logoSource == 'local' && localLogoBytes != null)
+                TextButton.icon(
+                  onPressed: () async {
+                    await CompanyLogoService.clearLocalLogo();
+                    if (!mounted) return;
+                    setState(() {
+                      localLogoBytes = null;
+                    });
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remove Local'),
                 ),
             ],
           ),
@@ -742,9 +804,16 @@ class _ProfilePageState extends State<ProfilePage> {
       String? newUrl = logoUrl;
 
       if (pickedBytes != null) {
-        newUrl = await _uploadBytes(pickedBytes!, pickedExt);
+        if (logoSource == 'local') {
+          await CompanyLogoService.saveLocalLogo(pickedBytes!);
+          localLogoBytes = await CompanyLogoService.loadLocalLogoBytes();
+        } else {
+          newUrl = await _uploadBytes(pickedBytes!, pickedExt);
+        }
         if (mounted) setState(() => pickedBytes = null);
       }
+
+      await CompanyLogoService.setLogoSource(logoSource);
 
       await ProfileService.save({
         'name': nameC.text.trim(),
@@ -764,6 +833,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'accent': accentColor.value & 0xFFFFFFFF,
           'footer': footerColor.value & 0xFFFFFFFF,
         },
+        'logoSource': logoSource,
         if (newUrl != null) 'logoUrl': newUrl,
         'language': langController.locale.languageCode,
       });

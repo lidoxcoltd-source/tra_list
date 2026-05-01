@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/company_logo_service.dart';
 
 class InvoicePage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? invoice;
@@ -25,6 +26,7 @@ class _InvoicePageState extends State<InvoicePage> {
 
   // Company profile loaded from Firestore
   Map<String, dynamic> _company = {};
+  Uint8List? _companyLogoBytes;
 
   // Dynamic colors from profile
   Color _brandColor = const Color(0xFF1976D2);
@@ -61,18 +63,22 @@ class _InvoicePageState extends State<InvoicePage> {
 
         _clientController.text = clientData['name'] ?? '';
         _invoiceNoController.text = invoiceData['number'] ?? '';
-        _issueDateController.text = invoiceData['issueDate'] ?? _fmtDate(DateTime.now());
-        _dueDateController.text = invoiceData['dueDate'] ?? _fmtDate(DateTime.now());
+        _issueDateController.text =
+            invoiceData['issueDate'] ?? _fmtDate(DateTime.now());
+        _dueDateController.text =
+            invoiceData['dueDate'] ?? _fmtDate(DateTime.now());
 
         _items.clear();
-        _items.addAll(itemsData.map((item) {
-          final itemMap = item as Map<String, dynamic>;
-          return {
-            'desc': itemMap['description'] ?? '',
-            'qty': itemMap['qty'] ?? 1,
-            'unit': itemMap['unit'] ?? 0.0,
-          };
-        }));
+        _items.addAll(
+          itemsData.map((item) {
+            final itemMap = item as Map<String, dynamic>;
+            return {
+              'desc': itemMap['description'] ?? '',
+              'qty': itemMap['qty'] ?? 1,
+              'unit': itemMap['unit'] ?? 0.0,
+            };
+          }),
+        );
       }
     }
   }
@@ -108,9 +114,11 @@ class _InvoicePageState extends State<InvoicePage> {
         return;
       }
       final profile = await ProfileService.loadOrCreate();
+      final logoBytes = await CompanyLogoService.resolveLogoBytes(profile);
       if (!mounted) return;
       setState(() {
         _company = profile ?? {};
+        _companyLogoBytes = logoBytes;
         if (profile.containsKey('colors')) {
           final colors = profile['colors'] as Map<String, dynamic>;
           _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
@@ -265,6 +273,8 @@ class _InvoicePageState extends State<InvoicePage> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  _buildCompanyHeaderCard(),
+                  const SizedBox(height: 16),
                   // Top info section (responsive two columns)
                   Wrap(
                     spacing: 16,
@@ -557,6 +567,53 @@ class _InvoicePageState extends State<InvoicePage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompanyHeaderCard() {
+    final name = (_company['name'] ?? '').toString().trim();
+    final phone = (_company['phone'] ?? '').toString().trim();
+    final email = (_company['email'] ?? '').toString().trim();
+
+    return _buildCard(
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: _brandColor.withOpacity(0.1),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _companyLogoBytes != null
+                  ? Image.memory(_companyLogoBytes!, fit: BoxFit.cover)
+                  : Icon(Icons.business, color: _brandColor),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? 'Company Profile' : name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (phone.isNotEmpty || email.isNotEmpty)
+                  Text(
+                    [phone, email].where((e) => e.isNotEmpty).join('  •  '),
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

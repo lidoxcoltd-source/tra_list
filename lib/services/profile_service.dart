@@ -32,8 +32,10 @@ class ProfileService {
         'email': d['email']?.toString() ?? '',
         'website': d['website']?.toString() ?? '',
         'taxId': d['taxId']?.toString() ?? '',
+        'role': d['role']?.toString() ?? 'user',
         'handle': d['handle']?.toString() ?? '',
         'logoUrl': d['logoUrl']?.toString() ?? '',
+        'logoSource': d['logoSource']?.toString() ?? 'firebase',
         // Payment details
         'beneficiary': d['beneficiary']?.toString() ?? '',
         'bank': d['bank']?.toString() ?? '',
@@ -55,8 +57,10 @@ class ProfileService {
       'phone': '',
       'website': '',
       'taxId': '',
+      'role': 'user',
       'handle': '',
       'logoUrl': '',
+      'logoSource': 'firebase',
       'beneficiary': '',
       'bank': '',
       'account': '',
@@ -92,7 +96,9 @@ class ProfileService {
       if (snap.exists && snap.data()!.containsKey('language')) {
         final langCode = snap.data()!['language']?.toString();
         if (langCode != null) {
-          final langController = Get.find<LanguageController>();
+          final langController = Get.isRegistered<LanguageController>()
+              ? Get.find<LanguageController>()
+              : Get.put(LanguageController());
           langController.changeLanguage(
             langCode,
             langCode == 'sw' ? 'TZ' : 'US',

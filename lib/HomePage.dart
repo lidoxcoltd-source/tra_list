@@ -178,7 +178,11 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             tooltip: 'home_profile'.tr,
             icon: const Icon(Icons.person_outline),
-            onPressed: () => Get.to(() => const ProfilePage()),
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
+            },
           ),
           PopupMenuButton<String>(
             onSelected: (value) {

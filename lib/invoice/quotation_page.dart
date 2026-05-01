@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/pdf/quotation_pdf.dart';
 
@@ -20,6 +23,7 @@ class _QuotationPageState extends State<QuotationPage> {
 
   // Company profile loaded from Firestore
   Map<String, dynamic> _company = {};
+  Uint8List? _companyLogoBytes;
 
   // Dynamic colors from profile
   Color _brandColor = const Color(0xFF1976D2);
@@ -103,9 +107,11 @@ class _QuotationPageState extends State<QuotationPage> {
   Future<void> _loadCompanyAndColors() async {
     try {
       final profile = await ProfileService.loadOrCreate();
+      final logoBytes = await CompanyLogoService.resolveLogoBytes(profile);
       if (!mounted) return;
       setState(() {
         _company = profile ?? {};
+        _companyLogoBytes = logoBytes;
         if (profile.containsKey('colors')) {
           final colors = profile['colors'] as Map<String, dynamic>;
           _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
@@ -371,6 +377,8 @@ class _QuotationPageState extends State<QuotationPage> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  _buildCompanyHeaderCard(),
+                  const SizedBox(height: 16),
                   Wrap(
                     spacing: 16,
                     runSpacing: 16,
@@ -655,6 +663,53 @@ class _QuotationPageState extends State<QuotationPage> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompanyHeaderCard() {
+    final name = (_company['name'] ?? '').toString().trim();
+    final phone = (_company['phone'] ?? '').toString().trim();
+    final email = (_company['email'] ?? '').toString().trim();
+
+    return _buildCard(
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: _brandColor.withOpacity(0.1),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _companyLogoBytes != null
+                  ? Image.memory(_companyLogoBytes!, fit: BoxFit.cover)
+                  : Icon(Icons.business, color: _brandColor),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? 'Company Profile' : name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (phone.isNotEmpty || email.isNotEmpty)
+                  Text(
+                    [phone, email].where((e) => e.isNotEmpty).join('  •  '),
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

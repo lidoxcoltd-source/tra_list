@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/company_logo_service.dart';
 import 'package:flutter/services.dart';
 
 class AdvanceInvoicePage extends StatefulWidget {
@@ -55,6 +56,8 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
 
   DateTime _issueDate = DateTime.now();
   DateTime? _advanceDueDate = DateTime.now().add(const Duration(days: 5));
+  Map<String, dynamic> _company = {};
+  Uint8List? _companyLogoBytes;
 
   // Dynamic colors from profile
   Color _brandColor = const Color(0xFF1976D2);
@@ -77,17 +80,25 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
   @override
   void initState() {
     super.initState();
-    _loadProfileColors();
+    _loadProfileAndBranding();
   }
 
-  Future<void> _loadProfileColors() async {
+  Future<void> _loadProfileAndBranding() async {
     try {
       final profile = await ProfileService.loadOrCreate();
+      final logoBytes = await CompanyLogoService.resolveLogoBytes(profile);
       if (mounted && profile.containsKey('colors')) {
         final colors = profile['colors'] as Map<String, dynamic>;
         setState(() {
+          _company = profile;
+          _companyLogoBytes = logoBytes;
           _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
           _accentColor = Color(colors['accent'] as int? ?? 0xFFFFA000);
+        });
+      } else if (mounted) {
+        setState(() {
+          _company = profile;
+          _companyLogoBytes = logoBytes;
         });
       }
     } catch (e) {
@@ -204,6 +215,8 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            _buildCompanyHeaderCard(),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _invoiceNoC,
               decoration: const InputDecoration(
@@ -383,6 +396,59 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
           Text(label, style: style),
           Text(value.toStringAsFixed(0), style: style),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyHeaderCard() {
+    final name = (_company['name'] ?? '').toString().trim();
+    final phone = (_company['phone'] ?? '').toString().trim();
+    final email = (_company['email'] ?? '').toString().trim();
+
+    return Card(
+      elevation: 0,
+      color: _brandColor.withOpacity(0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.white,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: _companyLogoBytes != null
+                    ? Image.memory(_companyLogoBytes!, fit: BoxFit.cover)
+                    : Icon(Icons.business, color: _brandColor),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name.isEmpty ? 'Company Profile' : name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  if (phone.isNotEmpty || email.isNotEmpty)
+                    Text(
+                      [phone, email].where((e) => e.isNotEmpty).join('  •  '),
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
