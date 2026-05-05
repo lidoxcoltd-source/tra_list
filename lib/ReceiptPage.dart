@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:tra_list/services/pdf/pdf_saver.dart' as pdf_saver;
 
 // QR Code Service
 import 'QRCodeService.dart';
@@ -54,11 +55,13 @@ class CustomerInfo {
   final String idType;
   final String idNo;
   final String mobile;
+  final String vrn;
   const CustomerInfo({
     required this.name,
     required this.idType,
     required this.idNo,
     required this.mobile,
+    required this.vrn,
   });
 }
 
@@ -172,7 +175,7 @@ class ReceiptPage extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 860),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -182,26 +185,26 @@ class ReceiptPage extends StatelessWidget {
                     style: textMuted,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
 
                 // Header with logo/info
                 Column(
                   children: [
                     CircleAvatar(
-                      radius: 26,
+                      radius: 20,
                       backgroundColor: Colors.grey.shade200,
                       backgroundImage: d.company.logo,
                       child: d.company.logo == null
                           ? const Icon(Icons.approval, size: 28)
                           : null,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
                       d.company.name.toUpperCase(),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _companyRow(
                       'ADDRESS:',
                       d.company.addressLine,
@@ -232,9 +235,9 @@ class ReceiptPage extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 10),
-                _dottedDivider(),
                 const SizedBox(height: 6),
+                _dottedDivider(),
+                const SizedBox(height: 4),
 
                 // Customer
                 _twoColRow(
@@ -261,10 +264,16 @@ class ReceiptPage extends StatelessWidget {
                   labelStyle,
                   textSmall,
                 ),
+                _twoColRow(
+                  'CUSTOMER VRN:',
+                  d.customer.vrn,
+                  labelStyle,
+                  textSmall,
+                ),
 
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 _dottedDivider(),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
 
                 // Meta
                 _twoColRow(
@@ -287,16 +296,16 @@ class ReceiptPage extends StatelessWidget {
                   textSmall,
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 3),
                 _dottedDivider(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
 
                 // Items table
                 Text(
                   'Purchased Items',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
 
                 Container(
                   decoration: BoxDecoration(
@@ -337,7 +346,7 @@ class ReceiptPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 4),
 
                 // Totals
                 _totalRow('TOTAL EXCL OF TAX:', _tzs(_fmtTZS(d.totalExclTax))),
@@ -348,9 +357,9 @@ class ReceiptPage extends StatelessWidget {
                   bold: true,
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 3),
                 _dottedDivider(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
 
                 // Verification section
                 Center(
@@ -360,7 +369,7 @@ class ReceiptPage extends StatelessWidget {
                         'RECEIPT VERIFICATION CODE',
                         style: textSmall.copyWith(color: Colors.black),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
                       Text(
                         d.verificationCode,
                         style: const TextStyle(
@@ -368,7 +377,7 @@ class ReceiptPage extends StatelessWidget {
                           color: Colors.black,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 3),
                       GestureDetector(
                         onTap: () {
                           if (d.verificationCode.isNotEmpty) {
@@ -380,8 +389,8 @@ class ReceiptPage extends StatelessWidget {
                           }
                         },
                         child: Container(
-                          width: 156,
-                          height: 156,
+                          width: 180,
+                          height: 180,
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.black, width: 1.6),
@@ -391,7 +400,7 @@ class ReceiptPage extends StatelessWidget {
                           child: d.verificationCode.isNotEmpty
                               ? QRCodeService.generateReceiptQR(
                                   receiptId: d.verificationCode,
-                                  size: 148,
+                                  size: 180,
                                   foregroundColor: Colors.black,
                                   backgroundColor: Colors.white,
                                   showLogo: false,
@@ -401,7 +410,7 @@ class ReceiptPage extends StatelessWidget {
                               : const Center(
                                   child: Icon(
                                     Icons.qr_code,
-                                    size: 90,
+                                    size: 58,
                                     color: Colors.black,
                                   ),
                                 ),
@@ -411,24 +420,29 @@ class ReceiptPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Center(
                   child: Text('*** END OF LEGAL RECEIPT ***', style: textMuted),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
                 // Print / Save as PDF
                 Center(
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       final bytes = await buildReceiptPdf(d);
-                      await Printing.layoutPdf(
-                        onLayout: (format) async => bytes,
+                      final fileName =
+                          'receipt_${d.verificationCode.isNotEmpty ? d.verificationCode : DateTime.now().millisecondsSinceEpoch}.pdf';
+                      final savedAs = await pdf_saver.savePdf(bytes, fileName);
+                      Get.snackbar(
+                        'Saved',
+                        'Receipt PDF saved/downloaded: $savedAs',
+                        snackPosition: SnackPosition.BOTTOM,
                       );
                     },
-                    icon: const Icon(Icons.print),
-                    label: const Text('Print Receipt'),
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Download Receipt PDF'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFFE500),
                       foregroundColor: Colors.black87,
@@ -449,7 +463,7 @@ class ReceiptPage extends StatelessWidget {
       fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Expanded(
@@ -471,7 +485,7 @@ class ReceiptPage extends StatelessWidget {
     TextStyle valueStyle,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: RichText(
         text: TextSpan(
           style: valueStyle.copyWith(color: Colors.black87),
@@ -491,7 +505,7 @@ class ReceiptPage extends StatelessWidget {
     TextStyle valueStyle,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -520,6 +534,7 @@ class ReceiptPage extends StatelessWidget {
       idType: 'N.I',
       idNo: 'N/A',
       mobile: 'N/A',
+      vrn: '',
     ),
     meta: ReceiptMeta(
       receiptNo: '1157',
@@ -546,7 +561,7 @@ class _Cell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Text(
         text,
         textAlign: align,
@@ -606,8 +621,8 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
     qr = pw.BarcodeWidget(
       barcode: pw.Barcode.qrCode(),
       data: receiptUrl,
-      width: 120,
-      height: 120,
+      width: 74,
+      height: 74,
     );
   } else {
     // Fallback to asset image
@@ -615,15 +630,15 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
       final qrImageBytes = await rootBundle.load('assets/frame.png');
       final qrImage = pw.MemoryImage(qrImageBytes.buffer.asUint8List());
       qr = pw.Container(
-        width: 120,
-        height: 120,
+        width: 74,
+        height: 74,
         child: pw.Image(qrImage, fit: pw.BoxFit.contain),
       );
     } catch (e) {
       // If asset loading fails, create a placeholder
       qr = pw.Container(
-        width: 120,
-        height: 120,
+        width: 74,
+        height: 74,
         decoration: pw.BoxDecoration(
           border: pw.Border.all(color: PdfColors.grey),
         ),
@@ -635,12 +650,12 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
   }
 
   pw.Widget kv(String k, String v) => pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 2),
+    padding: const pw.EdgeInsets.symmetric(vertical: 0.5),
     child: pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.SizedBox(
-          width: 130,
+          width: 122,
           child: pw.Text(
             k,
             style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
@@ -653,8 +668,9 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
 
   pdf.addPage(
     pw.MultiPage(
+      pageFormat: PdfPageFormat(80 * PdfPageFormat.mm, 140 * PdfPageFormat.mm),
       pageTheme: const pw.PageTheme(
-        margin: pw.EdgeInsets.fromLTRB(24, 24, 24, 36),
+        margin: pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
       ),
       build: (ctx) => [
         pw.Center(
@@ -663,7 +679,7 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
             style: pw.TextStyle(color: PdfColors.grey600, fontSize: 9),
           ),
         ),
-        pw.SizedBox(height: 6),
+        pw.SizedBox(height: 2),
 
         // Header
         pw.Column(
@@ -671,21 +687,21 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
           children: [
             // If you want a real logo, load it as pw.MemoryImage and put it here.
             pw.Container(
-              width: 48,
-              height: 48,
+              width: 30,
+              height: 30,
               decoration: const pw.BoxDecoration(
                 color: PdfColors.grey200,
                 shape: pw.BoxShape.circle,
               ),
               alignment: pw.Alignment.center,
-              child: pw.Icon(pw.IconData(0xe5ca), size: 20),
+              child: pw.Icon(pw.IconData(0xe5ca), size: 13),
             ),
-            pw.SizedBox(height: 8),
+            pw.SizedBox(height: 3),
             pw.Text(
               d.company.name.toUpperCase(),
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
             ),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 1),
             kv('ADDRESS:', d.company.addressLine),
             kv('MOBILE:', d.company.mobile),
             kv('TIN:', d.company.tin),
@@ -696,19 +712,20 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
           ],
         ),
 
-        pw.SizedBox(height: 6),
+        pw.SizedBox(height: 2),
         dotted(),
-        pw.SizedBox(height: 4),
+        pw.SizedBox(height: 1),
 
         // Customer
         kv('CUSTOMER NAME:', d.customer.name),
         kv('CUSTOMER ID TYPE:', d.customer.idType),
         kv('CUSTOMER ID NO:', d.customer.idNo),
         kv('CUSTOMER MOBILE:', d.customer.mobile),
+        kv('CUSTOMER VRN:', d.customer.vrn),
 
-        pw.SizedBox(height: 4),
+        pw.SizedBox(height: 1),
         dotted(),
-        pw.SizedBox(height: 4),
+        pw.SizedBox(height: 1),
 
         // Meta
         kv('RECEIPT NO:', d.meta.receiptNo),
@@ -716,16 +733,16 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
         kv('RECEIPT DATE:', d.meta.receiptDate),
         kv('RECEIPT TIME:', d.meta.receiptTime),
 
-        pw.SizedBox(height: 8),
+        pw.SizedBox(height: 2),
         dotted(),
-        pw.SizedBox(height: 10),
+        pw.SizedBox(height: 3),
 
         // Items
         pw.Text(
           'Purchased Items',
           style: pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
         ),
-        pw.SizedBox(height: 6),
+        pw.SizedBox(height: 2),
         pw.Table(
           border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.6),
           columnWidths: {
@@ -754,14 +771,14 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
           ],
         ),
 
-        pw.SizedBox(height: 12),
+        pw.SizedBox(height: 4),
         _totalRowPdf('TOTAL EXCL OF TAX:', fmtTZS(d.totalExclTax)),
         _totalRowPdf('TOTAL TAX:', fmtTZS(d.tax)),
         _totalRowPdf('TOTAL INCL OF TAX:', fmtTZS(d.totalInclTax), bold: true),
 
-        pw.SizedBox(height: 10),
+        pw.SizedBox(height: 3),
         dotted(),
-        pw.SizedBox(height: 10),
+        pw.SizedBox(height: 4),
 
         pw.Center(
           child: pw.Column(
@@ -773,7 +790,7 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
                   color: PdfColors.grey700,
                 ),
               ),
-              pw.SizedBox(height: 4),
+              pw.SizedBox(height: 3),
               pw.Text(
                 d.verificationCode,
                 style: pw.TextStyle(
@@ -781,13 +798,13 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 4),
               qr,
             ],
           ),
         ),
 
-        pw.SizedBox(height: 10),
+        pw.SizedBox(height: 4),
         pw.Center(
           child: pw.Text(
             '*** END OF LEGAL RECEIPT ***',
@@ -807,7 +824,7 @@ pw.Widget _pd(
   pw.Alignment align = pw.Alignment.centerLeft,
 }) {
   return pw.Padding(
-    padding: const pw.EdgeInsets.all(8),
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     child: pw.Align(
       alignment: align,
       child: pw.Text(
@@ -827,7 +844,7 @@ pw.Widget _totalRowPdf(String label, String value, {bool bold = false}) {
     fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
   );
   return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+    padding: const pw.EdgeInsets.symmetric(vertical: 2),
     child: pw.Row(
       children: [
         pw.Expanded(

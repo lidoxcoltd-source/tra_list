@@ -43,6 +43,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   final _customerIdTypeController = TextEditingController(text: 'N.I');
   final _customerIdNoController = TextEditingController(text: 'N/A');
   final _customerMobileController = TextEditingController();
+  final _customerVrnController = TextEditingController();
 
   // Receipt Meta Controllers
   final _receiptNoController = TextEditingController();
@@ -92,7 +93,10 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
   void _onItemAmountFocusChange() {
     if (_itemAmountFocusNode.hasFocus) {
-      _itemAmountController.text = _itemAmountController.text.replaceAll(',', '');
+      _itemAmountController.text = _itemAmountController.text.replaceAll(
+        ',',
+        '',
+      );
     } else {
       final value = double.tryParse(_itemAmountController.text) ?? 0.0;
       _itemAmountController.text = _formatNumberValue(value);
@@ -124,6 +128,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     _customerIdTypeController.text = data.customer.idType;
     _customerIdNoController.text = data.customer.idNo;
     _customerMobileController.text = data.customer.mobile;
+    _customerVrnController.text = data.customer.vrn;
 
     // Meta
     _receiptNoController.text = data.meta.receiptNo;
@@ -220,7 +225,8 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   }
 
   void _calculateTotals() {
-    final amount = double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0;
+    final amount =
+        double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0;
     final tax = double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0;
 
     _totalExclTaxController.text = _formatNumberValue(amount);
@@ -249,6 +255,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           'idType': _customerIdTypeController.text,
           'idNo': _customerIdNoController.text,
           'mobile': _customerMobileController.text,
+          'vrn': _customerVrnController.text,
         },
         'meta': {
           'receiptNo': _receiptNoController.text,
@@ -260,12 +267,20 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           {
             'description': _itemDescriptionController.text,
             'qty': int.tryParse(_itemQtyController.text) ?? 1,
-            'amount': double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0,
+            'amount':
+                double.tryParse(
+                  _itemAmountController.text.replaceAll(',', ''),
+                ) ??
+                0.0,
           },
         ],
-        'totalExclTax': double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ?? 0.0,
+        'totalExclTax':
+            double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ??
+            0.0,
         'tax': double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
-        'totalInclTax': double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ?? 0.0,
+        'totalInclTax':
+            double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ??
+            0.0,
         'verificationCode': _verificationCodeController.text,
         'createdAt': DateTime.now().toIso8601String(),
       };
@@ -390,6 +405,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
         idType: _customerIdTypeController.text,
         idNo: _customerIdNoController.text,
         mobile: _customerMobileController.text,
+        vrn: _customerVrnController.text,
       ),
       meta: ReceiptMeta(
         receiptNo: _receiptNoController.text,
@@ -401,12 +417,18 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
         LineItem(
           description: _itemDescriptionController.text,
           qty: int.tryParse(_itemQtyController.text) ?? 1,
-          amount: double.tryParse(_itemAmountController.text.replaceAll(',', '')) ?? 0.0,
+          amount:
+              double.tryParse(_itemAmountController.text.replaceAll(',', '')) ??
+              0.0,
         ),
       ],
-      totalExclTax: double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ?? 0.0,
+      totalExclTax:
+          double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ??
+          0.0,
       tax: double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
-      totalInclTax: double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ?? 0.0,
+      totalInclTax:
+          double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ??
+          0.0,
       verificationCode: _verificationCodeController.text,
       qr: const AssetImage('assets/frame.png'),
     );
@@ -503,6 +525,11 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     _customerMobileController,
                     'Mobile',
                     Icons.phone,
+                  ),
+                  _buildTextField(
+                    _customerVrnController,
+                    'VRN',
+                    Icons.confirmation_number,
                   ),
                 ]),
 
@@ -854,6 +881,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     _customerIdTypeController.dispose();
     _customerIdNoController.dispose();
     _customerMobileController.dispose();
+    _customerVrnController.dispose();
     _receiptNoController.dispose();
     _zNumberController.dispose();
     _receiptDateController.dispose();

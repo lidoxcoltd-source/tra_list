@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
 
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'TRA Receipt System',
+      title: 'Mjasi POS',
       // Localization settings
       translations: AppTranslations(),
       locale: langController.locale, // Set initial locale from storage

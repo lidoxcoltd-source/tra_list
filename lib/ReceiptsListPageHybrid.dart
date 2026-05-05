@@ -236,16 +236,17 @@ class ReceiptsListPageHybrid extends StatelessWidget {
                         _editReceipt(context, data);
                       }
                     },
-                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                      const PopupMenuItem<String>(
-                        value: 'view',
-                        child: Text('View'),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'edit',
-                        child: Text('Edit'),
-                      ),
-                    ],
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<String>>[
+                          const PopupMenuItem<String>(
+                            value: 'view',
+                            child: Text('View'),
+                          ),
+                          const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+                        ],
                   ),
                 ],
               ),
@@ -309,6 +310,7 @@ class ReceiptsListPageHybrid extends StatelessWidget {
           idType: customer['idType'] ?? '',
           idNo: customer['idNo'] ?? '',
           mobile: customer['mobile'] ?? '',
+          vrn: customer['vrn'] ?? '',
         ),
         meta: ReceiptMeta(
           receiptNo: meta['receiptNo'] ?? '',
@@ -334,7 +336,8 @@ class ReceiptsListPageHybrid extends StatelessWidget {
       Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) => AddReceiptPage(receiptData: receiptData)),
+          builder: (context) => AddReceiptPage(receiptData: receiptData),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -370,6 +373,7 @@ class ReceiptsListPageHybrid extends StatelessWidget {
           idType: customer['idType'] ?? '',
           idNo: customer['idNo'] ?? '',
           mobile: customer['mobile'] ?? '',
+          vrn: customer['vrn'] ?? '',
         ),
         meta: ReceiptMeta(
           receiptNo: meta['receiptNo'] ?? '',

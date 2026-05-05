@@ -12,7 +12,7 @@
     }
   },
   "hosting": {
-    "site": "tra-receipt-system",
+    "site": "mjasipos",
     "public": "build/web",
     "ignore": [
       "firebase.json",

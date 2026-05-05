@@ -276,7 +276,7 @@ class ReceiptsListPage extends StatelessWidget {
                     tooltip: 'Download',
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
@@ -287,7 +287,7 @@ class ReceiptsListPage extends StatelessWidget {
   void _editReceipt(BuildContext context, Map<String, dynamic> data) {
     // TODO: Implement edit functionality
     print('Edit receipt: ${data['meta']?['receiptNo']}');
-     try {
+    try {
       final company = data['company'] as Map<String, dynamic>? ?? {};
       final customer = data['customer'] as Map<String, dynamic>? ?? {};
       final meta = data['meta'] as Map<String, dynamic>? ?? {};
@@ -310,6 +310,7 @@ class ReceiptsListPage extends StatelessWidget {
           idType: customer['idType'] ?? '',
           idNo: customer['idNo'] ?? '',
           mobile: customer['mobile'] ?? '',
+          vrn: customer['vrn'] ?? '',
         ),
         meta: ReceiptMeta(
           receiptNo: meta['receiptNo'] ?? '',
@@ -334,7 +335,9 @@ class ReceiptsListPage extends StatelessWidget {
 
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => AddReceiptPage(receiptData: receiptData)),
+        MaterialPageRoute(
+          builder: (context) => AddReceiptPage(receiptData: receiptData),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,7 +353,11 @@ class ReceiptsListPage extends StatelessWidget {
     PDFService.generatePDF(data);
   }
 
-  void _viewReceipt(BuildContext context, Map<String, dynamic> data, {bool download = false}) async {
+  void _viewReceipt(
+    BuildContext context,
+    Map<String, dynamic> data, {
+    bool download = false,
+  }) async {
     try {
       final company = data['company'] as Map<String, dynamic>? ?? {};
       final customer = data['customer'] as Map<String, dynamic>? ?? {};
@@ -374,6 +381,7 @@ class ReceiptsListPage extends StatelessWidget {
           idType: customer['idType'] ?? '',
           idNo: customer['idNo'] ?? '',
           mobile: customer['mobile'] ?? '',
+          vrn: customer['vrn'] ?? '',
         ),
         meta: ReceiptMeta(
           receiptNo: meta['receiptNo'] ?? '',
@@ -398,11 +406,16 @@ class ReceiptsListPage extends StatelessWidget {
 
       if (download) {
         final bytes = await buildReceiptPdf(receiptData);
-        await Printing.sharePdf(bytes: bytes, filename: 'receipt_${receiptData.meta.receiptNo}.pdf');
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'receipt_${receiptData.meta.receiptNo}.pdf',
+        );
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ReceiptPage(data: receiptData)),
+          MaterialPageRoute(
+            builder: (context) => ReceiptPage(data: receiptData),
+          ),
         );
       }
     } catch (e) {

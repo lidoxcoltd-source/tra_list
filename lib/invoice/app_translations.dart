@@ -249,6 +249,33 @@ class AppTranslations extends Translations {
       'Network timeout. Please check your connection.':
           'Network timeout. Please check your connection.',
       'Failed to load analytics data: ': 'Failed to load analytics data: ',
+
+      // Subscription Page
+      'sub_title': 'Choose Your Plan',
+      'sub_upgrade_heading': 'Upgrade to Premium',
+      'sub_upgrade_desc':
+          'Get full access to receipts, invoices, analytics, and advanced business tools in one plan.',
+      'sub_per_year': '/ year',
+      'sub_trial_badge': '7-day trial',
+      'sub_feature_receipts': 'Unlimited Receipts',
+      'sub_feature_invoicing': 'Smart Invoicing',
+      'sub_feature_analytics': 'Sales Analytics',
+      'sub_feature_backup': 'Cloud Backup',
+      'sub_phone_label': 'Phone Number',
+      'sub_phone_hint': 'e.g. 07XXXXXXXX',
+      'sub_missing_phone_title': 'Missing Phone Number',
+      'sub_missing_phone_msg':
+          'Enter your phone number to continue with subscription.',
+      'sub_activated_msg': 'Subscription activated successfully!',
+      'sub_failed_title': 'Subscription Failed',
+      'sub_processing': 'Processing...',
+      'sub_subscribe_now': 'Subscribe Now',
+      'sub_auth_required_title': 'Authentication Required',
+      'sub_auth_required_msg': 'Please log in to start your free trial.',
+      'sub_trial_started_title': 'Trial Started',
+      'sub_trial_started_msg': 'Your 7-day free trial is now active.',
+      'sub_start_trial': 'Start 7-Day Free Trial',
+      'sub_secure_checkout': 'Secure checkout. Cancel anytime.',
     },
     'sw_TZ': {
       // General
@@ -499,6 +526,34 @@ class AppTranslations extends Translations {
           'Muda wa mtandao umeisha. Tafadhali angalia muunganisho wako.',
       'Failed to load analytics data: ':
           'Imeshindwa kupakia data ya uchambuzi: ',
+
+      // Subscription Page
+      'sub_title': 'Chagua Mpango Wako',
+      'sub_upgrade_heading': 'Panda Daraja la Premium',
+      'sub_upgrade_desc':
+          'Pata ufikiaji kamili wa risiti, ankara, uchambuzi na zana za biashara katika mpango mmoja.',
+      'sub_per_year': '/ mwaka',
+      'sub_trial_badge': 'Jaribio la siku 7',
+      'sub_feature_receipts': 'Risiti Zisizo na Kikomo',
+      'sub_feature_invoicing': 'Ankara za Kisasa',
+      'sub_feature_analytics': 'Uchambuzi wa Mauzo',
+      'sub_feature_backup': 'Hifadhi ya Wingu',
+      'sub_phone_label': 'Namba ya Simu',
+      'sub_phone_hint': 'mf. 07XXXXXXXX',
+      'sub_missing_phone_title': 'Namba ya Simu Haijawekwa',
+      'sub_missing_phone_msg':
+          'Weka namba yako ya simu ili kuendelea na usajili.',
+      'sub_activated_msg': 'Usajili umefanyika kikamilifu!',
+      'sub_failed_title': 'Usajili Umeshindwa',
+      'sub_processing': 'Inashughulikia...',
+      'sub_subscribe_now': 'Jiunge Sasa',
+      'sub_auth_required_title': 'Uthibitisho Unahitajika',
+      'sub_auth_required_msg':
+          'Tafadhali ingia ili kuanza jaribio lako la bure.',
+      'sub_trial_started_title': 'Jaribio Limeanza',
+      'sub_trial_started_msg': 'Jaribio lako la bure la siku 7 sasa liko hai.',
+      'sub_start_trial': 'Anza Jaribio la Bure la Siku 7',
+      'sub_secure_checkout': 'Malipo salama. Ghairi wakati wowote.',
     },
   };
 }

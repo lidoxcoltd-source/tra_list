@@ -32,7 +32,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Choose Your Plan'),
+        title: Text('sub_title'.tr),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -102,7 +102,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                 ),
                                 const SizedBox(height: 18),
                                 Text(
-                                  'Upgrade to Premium',
+                                  'sub_upgrade_heading'.tr,
                                   style: theme.textTheme.headlineSmall
                                       ?.copyWith(
                                         fontWeight: FontWeight.w800,
@@ -111,7 +111,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Get full access to receipts, invoices, analytics, and advanced business tools in one plan.',
+                                  'sub_upgrade_desc'.tr,
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: const Color(0xFF4E6471),
                                     height: 1.4,
@@ -144,7 +144,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                           bottom: 4,
                                         ),
                                         child: Text(
-                                          '/ year',
+                                          'sub_per_year'.tr,
                                           style: theme.textTheme.bodyMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.w600,
@@ -164,9 +164,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                             40,
                                           ),
                                         ),
-                                        child: const Text(
-                                          '7-day trial',
-                                          style: TextStyle(
+                                        child: Text(
+                                          'sub_trial_badge'.tr,
+                                          style: const TextStyle(
                                             color: Color(0xFF1C7C54),
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -179,11 +179,17 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                 Wrap(
                                   spacing: 10,
                                   runSpacing: 10,
-                                  children: const [
-                                    _FeatureTag(label: 'Unlimited Receipts'),
-                                    _FeatureTag(label: 'Smart Invoicing'),
-                                    _FeatureTag(label: 'Sales Analytics'),
-                                    _FeatureTag(label: 'Cloud Backup'),
+                                  children: [
+                                    _FeatureTag(
+                                      label: 'sub_feature_receipts'.tr,
+                                    ),
+                                    _FeatureTag(
+                                      label: 'sub_feature_invoicing'.tr,
+                                    ),
+                                    _FeatureTag(
+                                      label: 'sub_feature_analytics'.tr,
+                                    ),
+                                    _FeatureTag(label: 'sub_feature_backup'.tr),
                                   ],
                                 ),
                                 const SizedBox(height: 22),
@@ -191,8 +197,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                   controller: _phoneController,
                                   keyboardType: TextInputType.phone,
                                   decoration: InputDecoration(
-                                    labelText: 'Phone Number',
-                                    hintText: 'e.g. 07XXXXXXXX',
+                                    labelText: 'sub_phone_label'.tr,
+                                    hintText: 'sub_phone_hint'.tr,
                                     prefixIcon: const Icon(
                                       Icons.phone_iphone_outlined,
                                     ),
@@ -239,8 +245,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                       .trim();
                                                   if (phone.isEmpty) {
                                                     Get.snackbar(
-                                                      'Missing Phone Number',
-                                                      'Enter your phone number to continue with subscription.',
+                                                      'sub_missing_phone_title'
+                                                          .tr,
+                                                      'sub_missing_phone_msg'
+                                                          .tr,
                                                       snackPosition:
                                                           SnackPosition.BOTTOM,
                                                       backgroundColor:
@@ -255,8 +263,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                           phone: phone,
                                                         );
                                                     Get.snackbar(
-                                                      'Success',
-                                                      'Subscription activated successfully!',
+                                                      'success'.tr,
+                                                      'sub_activated_msg'.tr,
                                                       snackPosition:
                                                           SnackPosition.BOTTOM,
                                                       backgroundColor:
@@ -265,7 +273,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                     );
                                                   } catch (e) {
                                                     Get.snackbar(
-                                                      'Subscription Failed',
+                                                      'sub_failed_title'.tr,
                                                       e.toString(),
                                                       snackPosition:
                                                           SnackPosition.BOTTOM,
@@ -290,8 +298,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                 ),
                                           label: Text(
                                             _controller.loading.value
-                                                ? 'Processing...'
-                                                : 'Subscribe Now',
+                                                ? 'sub_processing'.tr
+                                                : 'sub_subscribe_now'.tr,
                                             style: const TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w700,
@@ -327,8 +335,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                       .currentUser;
                                                   if (user == null) {
                                                     Get.snackbar(
-                                                      'Authentication Required',
-                                                      'Please log in to start your free trial.',
+                                                      'sub_auth_required_title'
+                                                          .tr,
+                                                      'sub_auth_required_msg'
+                                                          .tr,
                                                       snackPosition:
                                                           SnackPosition.BOTTOM,
                                                       backgroundColor:
@@ -342,8 +352,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                                         user.uid,
                                                       );
                                                   Get.snackbar(
-                                                    'Trial Started',
-                                                    'Your 7-day free trial is now active.',
+                                                    'sub_trial_started_title'
+                                                        .tr,
+                                                    'sub_trial_started_msg'.tr,
                                                     snackPosition:
                                                         SnackPosition.BOTTOM,
                                                     backgroundColor:
@@ -354,9 +365,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                           icon: const Icon(
                                             Icons.auto_awesome_outlined,
                                           ),
-                                          label: const Text(
-                                            'Start 7-Day Free Trial',
-                                            style: TextStyle(
+                                          label: Text(
+                                            'sub_start_trial'.tr,
+                                            style: const TextStyle(
                                               fontSize: 15.5,
                                               fontWeight: FontWeight.w700,
                                             ),
@@ -377,7 +388,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'Secure checkout. Cancel anytime.',
+                                      'sub_secure_checkout'.tr,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: Colors.grey.shade700,

@@ -110,6 +110,7 @@ class ReceiptViewController extends GetxController {
         idType: customer['idType'] ?? '',
         idNo: customer['idNo'] ?? '',
         mobile: customer['mobile'] ?? '',
+        vrn: customer['vrn'] ?? '',
       ),
       meta: ReceiptMeta(
         receiptNo: meta['receiptNo'] ?? '',
@@ -179,7 +180,7 @@ class ReceiptViewPage extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            QRCodeService.generateReceiptQR(receiptId: receiptId, size: 250),
+            QRCodeService.generateReceiptQR(receiptId: receiptId, size: 350),
             const SizedBox(height: 16),
             const Text(
               'Scan to view receipt online',
