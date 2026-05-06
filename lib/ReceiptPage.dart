@@ -187,45 +187,58 @@ class ReceiptPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
 
-                // Header with logo/info
+                // ────────────── Header with logo and company info ──────────────
                 Column(
                   children: [
+                    // Company logo (shows image if available, otherwise fallback icon)
                     CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: d.company.logo,
+                      radius: 20, // Adjusts the size of the logo
+                      backgroundColor:
+                          Colors.grey.shade200, // Logo background color
+                      backgroundImage: d.company.logo, // AssetImage for logo
                       child: d.company.logo == null
-                          ? const Icon(Icons.approval, size: 28)
+                          ? const Icon(
+                              Icons.approval,
+                              size: 28,
+                            ) // Fallback icon if no logo
                           : null,
                     ),
                     const SizedBox(height: 6),
+                    // Company name in uppercase, bold, centered
                     Text(
                       d.company.name.toUpperCase(),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
+                    // Company address row
                     _companyRow(
                       'ADDRESS:',
                       d.company.addressLine,
                       labelStyle,
                       textSmall,
                     ),
+                    // Company mobile row
                     _companyRow(
                       'MOBILE:',
                       d.company.mobile,
                       labelStyle,
                       textSmall,
                     ),
+                    // Company TIN row
                     _companyRow('TIN:', d.company.tin, labelStyle, textSmall),
+                    // Company VRN row
                     _companyRow('VRN:', d.company.vrn, labelStyle, textSmall),
+                    // Company serial number row
                     _companyRow(
                       'SERIAL NO:',
                       d.company.serialNo,
                       labelStyle,
                       textSmall,
                     ),
+                    // Company UIM row
                     _companyRow('UIM:', d.company.uim, labelStyle, textSmall),
+                    // Company tax office row
                     _companyRow(
                       'TAX OFFICE:',
                       d.company.taxOffice,
@@ -235,9 +248,9 @@ class ReceiptPage extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 6),
-                _dottedDivider(),
                 const SizedBox(height: 4),
+                _dottedDivider(),
+                const SizedBox(height: 3),
 
                 // Customer
                 _twoColRow(
@@ -271,9 +284,9 @@ class ReceiptPage extends StatelessWidget {
                   textSmall,
                 ),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 _dottedDivider(),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 // Meta
                 _twoColRow(
@@ -298,14 +311,14 @@ class ReceiptPage extends StatelessWidget {
 
                 const SizedBox(height: 3),
                 _dottedDivider(),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 // Items table
                 Text(
                   'Purchased Items',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 Container(
                   decoration: BoxDecoration(
@@ -346,7 +359,7 @@ class ReceiptPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 // Totals
                 _totalRow('TOTAL EXCL OF TAX:', _tzs(_fmtTZS(d.totalExclTax))),
@@ -359,7 +372,7 @@ class ReceiptPage extends StatelessWidget {
 
                 const SizedBox(height: 3),
                 _dottedDivider(),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 // Verification section
                 Center(
@@ -400,7 +413,7 @@ class ReceiptPage extends StatelessWidget {
                           child: d.verificationCode.isNotEmpty
                               ? QRCodeService.generateReceiptQR(
                                   receiptId: d.verificationCode,
-                                  size: 180,
+                                  size: 240,
                                   foregroundColor: Colors.black,
                                   backgroundColor: Colors.white,
                                   showLogo: false,
@@ -420,7 +433,7 @@ class ReceiptPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Center(
                   child: Text('*** END OF LEGAL RECEIPT ***', style: textMuted),
                 ),
@@ -621,8 +634,8 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
     qr = pw.BarcodeWidget(
       barcode: pw.Barcode.qrCode(),
       data: receiptUrl,
-      width: 74,
-      height: 74,
+      width: 100,
+      height: 100,
     );
   } else {
     // Fallback to asset image
@@ -630,15 +643,15 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
       final qrImageBytes = await rootBundle.load('assets/frame.png');
       final qrImage = pw.MemoryImage(qrImageBytes.buffer.asUint8List());
       qr = pw.Container(
-        width: 74,
-        height: 74,
+        width: 100,
+        height: 100,
         child: pw.Image(qrImage, fit: pw.BoxFit.contain),
       );
     } catch (e) {
       // If asset loading fails, create a placeholder
       qr = pw.Container(
-        width: 74,
-        height: 74,
+        width: 100,
+        height: 100,
         decoration: pw.BoxDecoration(
           border: pw.Border.all(color: PdfColors.grey),
         ),
@@ -733,9 +746,9 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
         kv('RECEIPT DATE:', d.meta.receiptDate),
         kv('RECEIPT TIME:', d.meta.receiptTime),
 
-        pw.SizedBox(height: 2),
+        pw.SizedBox(height: 1),
         dotted(),
-        pw.SizedBox(height: 3),
+        pw.SizedBox(height: 2),
 
         // Items
         pw.Text(
@@ -771,14 +784,14 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
           ],
         ),
 
-        pw.SizedBox(height: 4),
+        pw.SizedBox(height: 2),
         _totalRowPdf('TOTAL EXCL OF TAX:', fmtTZS(d.totalExclTax)),
         _totalRowPdf('TOTAL TAX:', fmtTZS(d.tax)),
         _totalRowPdf('TOTAL INCL OF TAX:', fmtTZS(d.totalInclTax), bold: true),
 
-        pw.SizedBox(height: 3),
+        pw.SizedBox(height: 2),
         dotted(),
-        pw.SizedBox(height: 4),
+        pw.SizedBox(height: 43),
 
         pw.Center(
           child: pw.Column(
@@ -798,7 +811,7 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 4),
+              pw.SizedBox(height: 43),
               qr,
             ],
           ),

@@ -147,7 +147,7 @@ class PDFService {
                   textAlign: pw.TextAlign.left,
                 ),
 
-                pw.SizedBox(height: 15),
+                pw.SizedBox(height: 60),
 
                 // Receipt meta
                 pw.Row(

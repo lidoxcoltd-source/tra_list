@@ -540,83 +540,102 @@ class _HomePageState extends State<HomePage> {
       elevation: 10,
       shadowColor: Colors.black.withOpacity(0.25),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: InkWell(
-        onTap: () => _handleRestrictedTap(() => Get.toNamed(AppRoutes.jobs)),
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
-            gradient: const LinearGradient(
-              colors: [_brandDeep, _brandPrimary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
           ),
-          child: Obx(
-            () => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.work_history_outlined,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'home_jobs_overview'.tr,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+          collapsedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          backgroundColor: Colors.transparent,
+          collapsedBackgroundColor: Colors.transparent,
+          title: Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: _brandPrimary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.work_history_outlined,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'home_jobs_overview'.tr,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _brandDeep,
+                ),
+              ),
+            ],
+          ),
+          children: [
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: const LinearGradient(
+                  colors: [_brandDeep, _brandPrimary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Obx(
+                  () => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildSummaryStat(
+                            'home_active_jobs'.tr,
+                            controller.active.length.toString(),
+                          ),
+                          _buildSummaryStat(
+                            'home_completed_jobs'.tr,
+                            controller.completed.length.toString(),
+                          ),
+                        ],
                       ),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildSummaryStat(
+                            'home_overdue_jobs'.tr,
+                            '0',
+                            highlight: false,
+                          ),
+                          _buildSummaryStat(
+                            'home_important_jobs'.tr,
+                            controller.important.length.toString(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildSummaryStat(
-                          'home_active_jobs'.tr,
-                          controller.active.length.toString(),
-                        ),
-                        _buildSummaryStat(
-                          'home_completed_jobs'.tr,
-                          controller.completed.length.toString(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildSummaryStat(
-                          'home_overdue_jobs'.tr,
-                          '0',
-                          highlight: false,
-                        ),
-                        _buildSummaryStat(
-                          'home_important_jobs'.tr,
-                          controller.important.length.toString(),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
+          onExpansionChanged: (expanded) {
+            // Optionally handle expansion state changes here
+          },
         ),
       ),
     );
