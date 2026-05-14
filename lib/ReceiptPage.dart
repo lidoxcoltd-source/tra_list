@@ -540,7 +540,7 @@ class ReceiptPage extends StatelessWidget {
       serialNo: '1072114856',
       uim: '90VFVEDEAM4P+0517827123029511072114856',
       taxOffice: 'Tax Office Tabora',
-      logo: AssetImage('assets/tra-logo.png'),
+      logo: AssetImage('assets/mjas.png'),
     ),
     customer: CustomerInfo(
       name: 'MKURUGENZI TABORA MC',

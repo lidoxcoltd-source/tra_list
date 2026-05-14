@@ -21,25 +21,13 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -60,4 +48,40 @@ class DefaultFirebaseOptions {
     authDomain: 'tra-verify.firebaseapp.com',
     storageBucket: 'tra-verify.firebasestorage.app',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyAFBFg6fHVYrPrSu9jE-rc_WIjSBLOdA1s',
+    appId: '1:903048450592:ios:3c1e8c6847c6821a876245',
+    messagingSenderId: '903048450592',
+    projectId: 'tra-verify',
+    storageBucket: 'tra-verify.firebasestorage.app',
+    iosBundleId: 'com.example.traList',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAFBFg6fHVYrPrSu9jE-rc_WIjSBLOdA1s',
+    appId: '1:903048450592:ios:3c1e8c6847c6821a876245',
+    messagingSenderId: '903048450592',
+    projectId: 'tra-verify',
+    storageBucket: 'tra-verify.firebasestorage.app',
+    iosBundleId: 'com.example.traList',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDN57Q5fHVCnd93XUS-nW8TjgwpLhf0fbQ',
+    appId: '1:903048450592:android:99b78274d70f7613876245',
+    messagingSenderId: '903048450592',
+    projectId: 'tra-verify',
+    storageBucket: 'tra-verify.firebasestorage.app',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyAHfS7iNK-tNEesHkbE_79cfdEEbLX1x6A',
+    appId: '1:903048450592:web:c5a735cf16787135876245',
+    messagingSenderId: '903048450592',
+    projectId: 'tra-verify',
+    authDomain: 'tra-verify.firebaseapp.com',
+    storageBucket: 'tra-verify.firebasestorage.app',
+  );
+
 }

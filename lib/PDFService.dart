@@ -143,18 +143,18 @@ class PDFService {
                 // Company
                 pw.Text(
                   (company['name'] ?? 'LIDOX ENTERPRISES').toString(),
-                  style: t14(true).copyWith(letterSpacing: 2.5),
+                  style: t14(true).copyWith(letterSpacing: 2.3),
                   textAlign: pw.TextAlign.center,
                 ),
 
                 pw.Text(
                   'ADDRESS: ${company['addressLine'] ?? 'TABORA CBD'}',
-                  style: t12().copyWith(letterSpacing: 2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
                 pw.Text(
                   'MOBILE: ${company['mobile'] ?? '0655 000095'}',
-                  style: t12().copyWith(letterSpacing: 2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
                 pw.Text(
@@ -164,22 +164,22 @@ class PDFService {
                 ),
                 pw.Text(
                   'VRN: ${company['vrn'] ?? 'NOT REGISTERED'}',
-                  style: t12().copyWith(letterSpacing: 2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
                 pw.Text(
                   'SERIAL NO: ${company['serialNo'] ?? '1072114856'}',
-                  style: t12().copyWith(letterSpacing: 2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
                 pw.Text(
                   'UIM: ${company['uim'] ?? '90VFVEDEA4P4055778277123029511072114856'}',
-                  style: t12().copyWith(letterSpacing: 2.2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
                 pw.Text(
                   'TAX OFFICE: ${company['taxOffice'] ?? 'Tax Office Tabora'}',
-                  style: t12().copyWith(letterSpacing: 2),
+                  style: t12().copyWith(letterSpacing: 1.6),
                   textAlign: pw.TextAlign.center,
                 ),
 
@@ -263,9 +263,9 @@ class PDFService {
                     ),
                   ],
                 ),
-                pw.SizedBox(height: 10), // Increased from 15
-                dashedLine(),
-                pw.SizedBox(height: 10), // Increased from 15
+                // pw.SizedBox(height: 10), // Increased from 15
+                // dashedLine(),
+                // pw.SizedBox(height: 10), // Increased from 15
                 pw.Row(
                   children: [
                     pw.Text('ECR:', style: t12()),
@@ -278,9 +278,9 @@ class PDFService {
                     ),
                   ],
                 ),
-                pw.SizedBox(height: 10),
-                dashedLine(),
-                pw.SizedBox(height: 13), // Increased from 15
+                pw.SizedBox(height: 7),
+                // dashedLine(),
+                // pw.SizedBox(height: 13), // Increased from 15
                 // 1) All item descriptions first
                 ...items.map((it) {
                   final desc = (it['description'] ?? 'BRANDING').toString();
@@ -326,8 +326,8 @@ class PDFService {
 
                 pw.SizedBox(height: 4),
                 // dashed separator before totals
-                dashedLine(),
-                pw.SizedBox(height: 4),
+                //  dashedLine(),
+                //  pw.SizedBox(height: 4),
 
                 // 2) Totals: EXCL -> VAT
                 _totalLine('TOTAL EXCL OF TAX:', money(totalExclTax), t12()),
@@ -335,8 +335,8 @@ class PDFService {
                 pw.SizedBox(height: 4),
 
                 _totalLine('TOTAL TAX:', money(tax), t12()),
-                pw.SizedBox(height: 4),
-                dashedLine(),
+                // pw.SizedBox(height: 4),
+                // dashedLine(),
                 pw.SizedBox(height: 4),
 
                 // 3) All AMOUNT rows per item
@@ -359,8 +359,8 @@ class PDFService {
                     ],
                   ),
                 ),
-                pw.SizedBox(height: 4),
-                dashedLine(),
+                //  pw.SizedBox(height: 4),
+                //  dashedLine(),
                 pw.SizedBox(height: 4),
 
                 pw.Padding(
@@ -404,9 +404,9 @@ class PDFService {
                 }),
 
                 // CASH row showing total inclusive of tax
-                pw.SizedBox(height: 4),
+                // pw.SizedBox(height: 4),
                 // dashed separator before verification
-                dashedLine(),
+                // dashedLine(),
                 pw.SizedBox(height: 4), // Increased from 15
                 // Verification
                 pw.Center(
@@ -429,8 +429,8 @@ class PDFService {
                     barcode: pw.Barcode.qrCode(),
                     data:
                         'https://tra-verify-system.web.app/#/receipt/${(data['verificationCode'] ?? '56JLBU1108').toString()}',
-                    width: 85,
-                    height: 85,
+                    width: 100,
+                    height: 100,
                   ),
                 ),
 

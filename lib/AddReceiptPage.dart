@@ -8,7 +8,7 @@ import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
 import 'services/profile_service.dart';
-import 'dart:html' as html show window;
+import 'utils/url_launcher_platform.dart';
 
 class AddReceiptPage extends StatefulWidget {
   final ReceiptData? receiptData;
@@ -442,15 +442,18 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
-        title: const Text('Add New Receipt'),
+        title: const Text(
+          'New Receipt',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         foregroundColor: Colors.white,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [_brandColor, _accentColor],
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -463,285 +466,355 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           controller: _scrollController,
           child: SingleChildScrollView(
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Company Information Section
-                _buildSectionHeader('Company Information'),
+                _buildSectionHeader(
+                  'Company Information',
+                  Icons.business_rounded,
+                ),
                 _buildCard([
                   _buildTextField(
                     _companyNameController,
                     'Company Name',
-                    Icons.business,
+                    Icons.business_rounded,
                   ),
                   _buildTextField(
                     _companyAddressController,
                     'Address',
-                    Icons.location_on,
+                    Icons.location_on_rounded,
                   ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _companyMobileController,
+                          'Mobile',
+                          Icons.phone_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _companyTinController,
+                          'TIN',
+                          Icons.tag_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _companyVrnController,
+                          'VRN',
+                          Icons.verified_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _companySerialController,
+                          'Serial No',
+                          Icons.confirmation_number_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   _buildTextField(
-                    _companyMobileController,
-                    'Mobile',
-                    Icons.phone,
+                    _companyUimController,
+                    'UIM',
+                    Icons.qr_code_rounded,
                   ),
-                  _buildTextField(_companyTinController, 'TIN', Icons.numbers),
-                  _buildTextField(_companyVrnController, 'VRN', Icons.verified),
-                  _buildTextField(
-                    _companySerialController,
-                    'Serial No',
-                    Icons.confirmation_number,
-                  ),
-                  _buildTextField(_companyUimController, 'UIM', Icons.qr_code),
                   _buildTextField(
                     _companyTaxOfficeController,
                     'Tax Office',
-                    Icons.account_balance,
+                    Icons.account_balance_rounded,
+                    bottomPad: 0,
                   ),
                 ]),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Customer Information Section
-                _buildSectionHeader('Customer Information'),
+                _buildSectionHeader(
+                  'Customer Information',
+                  Icons.person_rounded,
+                ),
                 _buildCard([
                   _buildTextField(
                     _customerNameController,
                     'Customer Name',
-                    Icons.person,
+                    Icons.person_rounded,
                     required: true,
                   ),
-                  _buildTextField(
-                    _customerIdTypeController,
-                    'ID Type',
-                    Icons.credit_card,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _customerIdTypeController,
+                          'ID Type',
+                          Icons.credit_card_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _customerIdNoController,
+                          'ID Number',
+                          Icons.numbers_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildTextField(
-                    _customerIdNoController,
-                    'ID Number',
-                    Icons.numbers,
-                  ),
-                  _buildTextField(
-                    _customerMobileController,
-                    'Mobile',
-                    Icons.phone,
-                  ),
-                  _buildTextField(
-                    _customerVrnController,
-                    'VRN',
-                    Icons.confirmation_number,
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _customerMobileController,
+                          'Mobile',
+                          Icons.phone_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _customerVrnController,
+                          'VRN',
+                          Icons.confirmation_number_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 ]),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Receipt Meta Information Section
-                _buildSectionHeader('Receipt Information'),
+                _buildSectionHeader(
+                  'Receipt Information',
+                  Icons.receipt_long_rounded,
+                ),
                 _buildCard([
-                  _buildTextField(
-                    _receiptNoController,
-                    'Receipt No',
-                    Icons.receipt,
-                    readOnly: false,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _receiptNoController,
+                          'Receipt No',
+                          Icons.receipt_rounded,
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _zNumberController,
+                          'Z Number',
+                          Icons.tag_rounded,
+                          required: true,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildTextField(
-                    _zNumberController,
-                    'Z Number',
-                    Icons.tag,
-                    required: true,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: TextFormField(
-                      controller: _receiptDateController,
-                      readOnly: true,
-                      onTap: () async {
-                        // Try to parse existing controller value (expected dd-MM-yyyy)
-                        DateTime initialDate = DateTime.now();
-                        try {
-                          final parts = _receiptDateController.text.split('-');
-                          if (parts.length == 3) {
-                            final day = int.parse(parts[0]);
-                            final month = int.parse(parts[1]);
-                            final year = int.parse(parts[2]);
-                            initialDate = DateTime(year, month, day);
-                          }
-                        } catch (_) {
-                          initialDate = DateTime.now();
-                        }
-
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: initialDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-
-                        if (picked != null) {
-                          setState(() {
-                            _receiptDateController.text =
-                                '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
-                          });
-                        }
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Receipt Date',
-                        prefixIcon: Icon(
-                          Icons.calendar_today,
-                          color: Colors.grey.shade600,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(
-                              0xFF1976D2,
-                            ), // Use a consistent focus color
-                            width: 2,
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 0),
+                          child: TextFormField(
+                            controller: _receiptDateController,
+                            readOnly: true,
+                            onTap: () async {
+                              DateTime initialDate = DateTime.now();
+                              try {
+                                final parts = _receiptDateController.text.split(
+                                  '-',
+                                );
+                                if (parts.length == 3) {
+                                  initialDate = DateTime(
+                                    int.parse(parts[2]),
+                                    int.parse(parts[1]),
+                                    int.parse(parts[0]),
+                                  );
+                                }
+                              } catch (_) {}
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: initialDate,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setState(() {
+                                  _receiptDateController.text =
+                                      '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+                                });
+                              }
+                            },
+                            decoration: _fieldDecoration(
+                              'Date',
+                              Icons.calendar_today_rounded,
+                              readOnly: true,
+                            ),
                           ),
                         ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: TextFormField(
-                      controller: _receiptTimeController,
-                      readOnly: true,
-                      onTap: () async {
-                        // Parse existing controller value (expected HH:mm:ss)
-                        final now = DateTime.now();
-                        int initHour = now.hour;
-                        int initMinute = now.minute;
-                        int seconds = now.second;
-
-                        try {
-                          final parts = _receiptTimeController.text.split(':');
-                          if (parts.length >= 2) {
-                            initHour = int.parse(parts[0]);
-                            initMinute = int.parse(parts[1]);
-                            if (parts.length >= 3) {
-                              seconds = int.parse(parts[2]);
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _receiptTimeController,
+                          readOnly: true,
+                          onTap: () async {
+                            final now = DateTime.now();
+                            int initHour = now.hour,
+                                initMinute = now.minute,
+                                seconds = now.second;
+                            try {
+                              final parts = _receiptTimeController.text.split(
+                                ':',
+                              );
+                              if (parts.length >= 2) {
+                                initHour = int.parse(parts[0]);
+                                initMinute = int.parse(parts[1]);
+                                if (parts.length >= 3)
+                                  seconds = int.parse(parts[2]);
+                              }
+                            } catch (_) {}
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay(
+                                hour: initHour,
+                                minute: initMinute,
+                              ),
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                _receiptTimeController.text =
+                                    '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+                              });
                             }
-                          }
-                        } catch (_) {
-                          // ignore parsing errors and use current time
-                        }
-
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay(
-                            hour: initHour,
-                            minute: initMinute,
-                          ),
-                        );
-
-                        if (picked != null) {
-                          // Keep seconds from previous value (or current seconds)
-                          final secStr = seconds.toString().padLeft(2, '0');
-                          setState(() {
-                            _receiptTimeController.text =
-                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}:$secStr';
-                          });
-                        }
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Receipt Time',
-                        prefixIcon: Icon(
-                          Icons.access_time,
-                          color: Colors.grey.shade600,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(
-                              0xFF1976D2,
-                            ), // Use a consistent focus color
-                            width: 2,
+                          },
+                          decoration: _fieldDecoration(
+                            'Time',
+                            Icons.access_time_rounded,
+                            readOnly: true,
                           ),
                         ),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
                       ),
-                    ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
                   _buildTextField(
                     _verificationCodeController,
                     'Verification Code',
-                    Icons.verified_user,
+                    Icons.verified_user_rounded,
                     readOnly: true,
+                    bottomPad: 0,
                   ),
                 ]),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Items Section
-                _buildSectionHeader('Item Details'),
+                _buildSectionHeader('Item Details', Icons.inventory_2_rounded),
                 _buildCard([
                   _buildTextField(
                     _itemDescriptionController,
                     'Item Description',
-                    Icons.description,
+                    Icons.description_rounded,
                     required: true,
                   ),
-                  _buildTextField(
-                    _itemQtyController,
-                    'Quantity',
-                    Icons.production_quantity_limits,
-                    keyboardType: TextInputType.number,
-                  ),
-                  _buildTextField(
-                    _itemAmountController,
-                    'Amount (TZS)',
-                    Icons.attach_money,
-                    focusNode: _itemAmountFocusNode,
-                    keyboardType: TextInputType.number,
-                    required: true,
-                    onChanged: (value) => _calculateTotals(),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildTextField(
+                          _itemAmountController,
+                          'Amount (TZS)',
+                          Icons.payments_rounded,
+                          focusNode: _itemAmountFocusNode,
+                          keyboardType: TextInputType.number,
+                          required: true,
+                          onChanged: (_) => _calculateTotals(),
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          _itemQtyController,
+                          'Qty',
+                          Icons.production_quantity_limits_rounded,
+                          keyboardType: TextInputType.number,
+                          bottomPad: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 ]),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Totals Section
-                _buildSectionHeader('Totals'),
-                _buildCard([
-                  _buildTextField(
-                    _totalExclTaxController,
-                    'Total Excl Tax',
-                    Icons.calculate,
-                    readOnly: true,
+                _buildSectionHeader('Totals', Icons.calculate_rounded),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  _buildTextField(
-                    _taxController,
-                    'Tax Amount',
-                    Icons.percent,
-                    focusNode: _taxFocusNode,
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) => _calculateTotals(),
+                  child: Column(
+                    children: [
+                      _buildTotalRow(
+                        'Total Excl. Tax',
+                        _totalExclTaxController.text,
+                        isHighlighted: false,
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: _buildTextField(
+                          _taxController,
+                          'Tax Amount',
+                          Icons.percent_rounded,
+                          focusNode: _taxFocusNode,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => _calculateTotals(),
+                          bottomPad: 0,
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      _buildTotalRow(
+                        'Total Incl. Tax',
+                        _totalInclTaxController.text,
+                        isHighlighted: true,
+                      ),
+                    ],
                   ),
-                  _buildTextField(
-                    _totalInclTaxController,
-                    'Total Incl Tax',
-                    Icons.receipt_long,
-                    readOnly: true,
-                  ),
-                ]),
+                ),
 
                 const SizedBox(height: 32),
 
@@ -749,43 +822,60 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: OutlinedButton.icon(
                         onPressed: _isLoading ? null : _previewReceipt,
-                        icon: const Icon(Icons.visibility),
-                        label: const Text('Preview Receipt'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _accentColor,
-                          foregroundColor: Colors.white,
+                        icon: const Icon(Icons.visibility_rounded),
+                        label: const Text('Preview'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1A1A2E),
+                          side: const BorderSide(
+                            color: Color(0xFF1A1A2E),
+                            width: 1.5,
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
+                      flex: 2,
                       child: ElevatedButton.icon(
                         onPressed: _isLoading ? null : _saveReceiptData,
                         icon: _isLoading
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.black87,
+                                  color: Colors.white,
                                 ),
                               )
-                            : const Icon(Icons.save),
-                        label: Text(_isLoading ? 'Saving...' : 'Save Receipt'),
+                            : const Icon(Icons.save_rounded),
+                        label: Text(_isLoading ? 'Saving…' : 'Save Receipt'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _brandColor,
+                          backgroundColor: const Color(0xFF1A1A2E),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          elevation: 2,
                         ),
                       ),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -794,28 +884,122 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildTotalRow(
+    String label,
+    String value, {
+    required bool isHighlighted,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w500,
+              color: isHighlighted
+                  ? const Color(0xFF1A1A2E)
+                  : Colors.grey.shade600,
+            ),
+          ),
+          Text(
+            'TZS $value',
+            style: TextStyle(
+              fontSize: isHighlighted ? 16 : 14,
+              fontWeight: FontWeight.bold,
+              color: isHighlighted
+                  ? const Color(0xFF2E7D32)
+                  : Colors.grey.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A2E),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: const Color(0xFFFFE500), size: 16),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A2E),
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildCard(List<Widget> children) {
-    return Card(
-      elevation: 2,
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(children: children),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(
+    String label,
+    IconData icon, {
+    bool readOnly = false,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+      prefixIcon: Icon(icon, color: Colors.grey.shade500, size: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      filled: true,
+      fillColor: readOnly ? const Color(0xFFF0F0F5) : Colors.grey.shade50,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     );
   }
 
@@ -828,38 +1012,21 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     TextInputType? keyboardType,
     Function(String)? onChanged,
     FocusNode? focusNode,
+    double bottomPad = 16,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: bottomPad),
       child: TextFormField(
         controller: controller,
         focusNode: focusNode,
         readOnly: readOnly,
         keyboardType: keyboardType,
         onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.grey.shade600),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: _accentColor, // Use accent color for focus
-              width: 2,
-            ),
-          ),
-          filled: readOnly,
-          fillColor: readOnly ? Colors.grey.shade100 : null,
-        ),
+        style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A2E)),
+        decoration: _fieldDecoration(label, icon, readOnly: readOnly),
         validator: required
             ? (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter $label';
-                }
+                if (value == null || value.isEmpty) return 'Required';
                 return null;
               }
             : null,
@@ -906,98 +1073,141 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            const SizedBox(width: 12),
-            const Text('Receipt Saved!'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              savedToFirestore
-                  ? 'Receipt saved to Firebase successfully!'
-                  : 'Receipt saved locally (Firebase unavailable)',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Color(0xFF2E7D32),
+                  size: 36,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 16),
+              const Text(
+                'Receipt Saved!',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                savedToFirestore
+                    ? 'Saved to Firebase successfully.'
+                    : 'Saved locally — Firebase unavailable.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              // URL box
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F6FA),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Receipt URL',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade500,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      receiptUrl,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        color: Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Buttons
+              Row(
                 children: [
-                  const Text(
-                    'Receipt URL:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => UrlHelper.copyReceiptUrl(receiptId),
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('Copy'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1A1A2E),
+                        side: const BorderSide(color: Color(0xFF1A1A2E)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    receiptUrl,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'monospace',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        try {
+                          if (kIsWeb) {
+                            openUrlInNewTab(receiptUrl);
+                          } else {
+                            Clipboard.setData(ClipboardData(text: receiptUrl));
+                            Get.snackbar(
+                              'URL Copied',
+                              'Open in browser to view receipt.',
+                              backgroundColor: Colors.green,
+                              colorText: Colors.white,
+                              snackPosition: SnackPosition.BOTTOM,
+                              duration: const Duration(seconds: 4),
+                            );
+                          }
+                        } catch (e) {
+                          Get.snackbar(
+                            'Error',
+                            'Failed to open receipt: $e',
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                            snackPosition: SnackPosition.BOTTOM,
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                      label: const Text('View'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A1A2E),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              UrlHelper.copyReceiptUrl(receiptId);
-            },
-            icon: const Icon(Icons.copy),
-            label: const Text('Copy URL'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.of(context).pop();
-
-              // Use web-compatible approach
-              try {
-                if (kIsWeb) {
-                  // For web platform, use dart:html
-                  html.window.open(receiptUrl, '_blank');
-                } else {
-                  // For mobile platforms, just copy URL and show message
-                  Clipboard.setData(ClipboardData(text: receiptUrl));
-                  Get.snackbar(
-                    'URL Copied',
-                    'Receipt URL copied to clipboard. Open in browser to view.',
-                    backgroundColor: Colors.green,
-                    colorText: Colors.white,
-                    snackPosition: SnackPosition.BOTTOM,
-                    duration: const Duration(seconds: 4),
-                  );
-                }
-              } catch (e) {
-                Get.snackbar(
-                  'Error',
-                  'Failed to open receipt: $e',
-                  backgroundColor: Colors.red,
-                  colorText: Colors.white,
-                  snackPosition: SnackPosition.BOTTOM,
-                );
-              }
-            },
-            icon: const Icon(Icons.open_in_browser),
-            label: const Text('View Receipt'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
       ),
     );
   }

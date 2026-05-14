@@ -21,7 +21,7 @@ class QRCodeService {
       backgroundColor: backgroundColor,
       errorCorrectionLevel: QrErrorCorrectLevel.M,
       gapless: false,
-      embeddedImage: showLogo ? const AssetImage('assets/tra-logo.png') : null,
+      embeddedImage: showLogo ? const AssetImage('assets/mjas.png') : null,
       embeddedImageStyle: showLogo
           ? const QrEmbeddedImageStyle(size: Size(40, 40))
           : null,
