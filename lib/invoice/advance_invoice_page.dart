@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 import 'package:flutter/services.dart';
 
 class AdvanceInvoicePage extends StatefulWidget {
@@ -130,6 +131,10 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!BusinessAccessService.can('invoices', 'create')) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return;
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -144,7 +149,7 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
     try {
       final ref = FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(BusinessAccessService.businessId)
           .collection('invoices')
           .doc();
 

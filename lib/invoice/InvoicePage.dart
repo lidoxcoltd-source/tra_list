@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/pdf/proforma_pdf.dart';
+import 'package:tra_list/services/pdf/quotation_pdf.dart';
+import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:tra_list/services/pdf/pdf_saver.dart';
 import 'package:tra_list/services/pdf/delivery_note_pdf.dart';
 import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
 import 'package:tra_list/services/pdf/payment_details_pdf.dart';
@@ -11,6 +16,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/thousands_separator_formatter.dart';
 
 class InvoicePage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? invoice;
@@ -208,6 +215,20 @@ class _InvoicePageState extends State<InvoicePage> {
                 onPressed: _busy ? null : _chooseDocTypeAndPreview,
                 icon: const Icon(Icons.preview_outlined),
                 label: const Text('Preview'),
+              ),
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                tooltip: 'Share as image',
+                style: IconButton.styleFrom(
+                  foregroundColor: _brandColor,
+                  side: BorderSide(color: _brandColor),
+                  padding: const EdgeInsets.all(14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: _busy ? null : _chooseDocTypeAndShare,
+                icon: const Icon(Icons.share_outlined),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
@@ -516,7 +537,10 @@ class _InvoicePageState extends State<InvoicePage> {
                                 Expanded(
                                   flex: 3,
                                   child: TextFormField(
-                                    initialValue: (it['unit'] ?? 0).toString(),
+                                    initialValue:
+                                        ThousandsSeparatorFormatter.format(
+                                          (it['unit'] as num?) ?? 0,
+                                        ),
                                     decoration: const InputDecoration(
                                       labelText: 'Unit Price',
                                     ),
@@ -524,9 +548,15 @@ class _InvoicePageState extends State<InvoicePage> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
+                                    inputFormatters: const [
+                                      ThousandsSeparatorFormatter(),
+                                    ],
                                     onChanged: (v) => setState(
                                       () => it['unit'] =
-                                          double.tryParse(v) ?? 0.0,
+                                          ThousandsSeparatorFormatter.parse(
+                                            v,
+                                          ) ??
+                                          0.0,
                                     ),
                                   ),
                                 ),
@@ -658,10 +688,15 @@ class _InvoicePageState extends State<InvoicePage> {
         Get.snackbar('Sign in required', 'Please sign in to save to cloud');
         return;
       }
+      final permissionAction = widget.invoice == null ? 'create' : 'edit';
+      if (!BusinessAccessService.can('invoices', permissionAction)) {
+        Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+        return;
+      }
 
       final col = FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(BusinessAccessService.businessId)
           .collection('invoices');
 
       if (widget.invoice != null) {
@@ -724,94 +759,181 @@ class _InvoicePageState extends State<InvoicePage> {
     };
   }
 
-  Future<void> _chooseDocTypeAndSave() async {
+  static const _docKinds = <(String, String, IconData)>[
+    ('invoice', 'Invoice', Icons.receipt_long),
+    ('quotation', 'Quotation', Icons.format_quote_outlined),
+    ('proforma', 'Proforma', Icons.request_quote_outlined),
+    ('delivery', 'Delivery Note', Icons.local_shipping_outlined),
+    ('advance_payment', 'Advance Payment', Icons.payments_outlined),
+    ('reminder', 'Payment Reminder', Icons.alarm_on_outlined),
+    (
+      'payment_details',
+      'Payment Details',
+      Icons.account_balance_wallet_outlined,
+    ),
+  ];
+
+  void _chooseDocType(String title, Future<void> Function(String kind) onPick) {
     if (!_formKey.currentState!.validate()) return;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.receipt_long),
-              title: const Text('Invoice'),
-              onTap: () => _saveDoc('invoice'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.request_quote_outlined),
-              title: const Text('Proforma'),
-              onTap: () => _saveDoc('proforma'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.local_shipping_outlined),
-              title: const Text('Delivery Note'),
-              onTap: () => _saveDoc('delivery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.alarm_on_outlined),
-              title: const Text('Payment Reminder'),
-              onTap: () => _saveDoc('reminder'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: const Text('Payment Details'),
-              onTap: () => _saveDoc('payment_details'),
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              for (final k in _docKinds)
+                ListTile(
+                  leading: Icon(k.$3),
+                  title: Text(k.$2),
+                  onTap: () => onPick(k.$1),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _chooseDocTypeAndPreview() async {
-    if (!_formKey.currentState!.validate()) return;
-    showModalBottomSheet(
+  Future<void> _chooseDocTypeAndSave() =>
+      Future.sync(() => _chooseDocType('Generate PDF', _saveDoc));
+
+  Future<void> _chooseDocTypeAndPreview() =>
+      Future.sync(() => _chooseDocType('Preview', _previewDoc));
+
+  Future<void> _chooseDocTypeAndShare() =>
+      Future.sync(() => _chooseDocType('Share as image', _shareDoc));
+
+  // Asks for the advance amount and adds it to the data. Returns false if cancelled.
+  Future<bool> _applyAdvance(String kind, Map<String, dynamic> data) async {
+    if (kind != 'advance_payment') return true;
+    final total = (data['total'] as num?)?.toDouble() ?? 0;
+    final c = TextEditingController();
+    final value = await showDialog<double>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.receipt_long),
-              title: const Text('Invoice'),
-              onTap: () => _previewDoc('invoice'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.request_quote_outlined),
-              title: const Text('Proforma'),
-              onTap: () => _previewDoc('proforma'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.local_shipping_outlined),
-              title: const Text('Delivery Note'),
-              onTap: () => _previewDoc('delivery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.alarm_on_outlined),
-              title: const Text('Payment Reminder'),
-              onTap: () => _previewDoc('reminder'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: const Text('Payment Details'),
-              onTap: () => _previewDoc('payment_details'),
-            ),
-          ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Advance payment'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [ThousandsSeparatorFormatter()],
+          decoration: InputDecoration(
+            labelText: 'Advance paid',
+            helperText: 'Total: ${ThousandsSeparatorFormatter.format(total)}',
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(ctx, ThousandsSeparatorFormatter.parse(c.text)),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
+    c.dispose();
+    if (value == null) return false;
+    data['subtotal'] = total;
+    data['tax'] = 0.0;
+    data['advancePaid'] = value;
+    data['balance'] = total - value;
+    return true;
+  }
+
+  Future<Uint8List> _bytesFor(String kind, Map<String, dynamic> data) {
+    switch (kind) {
+      case 'quotation':
+        return QuotationPdf.generateBytes(data);
+      case 'proforma':
+        return ProformaPdf.generateBytes(data);
+      case 'delivery':
+        return DeliveryNotePdf.generateBytes(data);
+      case 'advance_payment':
+        return AdvancePaymentPdf.generateBytes(data);
+      case 'reminder':
+        return PaymentReminderPdf.generateBytes(data);
+      case 'payment_details':
+        return PaymentDetailsPdf.generateBytes(data);
+      default:
+        return InvoicePdf.generateBytes(data);
+    }
+  }
+
+  Future<void> _shareDoc(String kind) async {
+    Navigator.pop(context);
+    final data = _buildData();
+    if (!await _applyAdvance(kind, data)) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await _bytesFor(kind, data);
+      final invNo = _invoiceNoController.text.trim();
+      final base = '${kind}_${invNo.isEmpty ? 'document' : invNo}';
+      final files = <XFile>[];
+      final names = <String>[];
+      var i = 0;
+      await for (final page in Printing.raster(bytes, dpi: 144)) {
+        i++;
+        final png = await page.toPng();
+        names.add('${base}_$i.png');
+        if (kIsWeb) {
+          // Browsers rarely support file sharing, so download the images.
+          await downloadBytes(png, names.last, 'image/png');
+        } else {
+          files.add(XFile.fromData(png, mimeType: 'image/png'));
+        }
+      }
+      if (kIsWeb) {
+        Get.snackbar(
+          'Image downloaded',
+          '${names.length} file(s): ${names.join(', ')}',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+      await SharePlus.instance.share(
+        ShareParams(files: files, fileNameOverrides: names, subject: base),
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to share image: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _previewDoc(String kind) async {
     Navigator.pop(context);
+    final data = _buildData();
+    if (!await _applyAdvance(kind, data)) return;
     setState(() => _busy = true);
     try {
-      final data = _buildData();
-
       await ({
         'invoice': () => InvoicePdf.generate(data),
+        'quotation': () => QuotationPdf.generate(data),
         'proforma': () => ProformaPdf.generate(data),
         'delivery': () => DeliveryNotePdf.generate(data),
+        'advance_payment': () => AdvancePaymentPdf.generate(data),
         'reminder': () => PaymentReminderPdf.generate(data),
         'payment_details': () => PaymentDetailsPdf.generate(data),
       }[kind]!).call();
@@ -830,10 +952,10 @@ class _InvoicePageState extends State<InvoicePage> {
 
   Future<void> _saveDoc(String kind) async {
     Navigator.pop(context);
+    final data = _buildData();
+    if (!await _applyAdvance(kind, data)) return;
     setState(() => _busy = true);
     try {
-      final data = _buildData();
-
       // Save a record to Firestore before generating the PDF
       await _trySaveToFirestore(data, kind);
 
@@ -841,19 +963,19 @@ class _InvoicePageState extends State<InvoicePage> {
           ? DateTime.now().millisecondsSinceEpoch.toString()
           : _invoiceNoController.text.trim();
 
-      final fileNameBase = kind == 'invoice'
-          ? 'invoice_$invNo'
-          : kind == 'proforma'
-          ? 'proforma_$invNo'
-          : kind == 'delivery'
-          ? 'delivery_note_$invNo'
-          : kind == 'reminder'
-          ? 'payment_reminder_$invNo'
-          : 'payment_details_$invNo';
+      final fileNameBase = switch (kind) {
+        'delivery' => 'delivery_note_$invNo',
+        'reminder' => 'payment_reminder_$invNo',
+        _ => '${kind}_$invNo',
+      };
       final fileName = '$fileNameBase.pdf';
 
       final pathOrName = await ({
         'invoice': () => InvoicePdf.generateAndSave(data, fileName: fileName),
+        'quotation': () =>
+            QuotationPdf.generateAndSave(data, fileName: fileName),
+        'advance_payment': () =>
+            AdvancePaymentPdf.generateAndSave(data, fileName: fileName),
         'proforma': () => ProformaPdf.generateAndSave(data, fileName: fileName),
         'delivery': () =>
             DeliveryNotePdf.generateAndSave(data, fileName: fileName),

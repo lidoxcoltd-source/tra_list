@@ -6,7 +6,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
+import 'category_service.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
 import 'package:tra_list/invoice/transaction_excel_export.dart';
@@ -22,9 +24,17 @@ class AnalyticsPage extends StatefulWidget {
 
 class _AnalyticsPageState extends State<AnalyticsPage>
     with TickerProviderStateMixin {
+  static const int _analyticsPageSize = 500;
+
   List<TransactionModel> _transactions = [];
+  List<String> _availableShopNames = [];
+  List<String> _availableCategories = [];
+  String _selectedShopNickname = '';
+  String _selectedCategory = '';
   bool _isLoading = true;
+  bool _comparisonAvailable = false;
   String _selectedPeriod = 'transactions_today'.tr;
+  String _selectedPeriodKey = 'today';
   TransactionType? _typeFilter; // New: Filter for income/expense
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
@@ -42,11 +52,17 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   Map<String, double> _categoryData = {};
   Map<String, int> _transactionFrequency = {};
   List<TimeData> _timeSeriesData = [];
-  double _averageTransaction = 0;
   double _totalIncome = 0;
   double _totalExpense = 0;
   double _netFlow = 0;
   int _transactionCount = 0;
+  double _previousIncome = 0;
+  double _previousExpense = 0;
+  double _previousNetFlow = 0;
+  double _previousAllIncome = 0;
+  double _previousAllExpense = 0;
+  final Map<String, _ShopAnalyticsTotals> _shopTotals = {};
+  int _analyticsRequest = 0;
 
   bool _isPdfBusy = false;
   bool _isExcelBusy = false;
@@ -65,7 +81,11 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     );
 
     _initializeDates();
+    if (!BusinessAccessService.isOwner.value) {
+      _selectedShopNickname = BusinessAccessService.shopNickname.value.trim();
+    }
     _loadProfileColors();
+    _loadAnalyticsFilters();
     _loadAnalyticsData();
   }
 
@@ -92,27 +112,46 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Future<void> _loadAnalyticsData() async {
-    setState(() => _isLoading = true);
+    final request = ++_analyticsRequest;
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _comparisonAvailable = false;
+    });
 
     try {
-      final snapshot =
-          await TransactionService.getTransactions(
-            startDate: _startDate,
-            endDate: _endDate,
-            limit: 1000,
-          ).timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw TimeoutException('Data load timed out');
-            },
-          );
-
-      _transactions = snapshot.docs.map((doc) => doc.data()).toList();
+      final transactions = <TransactionModel>[];
+      DocumentSnapshot<TransactionModel>? cursor;
+      while (true) {
+        final snapshot =
+            await TransactionService.getTransactions(
+              startDate: _startDate,
+              endDate: _endDate,
+              limit: _analyticsPageSize,
+              startAfter: cursor,
+              shopNickname: _selectedShopNickname,
+              category: _selectedCategory,
+            ).timeout(
+              const Duration(seconds: 30),
+              onTimeout: () {
+                throw TimeoutException('Data load timed out');
+              },
+            );
+        transactions.addAll(snapshot.docs.map((doc) => doc.data()));
+        if (snapshot.docs.length < _analyticsPageSize) break;
+        cursor = snapshot.docs.last;
+      }
+      if (!mounted || request != _analyticsRequest) return;
+      _transactions = transactions;
+      _addTransactionShopsToOptions();
+      _addTransactionCategoriesToOptions();
       _processAnalyticsData();
+      await _loadPreviousPeriodTotals(request);
 
       _cardAnimController.forward();
       _chartAnimController.forward();
     } catch (e) {
+      if (!mounted || request != _analyticsRequest) return;
       Get.snackbar(
         'Error',
         (e is TimeoutException
@@ -122,37 +161,182 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && request == _analyticsRequest) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _processAnalyticsData() {
-    if (_transactions.isEmpty) return;
+  Future<void> _loadAnalyticsFilters() async {
+    if (BusinessAccessService.isOwner.value) {
+      try {
+        final profile = await ProfileService.loadOrCreate();
+        var ownerShopName = profile['shopNickname']?.toString().trim() ?? '';
+        if (ownerShopName.isEmpty) {
+          ownerShopName = profile['name']?.toString().trim() ?? '';
+        }
+        final shopNames = <String>{if (ownerShopName.isNotEmpty) ownerShopName};
+        final memberships = await FirebaseFirestore.instance
+            .collection('employeeMemberships')
+            .where('businessUid', isEqualTo: BusinessAccessService.businessId)
+            .get();
+        for (final membership in memberships.docs) {
+          final data = membership.data();
+          final nickname = data['shopNickname']?.toString().trim() ?? '';
+          if (nickname.isNotEmpty) shopNames.add(nickname);
+        }
+        if (mounted) {
+          setState(() {
+            _availableShopNames = shopNames.toList()..sort();
+          });
+        }
+      } catch (error, stackTrace) {
+        debugPrint('Failed to load analytics shop filters: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        if (mounted) {
+          Get.snackbar('error'.tr, 'transactions_shops_load_error'.tr);
+        }
+      }
+    }
 
+    try {
+      final snapshot = await CategoryService.getCategoriesFromServer();
+      if (mounted) {
+        setState(() {
+          _availableCategories =
+              snapshot.docs
+                  .map((doc) => doc.data().name.trim())
+                  .where((name) => name.isNotEmpty)
+                  .toSet()
+                  .toList()
+                ..sort();
+        });
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load analytics category filters: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar('error'.tr, 'transactions_categories_load_error'.tr);
+      }
+    }
+  }
+
+  void _addTransactionShopsToOptions() {
+    if (!BusinessAccessService.isOwner.value) return;
+    final names = _availableShopNames.toSet();
+    names.addAll(
+      _transactions
+          .map((transaction) => transaction.shopNickname.trim())
+          .where((name) => name.isNotEmpty),
+    );
+    _availableShopNames = names.toList()..sort();
+  }
+
+  void _addTransactionCategoriesToOptions() {
+    final names = _availableCategories.toSet();
+    names.addAll(
+      _transactions
+          .map((transaction) => transaction.category.trim())
+          .where((name) => name.isNotEmpty),
+    );
+    _availableCategories = names.toList()..sort();
+  }
+
+  Future<void> _loadPreviousPeriodTotals(int request) async {
+    final (previousStart, previousEnd) = _previousPeriodRange();
+    if (!previousStart.isBefore(previousEnd)) return;
+
+    try {
+      final previousTotals = await TransactionService.getTotals(
+        startDate: previousStart,
+        endDate: previousEnd,
+        shopNickname: _selectedShopNickname,
+        category: _selectedCategory,
+      ).timeout(const Duration(seconds: 30));
+      if (!mounted || request != _analyticsRequest) return;
+
+      final income = previousTotals['income'] ?? 0;
+      final expense = previousTotals['expense'] ?? 0;
+      setState(() {
+        _previousAllIncome = income;
+        _previousAllExpense = expense;
+        _applyTypeFilterToPreviousTotals();
+        _comparisonAvailable = true;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load analytics period comparison: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted && request == _analyticsRequest) {
+        _comparisonAvailable = false;
+        Get.snackbar('error'.tr, 'analytics_comparison_load_error'.tr);
+      }
+    }
+  }
+
+  (DateTime, DateTime) _previousPeriodRange() {
+    switch (_selectedPeriodKey) {
+      case 'Yesterday':
+      case 'transactions_today':
+        final previousDay = _startDate.subtract(const Duration(days: 1));
+        return (previousDay, _startDate);
+      case 'transactions_this_week':
+        final previousWeek = _startDate.subtract(const Duration(days: 7));
+        return (previousWeek, _startDate);
+      case 'transactions_this_month':
+        final previousMonth = DateTime(_startDate.year, _startDate.month - 1);
+        return (previousMonth, _startDate);
+      case 'analytics_last_3_months':
+        final previousQuarter = DateTime(_startDate.year, _startDate.month - 3);
+        return (previousQuarter, _startDate);
+      case 'analytics_this_year':
+        final previousYear = DateTime(_startDate.year - 1, 1);
+        return (previousYear, _startDate);
+      case 'transactions_custom_range':
+        final periodLength = _endDate.difference(_startDate);
+        return (_startDate.subtract(periodLength), _startDate);
+      default:
+        final previousDay = _startDate.subtract(const Duration(days: 1));
+        return (previousDay, _startDate);
+    }
+  }
+
+  void _applyTypeFilterToPreviousTotals() {
+    _previousIncome = _typeFilter == TransactionType.expense
+        ? 0
+        : _previousAllIncome;
+    _previousExpense = _typeFilter == TransactionType.income
+        ? 0
+        : _previousAllExpense;
+    _previousNetFlow = _previousIncome - _previousExpense;
+  }
+
+  void _processAnalyticsData() {
     _categoryChartData.clear();
     _categoryData.clear();
     _transactionFrequency.clear();
     _timeSeriesData.clear();
+    _shopTotals.clear();
 
     _totalIncome = 0;
     _totalExpense = 0;
-    _transactionCount = _transactions.length;
+    _transactionCount = 0;
+    _netFlow = 0;
 
-    // Removed unused monthlyMap (MonthlyData was not defined)
     final timeSeriesMap = <String, TimeData>{};
-    double totalAmount = 0;
 
     final filteredTransactions = _transactions.where((t) {
       if (_typeFilter == null) return true;
       return t.type == _typeFilter;
     }).toList();
 
+    var validTransactionCount = 0;
     for (final transaction in filteredTransactions) {
-      if (transaction.amount < 0 ||
-          transaction.date == null ||
-          transaction.category == null) {
+      if (transaction.amount < 0 || transaction.category.trim().isEmpty) {
         continue; // Skip invalid transactions
       }
+      validTransactionCount++;
 
       if (transaction.type == TransactionType.income) {
         _totalIncome += transaction.amount;
@@ -160,7 +344,18 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         _totalExpense += transaction.amount;
       }
 
-      totalAmount += transaction.amount;
+      final shopName = transaction.shopNickname.trim().isEmpty
+          ? 'transactions_shop_not_recorded'.tr
+          : transaction.shopNickname.trim();
+      final shopTotal = _shopTotals.putIfAbsent(
+        shopName,
+        _ShopAnalyticsTotals.new,
+      );
+      if (transaction.type == TransactionType.income) {
+        shopTotal.income += transaction.amount;
+      } else {
+        shopTotal.expense += transaction.amount;
+      }
 
       _categoryData[transaction.category] =
           (_categoryData[transaction.category] ?? 0) + transaction.amount;
@@ -214,17 +409,14 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           (_transactionFrequency[dayName] ?? 0) + 1;
     }
 
+    _transactionCount = validTransactionCount;
     _netFlow = _totalIncome - _totalExpense;
-    _averageTransaction = _transactionCount > 0
-        ? totalAmount / _transactionCount
-        : 0;
 
     _timeSeriesData = timeSeriesMap.values.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
     _categoryChartData = _categoryData.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    _transactionCount = filteredTransactions.length;
   }
 
   @override
@@ -321,8 +513,19 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildAnalyticsFilters(),
+                    const SizedBox(height: 20),
                     _buildOverviewCards(),
                     const SizedBox(height: 24),
+                    if (_comparisonAvailable) ...[
+                      _buildPeriodComparison(),
+                      const SizedBox(height: 24),
+                    ],
+                    if (BusinessAccessService.isOwner.value &&
+                        _selectedShopNickname.isEmpty) ...[
+                      _buildShopComparison(),
+                      const SizedBox(height: 24),
+                    ],
                     _buildCashFlowChart(),
                     const SizedBox(height: 24),
                     _buildCategoryPieChart(),
@@ -365,9 +568,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         selected: {_typeFilter},
         onSelectionChanged: (newSelection) {
           setState(() {
-            // No tr needed for logic
             _typeFilter = newSelection.first;
-            _processAnalyticsData(); // Re-process with the new filter
+            _applyTypeFilterToPreviousTotals();
+            _processAnalyticsData();
           });
         },
         style: SegmentedButton.styleFrom(
@@ -376,6 +579,336 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           selectedForegroundColor: _brandColor,
           selectedBackgroundColor: Colors.white,
         ),
+      ),
+    );
+  }
+
+  Widget _buildAnalyticsFilters() {
+    final shopValue =
+        _selectedShopNickname.isNotEmpty &&
+            _availableShopNames.contains(_selectedShopNickname)
+        ? _selectedShopNickname
+        : '';
+    final categoryValue =
+        _selectedCategory.isNotEmpty &&
+            _availableCategories.contains(_selectedCategory)
+        ? _selectedCategory
+        : '';
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'analytics_filters'.tr,
+              style: TextStyle(
+                color: Colors.grey[800],
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final categoryFilter = DropdownButtonFormField<String>(
+                  initialValue: categoryValue,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'transactions_filter_category'.tr,
+                    prefixIcon: const Icon(Icons.category_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: '',
+                      child: Text('transactions_all_categories'.tr),
+                    ),
+                    for (final category in _availableCategories)
+                      DropdownMenuItem(
+                        value: category,
+                        child: Text(category, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (category) {
+                    if (category == null || category == _selectedCategory) {
+                      return;
+                    }
+                    setState(() => _selectedCategory = category);
+                    _loadAnalyticsData();
+                  },
+                );
+                if (!BusinessAccessService.isOwner.value) {
+                  return categoryFilter;
+                }
+
+                final shopFilter = DropdownButtonFormField<String>(
+                  initialValue: shopValue,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'transactions_filter_shop'.tr,
+                    prefixIcon: const Icon(Icons.storefront_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: '',
+                      child: Text('transactions_all_shops'.tr),
+                    ),
+                    for (final shop in _availableShopNames)
+                      DropdownMenuItem(
+                        value: shop,
+                        child: Text(shop, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (shop) {
+                    if (shop == null || shop == _selectedShopNickname) return;
+                    setState(() => _selectedShopNickname = shop);
+                    _loadAnalyticsData();
+                  },
+                );
+                if (constraints.maxWidth < 520) {
+                  return Column(
+                    children: [
+                      shopFilter,
+                      const SizedBox(height: 12),
+                      categoryFilter,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: shopFilter),
+                    const SizedBox(width: 12),
+                    Expanded(child: categoryFilter),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPeriodComparison() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'analytics_period_comparison'.tr,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$_selectedPeriod · ${'analytics_previous_period'.tr}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          _buildComparisonRow(
+            'analytics_total_income'.tr,
+            _totalIncome,
+            _previousIncome,
+            Colors.green,
+          ),
+          const Divider(height: 20),
+          _buildComparisonRow(
+            'analytics_total_expense'.tr,
+            _totalExpense,
+            _previousExpense,
+            Colors.red,
+          ),
+          const Divider(height: 20),
+          _buildComparisonRow(
+            'net'.tr,
+            _netFlow,
+            _previousNetFlow,
+            _brandColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComparisonRow(
+    String label,
+    double current,
+    double previous,
+    Color color,
+  ) {
+    final change = current - previous;
+    final percentage = previous == 0
+        ? (current == 0 ? '0%' : 'analytics_new'.tr)
+        : '${change > 0 ? '+' : ''}${(change / previous.abs() * 100).toStringAsFixed(1)}%';
+    final isExpense = label == 'analytics_total_expense'.tr;
+    final changeColor = isExpense
+        ? (change <= 0 ? Colors.green : Colors.red)
+        : (change >= 0 ? Colors.green : Colors.red);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'TSH ${_formatMoney(current)}',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${'analytics_previous_short'.tr}: ${_formatMoney(previous)}  ·  $percentage',
+              style: TextStyle(
+                color: change == 0 ? Colors.grey : changeColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShopComparison() {
+    final isExpenseComparison = _typeFilter == TransactionType.expense;
+    final shops = _shopTotals.entries.toList()
+      ..sort(
+        (a, b) => (isExpenseComparison ? b.value.expense : b.value.income)
+            .compareTo(isExpenseComparison ? a.value.expense : a.value.income),
+      );
+    if (shops.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'analytics_shop_comparison'.tr,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final entry in shops.take(5)) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${'net'.tr}: ${_formatMoney(entry.value.income - entry.value.expense)}',
+                        style: TextStyle(
+                          color: entry.value.income >= entry.value.expense
+                              ? Colors.green
+                              : Colors.red,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${'income'.tr}: ${_formatMoney(entry.value.income)}',
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${'expense'.tr}: ${_formatMoney(entry.value.expense)}',
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (entry != shops.take(5).last) const Divider(height: 1),
+          ],
+        ],
       ),
     );
   }
@@ -939,6 +1472,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         chartData = _timeSeriesData.map((data) {
           // Sum income and expense transactions for total frequency. // No tr needed for logic
           final totalTransactions = _transactions.where((t) {
+            if (_typeFilter != null && t.type != _typeFilter) return false;
             final String timeKey;
             switch (_chartGranularity) {
               case ChartGranularity.week:
@@ -1263,13 +1797,21 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     }
     // No tr needed for logic
     // 2. Spending Habit Analysis
-    final expenseCategories = _categoryData.entries
-        .where(
-          (entry) => _transactions.any(
-            (t) => t.category == entry.key && t.type == TransactionType.expense,
-          ),
-        )
-        .toList();
+    final expenseCategoryTotals = <String, double>{};
+    for (final transaction in _transactions) {
+      if (_typeFilter == TransactionType.income ||
+          transaction.type != TransactionType.expense ||
+          transaction.amount < 0 ||
+          transaction.category.trim().isEmpty) {
+        continue;
+      }
+      expenseCategoryTotals.update(
+        transaction.category,
+        (amount) => amount + transaction.amount,
+        ifAbsent: () => transaction.amount,
+      );
+    }
+    final expenseCategories = expenseCategoryTotals.entries.toList();
 
     if (expenseCategories.isNotEmpty) {
       expenseCategories.sort((a, b) => b.value.compareTo(a.value));
@@ -1319,19 +1861,20 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     }
 
     // 4. Average Transaction Value // No tr needed for logic
-    if (_averageTransaction > 0) {
+    final expenseTransactions = _transactions
+        .where(
+          (transaction) =>
+              transaction.type == TransactionType.expense &&
+              transaction.amount >= 0,
+        )
+        .toList();
+    if (_typeFilter != TransactionType.income &&
+        expenseTransactions.isNotEmpty) {
       final avgExpense =
-          _transactions
-              .where((t) => t.type == TransactionType.expense)
-              .isNotEmpty
-          ? _transactions
-                    .where((t) => t.type == TransactionType.expense)
-                    .map((t) => t.amount)
-                    .reduce((a, b) => a + b) /
-                _transactions
-                    .where((t) => t.type == TransactionType.expense)
-                    .length
-          : 0.0;
+          expenseTransactions
+              .map((transaction) => transaction.amount)
+              .reduce((first, second) => first + second) /
+          expenseTransactions.length;
 
       insights.add(
         InsightData(
@@ -1402,6 +1945,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   void _changePeriod(String period) async {
+    final previousSelectedPeriod = _selectedPeriod;
     setState(() => _selectedPeriod = period);
 
     final now = DateTime.now();
@@ -1458,17 +2002,23 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           _selectedPeriod =
               '${DateFormat.yMd().format(_startDate)} - ${DateFormat.yMd().format(range.end)}';
         } else {
+          setState(() => _selectedPeriod = previousSelectedPeriod);
           return;
         }
         break;
     }
 
+    _selectedPeriodKey = period;
     _loadAnalyticsData();
   }
 
   Future<void> _exportPdf() async {
     setState(() => _isPdfBusy = true);
     try {
+      final activeFilters = [
+        if (_selectedShopNickname.isNotEmpty) _selectedShopNickname,
+        if (_selectedCategory.isNotEmpty) _selectedCategory,
+      ];
       final pathOrName = await TransactionReportPdf.generateAndSave(
         transactions: _transactions.where((t) {
           if (_typeFilter == null) return true; // No tr needed for logic
@@ -1477,7 +2027,8 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         totalIncome: _totalIncome,
         totalExpense: _totalExpense,
         netProfit: _netFlow,
-        filterTitle: '${'analytics_report_title'.tr}: $_selectedPeriod',
+        filterTitle:
+            '${'analytics_report_title'.tr}: $_selectedPeriod${activeFilters.isEmpty ? '' : ' · ${activeFilters.join(' · ')}'}',
       );
       Get.snackbar(
         'PDF saved'.tr, // No tr needed for variable
@@ -1635,6 +2186,11 @@ class TimeData {
     required this.expense,
     required this.date,
   });
+}
+
+class _ShopAnalyticsTotals {
+  double income = 0;
+  double expense = 0;
 }
 
 class InsightData {

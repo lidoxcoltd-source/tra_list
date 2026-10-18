@@ -8,6 +8,7 @@ import 'ReceiptPage.dart';
 import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
 import 'services/profile_service.dart';
+import 'services/business_access_service.dart';
 import 'utils/url_launcher_platform.dart';
 
 class AddReceiptPage extends StatefulWidget {
@@ -235,11 +236,16 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
   Future<void> _saveReceiptData() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!BusinessAccessService.can('receipts', 'create')) {
+      Get.snackbar('Error'.tr, 'staff_no_permission'.tr);
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
       final receiptData = {
+        'businessUid': BusinessAccessService.businessId,
         'company': {
           'name': _companyNameController.text,
           'addressLine': _companyAddressController.text,
@@ -291,15 +297,6 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
       try {
         print('Attempting to save to Firestore...');
 
-        // Test Firestore connection first
-        await FirebaseFirestore.instance
-            .collection('receipts')
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 5));
-
-        print('Firestore connection test successful');
-
         // Create separate data for Firestore with serverTimestamp
         final firestoreData = Map<String, dynamic>.from(receiptData);
         firestoreData['createdAt'] = FieldValue.serverTimestamp();
@@ -314,6 +311,10 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
         savedToFirestore = true;
       } catch (firestoreError) {
         print('Firestore error: $firestoreError');
+        if (firestoreError is FirebaseException &&
+            firestoreError.code == 'permission-denied') {
+          rethrow;
+        }
 
         // If Firestore fails, save to local storage using original receiptData
         // (which still has the ISO string timestamp)

@@ -4,6 +4,7 @@ import 'package:tra_list/invoice/transaction_model.dart';
 import 'package:tra_list/invoice/category_model.dart';
 import 'package:tra_list/invoice/transaction_service.dart';
 import 'package:tra_list/invoice/category_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 /// A result object for the sync operation.
 class SyncResult {
@@ -23,6 +24,10 @@ class OfflineService {
   static const String _pendingCategoriesKey = 'pending_categories';
   static const String _cachedCategoriesKey = 'cached_categories';
   static const String _pendingDeletionsKey = 'pending_deletions';
+
+  static String _categoriesKey(String key) {
+    return '$key.${BusinessAccessService.businessId}';
+  }
 
   // Save transaction offline
   static Future<void> saveTransactionOffline(
@@ -72,7 +77,7 @@ class OfflineService {
 
     await _writeJsonList(
       prefs,
-      _pendingCategoriesKey,
+      _categoriesKey(_pendingCategoriesKey),
       pendingCategories.map((c) => c.toJson()).toList(),
     );
   }
@@ -88,7 +93,7 @@ class OfflineService {
   // Get pending categories
   static Future<List<CategoryModel>> getPendingCategories() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_pendingCategoriesKey);
+    final jsonString = prefs.getString(_categoriesKey(_pendingCategoriesKey));
     return _decodeJsonList(jsonString, CategoryModel.fromJson);
   }
 
@@ -97,7 +102,7 @@ class OfflineService {
     final prefs = await SharedPreferences.getInstance();
     await _writeJsonList(
       prefs,
-      _cachedCategoriesKey,
+      _categoriesKey(_cachedCategoriesKey),
       categories.map((c) => c.toJson()).toList(),
     );
   }
@@ -105,7 +110,7 @@ class OfflineService {
   // Get cached categories
   static Future<List<CategoryModel>> getCachedCategories() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_cachedCategoriesKey);
+    final jsonString = prefs.getString(_categoriesKey(_cachedCategoriesKey));
     return _decodeJsonList(jsonString, CategoryModel.fromJson);
   }
 
@@ -198,7 +203,7 @@ class OfflineService {
           .toList();
       await _writeJsonList(
         prefs,
-        _pendingCategoriesKey,
+        _categoriesKey(_pendingCategoriesKey),
         remaining.map((c) => c.toJson()).toList(),
       );
     }
@@ -233,7 +238,7 @@ class OfflineService {
   static Future<void> clearPendingData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_pendingTransactionsKey);
-    await prefs.remove(_pendingCategoriesKey);
+    await prefs.remove(_categoriesKey(_pendingCategoriesKey));
     await prefs.remove(_pendingDeletionsKey);
   }
 

@@ -1,15 +1,37 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'transaction_model.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 class TransactionService {
   static final _auth = FirebaseAuth.instance;
   static final _db = FirebaseFirestore.instance;
 
   static String _uidOrThrow() {
-    final u = _auth.currentUser;
-    if (u == null) throw StateError('Not signed in');
-    return u.uid;
+    if (_auth.currentUser == null) throw StateError('Not signed in');
+    return BusinessAccessService.businessId;
+  }
+
+  static String? _shopFilter(String? requestedShopNickname) {
+    if (BusinessAccessService.isOwner.value) return requestedShopNickname;
+
+    final assignedShop = BusinessAccessService.shopNickname.value.trim();
+    if (assignedShop.isEmpty) {
+      throw StateError('Staff account is not assigned to a shop.');
+    }
+    return assignedShop;
+  }
+
+  static void _requireAssignedShop(TransactionModel transaction) {
+    if (BusinessAccessService.isOwner.value) return;
+
+    final assignedShop = BusinessAccessService.shopNickname.value.trim();
+    if (assignedShop.isEmpty ||
+        transaction.shopNickname.trim() != assignedShop) {
+      throw StateError(
+        'Staff can only save transactions for their assigned shop.',
+      );
+    }
   }
 
   static CollectionReference<TransactionModel> getCollectionRef() {
@@ -25,6 +47,10 @@ class TransactionService {
   }
 
   static Future<void> saveTransaction(TransactionModel transaction) async {
+    if (!BusinessAccessService.can('transactions', 'create')) {
+      throw StateError('You do not have permission to add transactions.');
+    }
+    _requireAssignedShop(transaction);
     await getCollectionRef().add(transaction);
   }
 
@@ -32,10 +58,17 @@ class TransactionService {
     String id,
     TransactionModel transaction,
   ) async {
+    if (!BusinessAccessService.can('transactions', 'edit')) {
+      throw StateError('You do not have permission to edit transactions.');
+    }
+    _requireAssignedShop(transaction);
     await getCollectionRef().doc(id).set(transaction);
   }
 
   static Future<void> deleteTransaction(String id) async {
+    if (!BusinessAccessService.can('transactions', 'delete')) {
+      throw StateError('You do not have permission to delete transactions.');
+    }
     await getCollectionRef().doc(id).delete();
   }
 
@@ -44,7 +77,10 @@ class TransactionService {
     DocumentSnapshot? startAfter,
     DateTime? startDate,
     DateTime? endDate,
+    String? shopNickname,
+    String? category,
   }) {
+    final effectiveShopNickname = _shopFilter(shopNickname);
     Query<TransactionModel> query = getCollectionRef().orderBy(
       'date',
       descending: true,
@@ -56,6 +92,12 @@ class TransactionService {
     if (endDate != null) {
       query = query.where('date', isLessThan: endDate);
     }
+    if (effectiveShopNickname != null && effectiveShopNickname.isNotEmpty) {
+      query = query.where('shopNickname', isEqualTo: effectiveShopNickname);
+    }
+    if (category != null && category.isNotEmpty) {
+      query = query.where('category', isEqualTo: category);
+    }
     if (startAfter != null) query = query.startAfterDocument(startAfter);
     return query.limit(limit).get();
   }
@@ -63,8 +105,10 @@ class TransactionService {
   static Future<Map<String, double>> getTotals({
     DateTime? startDate,
     DateTime? endDate,
+    String? shopNickname,
+    String? category,
   }) async {
-    final uid = _uidOrThrow();
+    final effectiveShopNickname = _shopFilter(shopNickname);
     Query<TransactionModel> query = getCollectionRef();
 
     // Apply date filters if they exist
@@ -73,6 +117,12 @@ class TransactionService {
     }
     if (endDate != null) {
       query = query.where('date', isLessThan: endDate);
+    }
+    if (effectiveShopNickname != null && effectiveShopNickname.isNotEmpty) {
+      query = query.where('shopNickname', isEqualTo: effectiveShopNickname);
+    }
+    if (category != null && category.isNotEmpty) {
+      query = query.where('category', isEqualTo: category);
     }
 
     // Run two separate aggregation queries (one for income, one for expense)

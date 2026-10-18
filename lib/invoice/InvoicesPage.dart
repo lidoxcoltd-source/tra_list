@@ -9,10 +9,13 @@ import 'package:tra_list/services/pdf/payment_reminder_pdf.dart';
 import 'package:tra_list/services/pdf/proforma_pdf.dart';
 import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
 import 'package:tra_list/services/pdf/quotation_pdf.dart';
+import 'package:tra_list/services/pages/document_design_page.dart';
+import 'package:tra_list/services/pages/document_terms_page.dart';
 
 import 'InvoicePage.dart' as invoice_page;
 import 'advance_invoice_page.dart';
 import 'quotation_page.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -148,32 +151,47 @@ class _InvoicesPageState extends State<InvoicesPage> {
       );
     }
 
-    final stream = FirebaseFirestore.instance
+    Query<Map<String, dynamic>> documentsQuery = FirebaseFirestore.instance
         .collection('users')
-        .doc(user.uid)
-        .collection('invoices')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+        .doc(BusinessAccessService.businessId)
+        .collection('invoices');
+    final canViewInvoices = BusinessAccessService.can('invoices', 'view');
+    final canViewQuotations = BusinessAccessService.can('quotations', 'view');
+    if (canViewInvoices && !canViewQuotations) {
+      documentsQuery = documentsQuery.where('kind', isNotEqualTo: 'quotation');
+    } else if (!canViewInvoices && canViewQuotations) {
+      documentsQuery = documentsQuery.where('kind', isEqualTo: 'quotation');
+    }
+    final stream = documentsQuery.snapshots();
 
     return Scaffold(
       backgroundColor: bgColor,
-      floatingActionButton: FloatingActionButton.extended(
-        elevation: 4,
-        highlightElevation: 8,
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const invoice_page.InvoicePage()),
-          );
-        },
-        label: const Text(
-          'New Document',
-          style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.5),
-        ),
-        icon: const Icon(Icons.add_circle_outline),
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+      floatingActionButton: BusinessAccessService.can('invoices', 'create')
+          ? FloatingActionButton.extended(
+              elevation: 4,
+              highlightElevation: 8,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const invoice_page.InvoicePage(),
+                  ),
+                );
+              },
+              label: const Text(
+                'New Document',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              icon: const Icon(Icons.add_circle_outline),
+              backgroundColor: primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            )
+          : null,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (context, snap) {
@@ -210,7 +228,14 @@ class _InvoicesPageState extends State<InvoicesPage> {
             );
           }
 
-          final all = snap.data?.docs ?? [];
+          final all = snap.data?.docs.toList() ?? [];
+          all.sort((a, b) {
+            final aDate = _asDate(a.data()['createdAt']);
+            final bDate = _asDate(b.data()['createdAt']);
+            return (bDate ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+              aDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+            );
+          });
           final filtered = all.where((d) {
             if (_query.isEmpty) return true;
             final data = d.data();
@@ -244,42 +269,82 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   backgroundColor: primary,
                   foregroundColor: Colors.white,
                   actions: [
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                    if (BusinessAccessService.can('profile', 'edit'))
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Document terms and versions',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DocumentTermsPage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.description_outlined),
+                        ),
                       ),
-                      child: IconButton(
-                        tooltip: 'New Quotation',
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const QuotationPage(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.request_quote),
+                    if (BusinessAccessService.can('profile', 'edit'))
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Document design and colors',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DocumentDesignPage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.palette_outlined),
+                        ),
                       ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.only(right: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                    if (BusinessAccessService.can('quotations', 'create'))
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          tooltip: 'New Quotation',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const QuotationPage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.request_quote),
+                        ),
                       ),
-                      child: IconButton(
-                        tooltip: 'New Advance Invoice',
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AdvanceInvoicePage(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.payments_outlined),
+                    if (BusinessAccessService.can('invoices', 'create'))
+                      Container(
+                        margin: const EdgeInsets.only(right: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          tooltip: 'New Advance Invoice',
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AdvanceInvoicePage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.payments_outlined),
+                        ),
                       ),
-                    ),
                   ],
                   flexibleSpace: FlexibleSpaceBar(
                     titlePadding: const EdgeInsets.symmetric(
@@ -380,6 +445,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           ),
                         );
                       },
+                      canCreate: BusinessAccessService.can(
+                        'invoices',
+                        'create',
+                      ),
                       primary: primary,
                     ),
                   )
@@ -455,6 +524,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
     final data = doc.data();
     final invoice = (data['invoice'] as Map?) ?? {};
     final kind = (data['kind']?.toString() ?? 'invoice');
+    final module = kind == 'quotation' ? 'quotations' : 'invoices';
+    final canDelete = BusinessAccessService.can(module, 'delete');
     final client = (data['client'] as Map?) ?? {};
     final created = _asDate(data['createdAt']);
     final total = (data['total'] as num?) ?? 0;
@@ -466,7 +537,9 @@ class _InvoicesPageState extends State<InvoicesPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Dismissible(
         key: ValueKey(doc.id),
-        direction: DismissDirection.endToStart,
+        direction: canDelete
+            ? DismissDirection.endToStart
+            : DismissDirection.none,
         background: _swipeBg(),
         confirmDismiss: (dir) => _confirmDismiss(context),
         onDismissed: (_) async {
@@ -684,6 +757,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
   ) {
     final data = doc.data();
     final kind = data['kind']?.toString() ?? 'invoice';
+    final module = kind == 'quotation' ? 'quotations' : 'invoices';
 
     showModalBottomSheet(
       context: context,
@@ -717,15 +791,16 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              _ActionTile(
-                icon: Icons.edit_outlined,
-                title: 'Edit Document',
-                color: textMain,
-                onTap: () {
-                  Navigator.pop(context);
-                  _editInvoice(doc);
-                },
-              ),
+              if (BusinessAccessService.can(module, 'edit'))
+                _ActionTile(
+                  icon: Icons.edit_outlined,
+                  title: 'Edit Document',
+                  color: textMain,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _editInvoice(doc);
+                  },
+                ),
               _ActionTile(
                 icon: Icons.visibility_outlined,
                 title: 'Preview PDF',
@@ -824,23 +899,24 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 ],
               ),
               Divider(color: Colors.grey.shade100, height: 24),
-              _ActionTile(
-                icon: Icons.delete_outline,
-                title: 'Delete Document',
-                color: Colors.red,
-                onTap: () async {
-                  Navigator.pop(context);
-                  final ok = await _confirmDismiss(context);
-                  if (ok == true) {
-                    await doc.reference.delete();
-                    Get.snackbar(
-                      'Deleted',
-                      'Document removed',
-                      snackPosition: SnackPosition.BOTTOM,
-                    );
-                  }
-                },
-              ),
+              if (BusinessAccessService.can(module, 'delete'))
+                _ActionTile(
+                  icon: Icons.delete_outline,
+                  title: 'Delete Document',
+                  color: Colors.red,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final ok = await _confirmDismiss(context);
+                    if (ok == true) {
+                      await doc.reference.delete();
+                      Get.snackbar(
+                        'Deleted',
+                        'Document removed',
+                        snackPosition: SnackPosition.BOTTOM,
+                      );
+                    }
+                  },
+                ),
             ],
           ),
         ),
@@ -1031,6 +1107,19 @@ class _InvoicesPageState extends State<InvoicesPage> {
   }
 
   void _editInvoice(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final module = doc.data()?['kind']?.toString() == 'quotation'
+        ? 'quotations'
+        : 'invoices';
+    if (!BusinessAccessService.can(module, 'edit')) {
+      Get.snackbar('Error', 'staff_no_permission'.tr);
+      return;
+    }
+    if (module == 'quotations') {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => QuotationPage(quotation: doc)));
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => invoice_page.InvoicePage(invoice: doc)),
     );
@@ -1041,11 +1130,13 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState({
     required this.onCreate,
     required this.onCreateAdvance,
+    required this.canCreate,
     required this.primary,
   });
 
   final VoidCallback onCreate;
   final VoidCallback onCreateAdvance;
+  final bool canCreate;
   final Color primary;
 
   @override
@@ -1084,45 +1175,47 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 14,
+            if (canCreate)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              onPressed: onCreate,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Create New Document',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                foregroundColor: primary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                onPressed: onCreate,
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  'Create New Document',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
               ),
-              onPressed: onCreateAdvance,
-              icon: const Icon(Icons.payments_outlined),
-              label: const Text(
-                'Create Advance Invoice',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            if (canCreate) const SizedBox(height: 16),
+            if (canCreate)
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: primary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: onCreateAdvance,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text(
+                  'Create Advance Invoice',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
               ),
-            ),
           ],
         ),
       ),

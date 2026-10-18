@@ -1,1 +1,81 @@
-{"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"tra-verify","configurations":{"android":"1:903048450592:android:99b78274d70f7613876245","ios":"1:903048450592:ios:3c1e8c6847c6821a876245","macos":"1:903048450592:ios:3c1e8c6847c6821a876245","web":"1:903048450592:web:f9d6d50a3955d20c876245","windows":"1:903048450592:web:c5a735cf16787135876245"}}},"android":{"default":{"projectId":"tra-verify","appId":"1:903048450592:android:99b78274d70f7613876245","fileOutput":"android/app/google-services.json"}}}},"hosting":{"site":"mjasipos","public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}],"headers":[{"source":"**/*.@(js|css|svg|png|jpg|jpeg|gif|wasm)","headers":[{"key":"Cache-Control","value":"public,max-age=31536000,immutable"}]},{"source":"/index.html","headers":[{"key":"Cache-Control","value":"no-cache"}]}]}}
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tra-verify",
+          "configurations": {
+            "android": "1:903048450592:android:99b78274d70f7613876245",
+            "ios": "1:903048450592:ios:3c1e8c6847c6821a876245",
+            "macos": "1:903048450592:ios:3c1e8c6847c6821a876245",
+            "web": "1:903048450592:web:f9d6d50a3955d20c876245",
+            "windows": "1:903048450592:web:c5a735cf16787135876245"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "tra-verify",
+          "appId": "1:903048450592:android:99b78274d70f7613876245",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
+  "hosting": {
+    "site": "mjasipos",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(js|css|svg|png|jpg|jpeg|gif|wasm)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=31536000,immutable"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ]
+  },
+  "functions": {
+    "source": "functions"
+  }
+}

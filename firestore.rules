@@ -1,0 +1,424 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function accountAccessPath(userUid) {
+      return /databases/$(database)/documents/accountAccess/$(userUid);
+    }
+
+    function isAccountEnabled(userUid) {
+      return !exists(accountAccessPath(userUid))
+        || get(accountAccessPath(userUid)).data.get('disabled', false) != true;
+    }
+
+    function isSuperAdmin() {
+      let profilePath = /databases/$(database)/documents/users/$(request.auth.uid)/profile/company;
+      return signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && exists(profilePath)
+        && get(profilePath).data.get('role', '')
+          in ['superadmin', 'super_admin', 'super-admin', 'Super Admin'];
+    }
+
+    // Allow a user to read their own company profile doc so the app can
+    // determine their role. Also allow superadmins. This prevents a
+    // circular permission-check situation where isSuperAdmin() needs to read
+    // the profile but the profile read itself was only allowed for superadmins.
+    function canReadOwnCompanyProfile(userUid) {
+      return signedIn() && (request.auth.uid == userUid || isSuperAdmin());
+    }
+
+    function validSubscriptionPlan(data) {
+      return data.keys().hasOnly([
+          'amount',
+          'durationDays',
+          'version',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'amount',
+          'durationDays',
+          'version',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && data.amount is int
+        && data.amount > 0
+        && data.durationDays is int
+        && data.durationDays > 0
+        && data.durationDays <= 3650
+        && data.version is int
+        && data.version > 0
+        && data.updatedAt is timestamp
+        && data.updatedBy == request.auth.uid;
+    }
+
+    function hasPrivilegedRole(role) {
+      return role in [
+        'admin',
+        'Admin',
+        'ADMIN',
+        'superadmin',
+        'super_admin',
+        'super-admin',
+        'Super Admin'
+      ];
+    }
+
+    function membershipPath(employeeUid) {
+      return /databases/$(database)/documents/employeeMemberships/$(employeeUid);
+    }
+
+    function isBusinessOwner(businessUid) {
+      return signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && request.auth.uid == businessUid
+        && !exists(membershipPath(request.auth.uid));
+    }
+
+    function hasActiveMembership(businessUid) {
+      return signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && isAccountEnabled(businessUid)
+        && exists(membershipPath(request.auth.uid))
+        && get(membershipPath(request.auth.uid)).data.businessUid == businessUid
+        && get(membershipPath(request.auth.uid)).data.active == true;
+    }
+
+    function hasPermission(businessUid, module, action) {
+      return isBusinessOwner(businessUid)
+        || (
+          hasActiveMembership(businessUid)
+          && get(membershipPath(request.auth.uid))
+            .data.get('permissions', {})
+            .get(module, {})
+            .get(action, false) == true
+        );
+    }
+
+    function canAccessTransactionShop(businessUid, data) {
+      return isBusinessOwner(businessUid)
+        || (
+          hasActiveMembership(businessUid)
+          && get(membershipPath(request.auth.uid))
+            .data.get('shopNickname', '') is string
+          && get(membershipPath(request.auth.uid))
+            .data.get('shopNickname', '').size() > 0
+          && data.get('shopNickname', '')
+            == get(membershipPath(request.auth.uid))
+              .data.get('shopNickname', '')
+        );
+    }
+
+    function canAccessDebtShop(businessUid, data) {
+      return isBusinessOwner(businessUid)
+        || (
+          hasActiveMembership(businessUid)
+          && get(membershipPath(request.auth.uid))
+            .data.get('shopNickname', '') is string
+          && get(membershipPath(request.auth.uid))
+            .data.get('shopNickname', '').size() > 0
+          && data.get('shopNickname', '')
+            == get(membershipPath(request.auth.uid))
+              .data.get('shopNickname', '')
+        );
+    }
+
+    function canViewCategories(businessUid) {
+      return hasPermission(businessUid, 'categories', 'view')
+        || hasPermission(businessUid, 'transactions', 'view')
+        || hasPermission(businessUid, 'transactions', 'create')
+        || hasPermission(businessUid, 'analytics', 'view')
+        || hasPermission(businessUid, 'invoices', 'create')
+        || hasPermission(businessUid, 'quotations', 'create');
+    }
+
+    function canViewProfile(businessUid) {
+      return hasPermission(businessUid, 'profile', 'view')
+        || hasPermission(businessUid, 'invoices', 'create')
+        || hasPermission(businessUid, 'quotations', 'create')
+        || hasPermission(businessUid, 'receipts', 'create')
+        || hasPermission(businessUid, 'jobs', 'create');
+    }
+
+    function invoiceModule(data) {
+      return data.get('kind', 'invoice') == 'quotation'
+        ? 'quotations'
+        : 'invoices';
+    }
+
+    function canAccessDocument(businessUid, data, action) {
+      return hasPermission(businessUid, invoiceModule(data), action);
+    }
+
+    match /accountAccess/{userUid} {
+      allow get: if signedIn()
+        && (request.auth.uid == userUid || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isSuperAdmin()
+        && userUid != request.auth.uid
+        && request.resource.data.get('disabled', false) == true
+        && request.resource.data.get('disabledBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'disabled',
+          'disabledAt',
+          'disabledBy'
+        ]);
+      allow update: if isSuperAdmin()
+        && userUid != request.auth.uid
+        && request.resource.data.get('disabled', false) is bool
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'disabled',
+          'disabledAt',
+          'disabledBy',
+          'enabledAt',
+          'enabledBy'
+        ]);
+      allow delete: if false;
+    }
+
+    match /employeeMemberships/{employeeUid} {
+      allow get: if signedIn()
+        && (
+          request.auth.uid == employeeUid
+          || (
+            resource.data.businessUid == request.auth.uid
+            && isBusinessOwner(request.auth.uid)
+          )
+        );
+      allow list: if signedIn()
+        && isBusinessOwner(request.auth.uid)
+        && resource.data.businessUid == request.auth.uid;
+      allow create: if signedIn()
+        && employeeUid != request.auth.uid
+        && isBusinessOwner(request.auth.uid)
+        && request.resource.data.employeeUid == employeeUid
+        && request.resource.data.businessUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.active == true
+        && request.resource.data.businessEmail is string
+        && request.resource.data.businessName is string
+        && request.resource.data.shopNickname is string
+        && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.keys().hasOnly([
+          'employeeUid',
+          'businessUid',
+          'businessEmail',
+          'businessName',
+          'shopNickname',
+          'name',
+          'email',
+          'phone',
+          'active',
+          'permissions',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ]);
+      allow update: if signedIn()
+        && employeeUid != request.auth.uid
+        && isBusinessOwner(request.auth.uid)
+        && resource.data.businessUid == request.auth.uid
+        && request.resource.data.businessUid == resource.data.businessUid
+        && request.resource.data.employeeUid == resource.data.employeeUid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'name',
+            'email',
+            'phone',
+            'permissions',
+            'active',
+            'removed',
+            'shopNickname',
+            'updatedAt'
+          ])
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.shopNickname is string
+        && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.get('active', false) is bool
+        && request.resource.data.get('removed', false) is bool
+        && (
+          request.resource.data.get('removed', false) != true
+          || request.resource.data.active == false
+        );
+      allow delete: if signedIn()
+        && employeeUid != request.auth.uid
+        && isBusinessOwner(request.auth.uid)
+        && resource.data.businessUid == request.auth.uid;
+    }
+
+    match /users/{businessUid}/{document=**} {
+      allow read: if isBusinessOwner(businessUid);
+      allow create: if isBusinessOwner(businessUid)
+        && !hasPrivilegedRole(request.resource.data.get('role', ''));
+      allow update: if isBusinessOwner(businessUid)
+        && request.resource.data.get('role', '')
+          == resource.data.get('role', '');
+      allow delete: if isBusinessOwner(businessUid);
+    }
+
+    match /users/{businessUid}/transactions/{transactionId} {
+      allow read: if (
+          hasPermission(businessUid, 'transactions', 'view')
+          || hasPermission(businessUid, 'analytics', 'view')
+        )
+        && canAccessTransactionShop(businessUid, resource.data);
+      allow create: if hasPermission(businessUid, 'transactions', 'create')
+        && canAccessTransactionShop(businessUid, request.resource.data);
+      allow update: if hasPermission(businessUid, 'transactions', 'edit')
+        && canAccessTransactionShop(businessUid, resource.data)
+        && canAccessTransactionShop(businessUid, request.resource.data);
+      allow delete: if hasPermission(businessUid, 'transactions', 'delete')
+        && canAccessTransactionShop(businessUid, resource.data);
+    }
+
+    match /users/{businessUid}/categories/{categoryId} {
+      allow read: if canViewCategories(businessUid);
+      allow create: if hasPermission(businessUid, 'categories', 'create');
+      allow update: if hasPermission(businessUid, 'categories', 'edit');
+      allow delete: if hasPermission(businessUid, 'categories', 'delete');
+    }
+
+    match /users/{businessUid}/profile/{profileId} {
+      allow read: if canViewProfile(businessUid);
+      allow create: if hasPermission(businessUid, 'profile', 'edit')
+        && (
+          profileId != 'company'
+          || !hasPrivilegedRole(request.resource.data.get('role', ''))
+        );
+      allow update: if hasPermission(businessUid, 'profile', 'edit')
+        && (
+          profileId != 'company'
+          || request.resource.data.get('role', '')
+            == resource.data.get('role', '')
+        );
+      allow delete: if hasPermission(businessUid, 'profile', 'delete');
+    }
+
+    match /users/{businessUid}/invoices/{documentId} {
+      allow read: if canAccessDocument(businessUid, resource.data, 'view');
+      allow create: if canAccessDocument(
+        businessUid,
+        request.resource.data,
+        'create'
+      );
+      allow update: if invoiceModule(resource.data)
+          == invoiceModule(request.resource.data)
+        && canAccessDocument(businessUid, resource.data, 'edit');
+      allow delete: if canAccessDocument(businessUid, resource.data, 'delete');
+    }
+
+    match /users/{businessUid}/jobs/{jobId} {
+      allow read: if isBusinessOwner(businessUid);
+      allow write: if false;
+    }
+
+    match /users/{businessUid}/debts/{debtId} {
+      allow read: if hasPermission(businessUid, 'jobs', 'view')
+        && canAccessDebtShop(businessUid, resource.data);
+      allow create: if hasPermission(businessUid, 'jobs', 'create')
+        && canAccessDebtShop(businessUid, request.resource.data);
+      allow update: if hasPermission(businessUid, 'jobs', 'edit')
+        && canAccessDebtShop(businessUid, resource.data)
+        && canAccessDebtShop(businessUid, request.resource.data)
+        && (
+          request.resource.data.get('amountPaid', 0)
+            == resource.data.get('amountPaid', 0)
+          || (
+            request.resource.data.get('amountPaid', 0)
+              > resource.data.get('amountPaid', 0)
+            && request.resource.data.get('lastPaymentId', '') is string
+            && getAfter(/databases/$(database)/documents/users/$(businessUid)/debts/$(debtId)/payments/$(request.resource.data.lastPaymentId)).data.get('amount', 0)
+              == request.resource.data.amountPaid
+                - resource.data.get('amountPaid', 0)
+          )
+        );
+      allow delete: if hasPermission(businessUid, 'jobs', 'delete')
+        && canAccessDebtShop(businessUid, resource.data);
+
+      match /payments/{paymentId} {
+        function debtPath() {
+          return /databases/$(database)/documents/users/$(businessUid)/debts/$(debtId);
+        }
+
+        allow read: if hasPermission(businessUid, 'jobs', 'view')
+          && canAccessDebtShop(businessUid, get(debtPath()).data);
+        allow create: if hasPermission(businessUid, 'jobs', 'edit')
+          && canAccessDebtShop(businessUid, get(debtPath()).data)
+          && request.resource.data.get('amount', 0) is number
+          && request.resource.data.amount > 0
+          && request.resource.data.get('method', '')
+            in ['cash', 'mobile_money', 'bank', 'other']
+          && request.resource.data.amount
+            <= get(debtPath()).data.get('principal', 0)
+              - get(debtPath()).data.get('amountPaid', 0)
+          && getAfter(debtPath()).data.get('lastPaymentId', '') == paymentId
+          && getAfter(debtPath()).data.get('amountPaid', 0)
+            == get(debtPath()).data.get('amountPaid', 0)
+              + request.resource.data.amount;
+        allow update, delete: if false;
+      }
+    }
+
+    match /receipts/{receiptId} {
+      allow get: if resource.data.get('verificationCode', '') == receiptId
+        || (
+          resource.data.get('businessUid', '') is string
+          && hasPermission(resource.data.businessUid, 'receipts', 'view')
+        );
+      allow list: if resource.data.get('businessUid', '') is string
+        && hasPermission(resource.data.businessUid, 'receipts', 'view');
+      allow create: if request.resource.data.get('businessUid', '') is string
+        && request.resource.data.get('verificationCode', '') == receiptId
+        && hasPermission(
+          request.resource.data.businessUid,
+          'receipts',
+          'create'
+        );
+      allow update: if resource.data.get('businessUid', '') is string
+        && request.resource.data.businessUid == resource.data.businessUid
+        && hasPermission(resource.data.businessUid, 'receipts', 'edit');
+      allow delete: if resource.data.get('businessUid', '') is string
+        && hasPermission(resource.data.businessUid, 'receipts', 'delete');
+    }
+
+    match /{path=**}/profile/{profileId} {
+      // Allow listing/reading profiles only for superadmins, except allow a user
+      // to read their own company profile document so the client can determine
+      // the user's role without being blocked by the circular check.
+      allow get: if isSuperAdmin() || (profileId == 'company' && canReadOwnCompanyProfile(request.auth.uid));
+      allow list: if isSuperAdmin();
+    }
+
+    match /app_config/{configId} {
+      allow get: if signedIn() && configId == 'subscription_plan';
+      allow list: if false;
+      allow create: if isSuperAdmin()
+        && configId == 'subscription_plan'
+        && validSubscriptionPlan(request.resource.data);
+      allow update: if isSuperAdmin()
+        && configId == 'subscription_plan'
+        && validSubscriptionPlan(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1;
+      allow delete: if false;
+    }
+
+    match /subscriptions/{businessUid} {
+      allow get: if isBusinessOwner(businessUid)
+        || hasActiveMembership(businessUid)
+        || isSuperAdmin();
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if isBusinessOwner(businessUid)
+        || isSuperAdmin();
+    }
+  }
+}

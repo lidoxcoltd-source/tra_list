@@ -4,6 +4,7 @@ import 'package:printing/printing.dart';
 import 'AddReceiptPage.dart';
 import 'PDFService.dart';
 import 'ReceiptPage.dart';
+import 'services/business_access_service.dart';
 
 const _kBrand = Color(0xFFFFE500);
 const _kDark = Color(0xFF1A1A2E);
@@ -54,6 +55,7 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('receipts')
+            .where('businessUid', isEqualTo: BusinessAccessService.businessId)
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -92,7 +94,9 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
                       return _ReceiptCard(
                         data: data,
                         onView: () => _viewReceipt(context, data),
-                        onEdit: () => _editReceipt(context, data),
+                        onEdit: BusinessAccessService.can('receipts', 'edit')
+                            ? () => _editReceipt(context, data)
+                            : null,
                         onDownload: () => _downloadReceipt(context, data),
                       );
                     }, childCount: docs.length),
@@ -102,20 +106,25 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AddReceiptPage()),
-        ),
-        backgroundColor: _kBrand,
-        foregroundColor: _kDark,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'New Receipt',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.4),
-        ),
-        elevation: 4,
-      ),
+      floatingActionButton: BusinessAccessService.can('receipts', 'create')
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddReceiptPage()),
+              ),
+              backgroundColor: _kBrand,
+              foregroundColor: _kDark,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                'New Receipt',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              elevation: 4,
+            )
+          : null,
     );
   }
 
@@ -199,14 +208,15 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
         ),
       ),
       actions: [
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddReceiptPage()),
+        if (BusinessAccessService.can('receipts', 'create'))
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddReceiptPage()),
+            ),
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            tooltip: 'Add New Receipt',
           ),
-          icon: const Icon(Icons.add_circle_outline_rounded),
-          tooltip: 'Add New Receipt',
-        ),
         const SizedBox(width: 4),
       ],
     );
@@ -445,7 +455,7 @@ class _ReceiptCard extends StatelessWidget {
 
   final Map<String, dynamic> data;
   final VoidCallback onView;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
   final VoidCallback onDownload;
 
   @override
@@ -643,13 +653,15 @@ class _ReceiptCard extends StatelessWidget {
                       onPressed: onView,
                     ),
                     const SizedBox(width: 6),
-                    _ActionButton(
-                      icon: Icons.edit_rounded,
-                      label: 'Edit',
-                      color: const Color(0xFF1565C0),
-                      onPressed: onEdit,
-                    ),
-                    const SizedBox(width: 6),
+                    if (onEdit != null) ...[
+                      _ActionButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: const Color(0xFF1565C0),
+                        onPressed: onEdit!,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     _ActionButton(
                       icon: Icons.download_rounded,
                       label: 'PDF',

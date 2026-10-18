@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/pdf/quotation_pdf.dart';
+import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/thousands_separator_formatter.dart';
 
 class QuotationPage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? quotation; // for editing
@@ -204,6 +206,11 @@ class _QuotationPageState extends State<QuotationPage> {
 
   Future<void> _saveQuotation() async {
     if (!_formKey.currentState!.validate()) return;
+    final permissionAction = widget.quotation == null ? 'create' : 'edit';
+    if (!BusinessAccessService.can('quotations', permissionAction)) {
+      Get.snackbar('Error', 'staff_no_permission'.tr);
+      return;
+    }
     if (_items.isEmpty) {
       Get.snackbar('Error', 'Please add at least one item');
       return;
@@ -219,7 +226,7 @@ class _QuotationPageState extends State<QuotationPage> {
           widget.quotation?.reference ??
           FirebaseFirestore.instance
               .collection('users')
-              .doc(user.uid)
+              .doc(BusinessAccessService.businessId)
               .collection('invoices')
               .doc();
 
@@ -612,7 +619,10 @@ class _QuotationPageState extends State<QuotationPage> {
                                 Expanded(
                                   flex: 3,
                                   child: TextFormField(
-                                    initialValue: (it['unit'] ?? 0).toString(),
+                                    initialValue:
+                                        ThousandsSeparatorFormatter.format(
+                                          (it['unit'] ?? 0) as num,
+                                        ),
                                     decoration: const InputDecoration(
                                       labelText: 'Unit Price',
                                     ),
@@ -620,9 +630,15 @@ class _QuotationPageState extends State<QuotationPage> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
+                                    inputFormatters: const [
+                                      ThousandsSeparatorFormatter(),
+                                    ],
                                     onChanged: (v) => setState(
                                       () => it['unit'] =
-                                          double.tryParse(v) ?? 0.0,
+                                          ThousandsSeparatorFormatter.parse(
+                                            v,
+                                          ) ??
+                                          0.0,
                                     ),
                                   ),
                                 ),

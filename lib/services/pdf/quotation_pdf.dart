@@ -7,6 +7,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/document_design_service.dart';
+import 'package:tra_list/services/document_terms_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 
 class QuotationPdf {
@@ -14,12 +16,12 @@ class QuotationPdf {
     Map<String, dynamic> data, {
     String? fileName,
   }) async {
-    final bytes = await _buildPdfBytes(await _ensureCompany(data));
+    final bytes = await _buildPdfBytes(await _prepareData(data));
     return pdf_saver.savePdf(bytes, fileName ?? 'quotation.pdf');
   }
 
   static Future<void> generate(Map<String, dynamic> data) async {
-    final bytes = await _buildPdfBytes(await _ensureCompany(data));
+    final bytes = await _buildPdfBytes(await _prepareData(data));
     await Printing.layoutPdf(onLayout: (f) async => bytes);
     Get.snackbar(
       'Success',
@@ -29,7 +31,17 @@ class QuotationPdf {
   }
 
   static Future<Uint8List> generateBytes(Map<String, dynamic> data) async =>
-      _buildPdfBytes(await _ensureCompany(data));
+      _buildPdfBytes(await _prepareData(data));
+
+  static Future<Map<String, dynamic>> _prepareData(
+    Map<String, dynamic> data,
+  ) async {
+    final withTerms = await DocumentTermsService.applySelected(
+      await _ensureCompany(data),
+      'quotation',
+    );
+    return DocumentDesignService.applySelected(withTerms, 'quotation');
+  }
 
   // Ensure company data is present by loading from Firestore if missing
   static Future<Map<String, dynamic>> _ensureCompany(
@@ -46,23 +58,23 @@ class QuotationPdf {
     final pdf = pw.Document();
 
     final company = data['company'] as Map<String, dynamic>? ?? {};
+    final documentTerms = Map<String, dynamic>.from(
+      data['documentTerms'] as Map? ?? DocumentTermsService.defaultVersion(),
+    );
     final client = data['client'] as Map<String, dynamic>? ?? {};
     final invoice = data['invoice'] as Map<String, dynamic>? ?? {};
     final items =
         (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
     final total = (data['total'] as num?)?.toDouble() ?? 0.0;
 
-    final colors = (company['colors'] as Map?) ?? {};
-    final brandColor = colors['brand'] is int
-        ? PdfColor.fromInt(colors['brand'])
-        : PdfColor.fromInt(0xFFF15A24);
-    final accentColor = colors['accent'] is int
-        ? PdfColor.fromInt(colors['accent'])
-        : PdfColor.fromInt(0xFF1976D2);
-    final footerColor = colors['footer'] is int
-        ? PdfColor.fromInt(colors['footer'])
-        : PdfColors.grey800;
-    final t = _Theme(brand: brandColor, accent: accentColor);
+    final design = DocumentDesign.fromData(data, company);
+    final brandColor = design.brand;
+    final footerColor = design.footer;
+    final t = _Theme(
+      brand: design.brand,
+      accent: design.accent,
+      design: design,
+    );
 
     pw.ImageProvider? logo;
     try {
@@ -91,9 +103,8 @@ class QuotationPdf {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.only(top: 36, bottom: 0, left: 0, right: 0),
-        footer: (ctx) => _footer(t, company, footerColor, socialIcons, ctx),
+        pageTheme: design.pageTheme(),
+        footer: (_) => _footer(t, company, footerColor, socialIcons),
         build: (ctx) => [
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(horizontal: 36),
@@ -101,44 +112,53 @@ class QuotationPdf {
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 // Header
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    if (logo != null)
-                      pw.Container(
-                        width: 120,
-                        height: 60,
-                        alignment: pw.Alignment.centerLeft,
-                        child: pw.Image(logo!, fit: pw.BoxFit.contain),
-                      ),
-                    pw.Spacer(),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('QUOTATION', style: t.h1),
-                        pw.SizedBox(height: 6),
-                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
-                        pw.Text(
-                          company['address']?.toString() ?? '',
-                          style: t.small,
-                          textAlign: pw.TextAlign.right,
+                design.wrapHeader(
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      if (logo != null)
+                        pw.Container(
+                          width: 120,
+                          height: 60,
+                          alignment: pw.Alignment.centerLeft,
+                          child: pw.Image(logo!, fit: pw.BoxFit.contain),
                         ),
-                        if (company['taxId'] != null)
+                      pw.Spacer(),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text('QUOTATION', style: t.h1),
+                          pw.SizedBox(height: 6),
                           pw.Text(
-                            'Tax Id: ${company['taxId']}',
-                            style: t.small,
+                            company['name']?.toString() ?? '',
+                            style: t.h2,
                           ),
-                        if (company['email'] != null)
-                          pw.Text(company['email'].toString(), style: t.small),
-                        if (company['phone'] != null)
                           pw.Text(
-                            'Otc Tel: ${company['phone']}',
+                            company['address']?.toString() ?? '',
                             style: t.small,
+                            textAlign: pw.TextAlign.right,
                           ),
-                      ],
-                    ),
-                  ],
+                          if (company['taxId'] != null)
+                            pw.Text(
+                              'Tax Id: ${company['taxId']}',
+                              style: t.small,
+                            ),
+                          if (company['email'] != null)
+                            pw.Text(
+                              company['email'].toString(),
+                              style: t.small,
+                            ),
+                          if (company['phone'] != null)
+                            pw.Text(
+                              'Otc Tel: ${company['phone']}',
+                              style: t.small,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+
                 pw.SizedBox(height: 24),
 
                 // Bill to + meta
@@ -270,6 +290,8 @@ class QuotationPdf {
                     ),
                   ],
                 ),
+                _noteAndDelivery(t, documentTerms),
+                _termsAndConditions(t, documentTerms),
               ],
             ),
           ),
@@ -294,10 +316,7 @@ class QuotationPdf {
   );
 
   static pw.Widget _tableHeader(_Theme t, PdfColor brandColor) => pw.Container(
-    decoration: pw.BoxDecoration(
-      color: brandColor,
-      borderRadius: pw.BorderRadius.circular(8),
-    ),
+    decoration: t.design.tableHeaderDecoration(),
     padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
     child: pw.Row(
       children: [
@@ -336,7 +355,8 @@ class QuotationPdf {
     double qty,
     double unit,
     double amount,
-  ) => pw.Padding(
+  ) => pw.Container(
+    decoration: t.design.rowDecoration(),
     padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
     child: pw.Row(
       children: [
@@ -369,16 +389,19 @@ class QuotationPdf {
     ),
   );
 
-  static pw.Widget _noteAndDelivery(_Theme t) {
-    const note =
-        'We kindly request that the remaining balance to be settled upon the project\'s completion.\n'
-        'This will help ensure that everything runs smoothly and\n'
-        'allows us to maintain the highest quality of service.';
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+  static pw.Widget _noteAndDelivery(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final note = documentTerms['note']?.toString().trim() ?? '';
+    final delivery = documentTerms['delivery']?.toString().trim() ?? '';
+    if (note.isEmpty && delivery.isEmpty) return pw.SizedBox();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        pw.Expanded(
-          child: pw.Container(
+        if (note.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 10),
             padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: pw.BoxDecoration(
               border: pw.Border(
@@ -387,40 +410,37 @@ class QuotationPdf {
             ),
             child: pw.Text(note, style: t.smallGrey),
           ),
-        ),
-        pw.SizedBox(width: 18),
-        pw.Container(
-          width: 220,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: pw.BoxDecoration(
-            border: pw.Border(
-              left: pw.BorderSide(color: PdfColors.black, width: 3),
+        if (delivery.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 8),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                left: pw.BorderSide(color: PdfColors.black, width: 3),
+              ),
             ),
+            child: pw.Text(delivery, style: t.smallRed),
           ),
-          child: pw.RichText(
-            text: pw.TextSpan(
-              style: t.smallRed,
-              children: [
-                pw.TextSpan(text: 'Delivery Time  '),
-                pw.TextSpan(text: 'Max '),
-                pw.TextSpan(
-                  text: '7 Days ',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(text: 'Min '),
-                pw.TextSpan(
-                  text: '5 Days\n',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(
-                  text: 'From Payment Day',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
+    );
+  }
+
+  static pw.Widget _termsAndConditions(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final conditions = documentTerms['conditions']?.toString().trim() ?? '';
+    if (conditions.isEmpty) return pw.SizedBox();
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('TERMS AND CONDITIONS', style: t.h3Bold),
+          pw.SizedBox(height: 6),
+          pw.Text(conditions, style: t.small),
+        ],
+      ),
     );
   }
 
@@ -429,18 +449,10 @@ class QuotationPdf {
     Map<String, dynamic> company,
     PdfColor footerColor,
     pw.ImageProvider? socialIcons,
-    pw.Context ctx,
   ) {
     return pw.Column(
       mainAxisSize: pw.MainAxisSize.min,
-      children: [
-        if (ctx.pageNumber == ctx.pagesCount)
-          pw.Padding(
-            padding: const pw.EdgeInsets.fromLTRB(36, 0, 36, 8),
-            child: _noteAndDelivery(t),
-          ),
-        _footerBar(t, company, footerColor, socialIcons),
-      ],
+      children: [_footerBar(t, company, footerColor, socialIcons)],
     );
   }
 
@@ -483,8 +495,9 @@ class QuotationPdf {
 class _Theme {
   final PdfColor brand;
   final PdfColor accent;
+  final DocumentDesign design;
 
-  _Theme({required this.brand, required this.accent});
+  _Theme({required this.brand, required this.accent, required this.design});
 
   pw.TextStyle get h1 =>
       pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold, color: brand);
@@ -495,7 +508,7 @@ class _Theme {
   pw.TextStyle get header => pw.TextStyle(
     fontSize: 10,
     fontWeight: pw.FontWeight.bold,
-    color: PdfColors.white,
+    color: design.lightTableHeader ? brand : PdfColors.white,
   );
   pw.TextStyle get medium => pw.TextStyle(fontSize: 10, color: PdfColors.black);
   pw.TextStyle get mediumBold => pw.TextStyle(

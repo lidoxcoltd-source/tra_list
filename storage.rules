@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function membershipPath(employeeUid) {
+      return /databases/(default)/documents/employeeMemberships/$(employeeUid);
+    }
+
+    function isBusinessOwner(businessUid) {
+      return request.auth != null
+        && request.auth.uid == businessUid
+        && !firestore.exists(membershipPath(request.auth.uid));
+    }
+
+    function hasActiveMembership(businessUid) {
+      return request.auth != null
+        && firestore.exists(membershipPath(request.auth.uid))
+        && firestore.get(membershipPath(request.auth.uid)).data.businessUid
+          == businessUid
+        && firestore.get(membershipPath(request.auth.uid)).data.active == true;
+    }
+
+    function hasPermission(businessUid, module, action) {
+      return isBusinessOwner(businessUid)
+        || (
+          hasActiveMembership(businessUid)
+          && firestore.get(membershipPath(request.auth.uid))
+            .data.get('permissions', {})
+            .get(module, {})
+            .get(action, false) == true
+        );
+    }
+
+    function canViewProfile(businessUid) {
+      return hasPermission(businessUid, 'profile', 'view')
+        || hasPermission(businessUid, 'invoices', 'create')
+        || hasPermission(businessUid, 'quotations', 'create')
+        || hasPermission(businessUid, 'receipts', 'create')
+        || hasPermission(businessUid, 'jobs', 'create');
+    }
+
+    match /users/{businessUid}/{filePath=**} {
+      allow read: if canViewProfile(businessUid);
+      allow write: if hasPermission(businessUid, 'profile', 'edit');
+    }
+  }
+}

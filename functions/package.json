@@ -1,0 +1,16 @@
+{
+  "name": "tra-list-functions",
+  "description": "Firebase backend functions for TRA List",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}

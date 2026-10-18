@@ -6,13 +6,15 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/document_design_service.dart';
+import 'package:tra_list/services/document_terms_service.dart';
 import '../profile_service.dart'; // <-- add
 
 class InvoicePdf {
   static Future<void> generate(Map<String, dynamic> data) async {
     try {
-      final withCompany = await _ensureCompany(data); // <-- add
-      final bytes = await _buildPdfBytes(withCompany);
+      final preparedData = await _prepareData(data);
+      final bytes = await _buildPdfBytes(preparedData);
       await Printing.layoutPdf(onLayout: (format) async => bytes);
       Get.snackbar(
         'Success',
@@ -33,16 +35,27 @@ class InvoicePdf {
     Map<String, dynamic> data, {
     required String fileName,
   }) async {
-    final withCompany = await _ensureCompany(data); // <-- add
-    final bytes = await _buildPdfBytes(withCompany);
+    final preparedData = await _prepareData(data);
+    final bytes = await _buildPdfBytes(preparedData);
     return pdf_saver.savePdf(bytes, fileName);
   }
 
   // Keep your existing generate(...) if you still need print preview.
   // Add this method to get raw PDF bytes for saving.
   static Future<Uint8List> generateBytes(Map<String, dynamic> data) async {
-    final withCompany = await _ensureCompany(data); // <-- add
-    return _buildPdfBytes(withCompany);
+    final preparedData = await _prepareData(data);
+    return _buildPdfBytes(preparedData);
+  }
+
+  static Future<Map<String, dynamic>> _prepareData(
+    Map<String, dynamic> data,
+  ) async {
+    final withCompany = await _ensureCompany(data);
+    final withTerms = await DocumentTermsService.applySelected(
+      withCompany,
+      'invoice',
+    );
+    return DocumentDesignService.applySelected(withTerms, 'invoice');
   }
 
   // Ensure company data is present by loading from Firestore if needed
@@ -60,6 +73,9 @@ class InvoicePdf {
     final pdf = pw.Document();
 
     final company = data['company'] as Map<String, dynamic>? ?? {};
+    final documentTerms = Map<String, dynamic>.from(
+      data['documentTerms'] as Map? ?? DocumentTermsService.defaultVersion(),
+    );
     final client = data['client'] as Map<String, dynamic>? ?? {};
     final invoice = data['invoice'] as Map<String, dynamic>? ?? {};
     final items =
@@ -94,23 +110,19 @@ class InvoicePdf {
       return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
     }
 
-    final colors = (company['colors'] as Map?) ?? {};
-    final brandColor = colors['brand'] is int
-        ? PdfColor.fromInt(colors['brand'])
-        : PdfColor.fromInt(0xFFF15A24);
-    final accentColor = colors['accent'] is int
-        ? PdfColor.fromInt(colors['accent'])
-        : PdfColor.fromInt(0xFF1976D2);
-    final footerColor = colors['footer'] is int
-        ? PdfColor.fromInt(colors['footer'])
-        : PdfColors.grey800;
-    final t = _Theme(brand: brandColor, accent: accentColor);
+    final design = DocumentDesign.fromData(data, company);
+    final brandColor = design.brand;
+    final footerColor = design.footer;
+    final t = _Theme(
+      brand: design.brand,
+      accent: design.accent,
+      design: design,
+    );
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.only(top: 36, bottom: 0, left: 0, right: 0),
-        footer: (ctx) => _footer(t, company, footerColor, socialIcons, ctx),
+        pageTheme: design.pageTheme(),
+        footer: (_) => _footer(t, company, footerColor, socialIcons),
         build: (ctx) => [
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(horizontal: 36),
@@ -118,43 +130,51 @@ class InvoicePdf {
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 // Header
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    if (logo != null)
-                      pw.Container(
-                        width: 120,
-                        height: 60,
-                        alignment: pw.Alignment.centerLeft,
-                        child: pw.Image(logo!, fit: pw.BoxFit.contain),
-                      ),
-                    pw.Spacer(),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('INVOICE', style: t.h1),
-                        pw.SizedBox(height: 6),
-                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
-                        pw.Text(
-                          company['address']?.toString() ?? '',
-                          style: t.small,
-                          textAlign: pw.TextAlign.right,
+                design.wrapHeader(
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      if (logo != null)
+                        pw.Container(
+                          width: 120,
+                          height: 60,
+                          alignment: pw.Alignment.centerLeft,
+                          child: pw.Image(logo!, fit: pw.BoxFit.contain),
                         ),
-                        if (company['taxId'] != null)
+                      pw.Spacer(),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text('INVOICE', style: t.h1),
+                          pw.SizedBox(height: 6),
                           pw.Text(
-                            'Tax Id: ${company['taxId']}',
-                            style: t.small,
+                            company['name']?.toString() ?? '',
+                            style: t.h2,
                           ),
-                        if (company['email'] != null)
-                          pw.Text(company['email'].toString(), style: t.small),
-                        if (company['phone'] != null)
                           pw.Text(
-                            'Otc Tel: ${company['phone']}',
+                            company['address']?.toString() ?? '',
                             style: t.small,
+                            textAlign: pw.TextAlign.right,
                           ),
-                      ],
-                    ),
-                  ],
+                          if (company['taxId'] != null)
+                            pw.Text(
+                              'Tax Id: ${company['taxId']}',
+                              style: t.small,
+                            ),
+                          if (company['email'] != null)
+                            pw.Text(
+                              company['email'].toString(),
+                              style: t.small,
+                            ),
+                          if (company['phone'] != null)
+                            pw.Text(
+                              'Otc Tel: ${company['phone']}',
+                              style: t.small,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
 
                 pw.SizedBox(height: 24),
@@ -294,9 +314,8 @@ class InvoicePdf {
                     ),
                   ],
                 ),
-                // REMOVE these two lines (they won’t float to bottom reliably):
-                // pw.SizedBox(height: 14),
-                // _noteAndDelivery(t),
+                _noteAndDelivery(t, documentTerms),
+                _termsAndConditions(t, documentTerms),
               ],
             ),
           ),
@@ -323,10 +342,7 @@ class InvoicePdf {
 
   static pw.Widget _tableHeader(_Theme t, PdfColor brandColor) {
     return pw.Container(
-      decoration: pw.BoxDecoration(
-        color: brandColor,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
+      decoration: t.design.tableHeaderDecoration(),
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: pw.Row(
         children: [
@@ -368,7 +384,8 @@ class InvoicePdf {
     double amount, {
     bool dense = false,
   }) {
-    return pw.Padding(
+    return pw.Container(
+      decoration: t.design.rowDecoration(),
       padding: pw.EdgeInsets.symmetric(vertical: dense ? 4 : 6, horizontal: 6),
       child: pw.Row(
         children: [
@@ -403,18 +420,19 @@ class InvoicePdf {
   }
 
   // NEW: Note + Delivery Time section shown before footer
-  static pw.Widget _noteAndDelivery(_Theme t) {
-    const note =
-        'We kindly request that the remaining balance to be settled upon the project\'s completion.\n'
-        'This will help ensure that everything runs smoothly and\n'
-        'allows us to maintain the highest quality of service.';
-
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+  static pw.Widget _noteAndDelivery(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final note = documentTerms['note']?.toString().trim() ?? '';
+    final delivery = documentTerms['delivery']?.toString().trim() ?? '';
+    if (note.isEmpty && delivery.isEmpty) return pw.SizedBox();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        // Left note with green accent bar
-        pw.Expanded(
-          child: pw.Container(
+        if (note.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 10),
             padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: pw.BoxDecoration(
               border: pw.Border(
@@ -423,61 +441,49 @@ class InvoicePdf {
             ),
             child: pw.Text(note, style: t.smallGrey),
           ),
-        ),
-        pw.SizedBox(width: 18),
-        // Right “Delivery Time” panel with black vertical bar and red text
-        pw.Container(
-          width: 220,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: pw.BoxDecoration(
-            border: pw.Border(
-              left: pw.BorderSide(color: PdfColors.black, width: 3),
+        if (delivery.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 8),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                left: pw.BorderSide(color: PdfColors.black, width: 3),
+              ),
             ),
+            child: pw.Text(delivery, style: t.smallRed),
           ),
-          child: pw.RichText(
-            text: pw.TextSpan(
-              style: t.smallRed,
-              children: [
-                pw.TextSpan(text: 'Delivery Time  '),
-                pw.TextSpan(text: 'Max '),
-                pw.TextSpan(
-                  text: '7 Days ',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(text: 'Min '),
-                pw.TextSpan(
-                  text: '5 Days\n',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(
-                  text: 'From Payment Day',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
 
-  // NEW: footer that places the note block at the bottom, above the bar.
-  // Shown only on the last page.
+  static pw.Widget _termsAndConditions(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final conditions = documentTerms['conditions']?.toString().trim() ?? '';
+    if (conditions.isEmpty) return pw.SizedBox();
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('TERMS AND CONDITIONS', style: t.h3Bold),
+          pw.SizedBox(height: 6),
+          pw.Text(conditions, style: t.small),
+        ],
+      ),
+    );
+  }
+
   static pw.Widget _footer(
     _Theme t,
     Map<String, dynamic> company,
     PdfColor footerColor,
     pw.ImageProvider? socialIcons,
-    pw.Context ctx,
   ) {
     return pw.Column(
       mainAxisSize: pw.MainAxisSize.min,
       children: [
-        if (ctx.pageNumber == ctx.pagesCount)
-          pw.Padding(
-            padding: const pw.EdgeInsets.fromLTRB(36, 0, 36, 8),
-            child: _noteAndDelivery(t),
-          ),
         _footerBar(t, company, footerColor, socialIcons), // full-width dark bar
       ],
     );
@@ -524,8 +530,9 @@ class InvoicePdf {
 class _Theme {
   final PdfColor brand;
   final PdfColor accent;
+  final DocumentDesign design;
 
-  _Theme({required this.brand, required this.accent});
+  _Theme({required this.brand, required this.accent, required this.design});
 
   final PdfColor grey = PdfColors.grey600;
   final PdfColor dark = PdfColors.black;
@@ -540,7 +547,7 @@ class _Theme {
   pw.TextStyle get header => pw.TextStyle(
     fontSize: 10,
     fontWeight: pw.FontWeight.bold,
-    color: PdfColors.white,
+    color: design.lightTableHeader ? brand : PdfColors.white,
   );
   pw.TextStyle get medium => pw.TextStyle(fontSize: 10, color: PdfColors.black);
   pw.TextStyle get mediumBold => pw.TextStyle(

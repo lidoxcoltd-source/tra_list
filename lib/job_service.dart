@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tra_list/jobs/models/job.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 class JobService {
   static final _auth = FirebaseAuth.instance;
@@ -9,7 +10,7 @@ class JobService {
   static String _uidOrThrow() {
     final u = _auth.currentUser;
     if (u == null) throw StateError('Not signed in');
-    return u.uid;
+    return BusinessAccessService.businessId;
   }
 
   static CollectionReference<Job> getCollectionRef() {
@@ -25,20 +26,29 @@ class JobService {
   }
 
   static Future<void> addJob(Job job) async {
+    if (!BusinessAccessService.can('jobs', 'create')) {
+      throw StateError('You do not have permission to add jobs.');
+    }
     // The model generates an ID, so we use `doc(job.id).set(job)`
     await getCollectionRef().doc(job.id).set(job);
   }
 
   static Future<void> updateJob(String id, Map<String, dynamic> data) async {
+    if (!BusinessAccessService.can('jobs', 'edit')) {
+      throw StateError('You do not have permission to edit jobs.');
+    }
     // Ensure updatedAt is always updated
     final updateData = {...data};
     // Do not overwrite createdAt on update
     updateData.remove('createdAt');
     updateData['updatedAt'] = FieldValue.serverTimestamp();
-    await getCollectionRef().doc(id).update(data);
+    await getCollectionRef().doc(id).update(updateData);
   }
 
   static Future<void> deleteJob(String id) async {
+    if (!BusinessAccessService.can('jobs', 'delete')) {
+      throw StateError('You do not have permission to delete jobs.');
+    }
     await getCollectionRef().doc(id).delete();
   }
 

@@ -7,14 +7,19 @@ import 'package:tra_list/ReceiptsListPage.dart';
 import 'package:tra_list/invoice/categories_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';
+import 'package:tra_list/jobs/views/archived_jobs_page.dart';
 import 'package:tra_list/subscription_page.dart';
+import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/staff_management_page.dart';
+import 'package:tra_list/services/super_admin_subscriptions_page.dart';
 
-import 'package:tra_list/ReceiptsListPageHybrid.dart';
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/FirebaseTestPage.dart';
 import 'package:tra_list/ReceiptViewPage.dart';
 import 'package:tra_list/RouteTestPage.dart';
 import 'package:tra_list/LoginPage.dart';
+import 'package:tra_list/splash_page.dart';
+import 'package:tra_list/CreateAccountPage.dart';
 import 'invoice/InvoicePage.dart';
 import 'invoice/InvoicesPage.dart';
 import 'invoice/transactions_page.dart';
@@ -39,8 +44,36 @@ class AuthMiddleware extends GetMiddleware {
   }
 }
 
+class BusinessPermissionMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (!BusinessAccessService.isReady.value) {
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    if (!BusinessAccessService.canAccessRoute(route ?? '')) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    return null;
+  }
+}
+
+class BusinessOwnerMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (!BusinessAccessService.isReady.value ||
+        !BusinessAccessService.isOwner.value) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    return null;
+  }
+}
+
 class AppRoutes {
+  static const String splash = '/splash';
   static const String login = '/login';
+  static const String register = '/register';
   static const String home = '/';
   static const String addReceipt = '/add-receipt';
   static const String receiptsList = '/receipts';
@@ -54,15 +87,24 @@ class AppRoutes {
   static const String categories = '/categories';
   static const String analytics = '/analytics';
   static const String jobs = '/jobs';
+  static const String jobsArchive = '/jobs-archive';
   static const String quotation = '/quotation';
   static const String clientCredit = '/client-credit';
   static const String subscription = '/subscription';
+  static const String staff = '/staff';
+  static const String adminSubscriptions = '/admin-subscriptions';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
 
   static final pages = <GetPage>[
+    GetPage(
+      name: splash,
+      page: () => const SplashPage(),
+      transition: Transition.fadeIn,
+    ),
     GetPage(name: login, page: () => LoginPage()),
+    GetPage(name: register, page: () => const CreateAccountPage()),
     GetPage(
       name: home,
       page: () => const HomePage(),
@@ -72,13 +114,13 @@ class AppRoutes {
     GetPage(
       name: addReceipt,
       page: () => const AddReceiptPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: receiptsList,
       page: () => const ReceiptsListPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
@@ -102,41 +144,66 @@ class AppRoutes {
       // Public route: no AuthMiddleware
       transition: Transition.rightToLeft,
     ),
-    GetPage(name: invoice, page: () => const InvoicePage()),
-    GetPage(name: invoicesList, page: () => const InvoicesPage()),
+    GetPage(
+      name: invoice,
+      page: () => const InvoicePage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
+    GetPage(
+      name: invoicesList,
+      page: () => const InvoicesPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
     GetPage(
       name: transactions,
       page: () => const TransactionsPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: categories,
       page: () => const CategoriesPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: analytics,
       page: () => const AnalyticsPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: jobs,
       page: () => const JobsPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: jobsArchive,
+      page: () => const ArchivedJobsPage(),
+      middlewares: [AuthMiddleware(), BusinessOwnerMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: quotation,
       page: () => const QuotationPage(),
-      middlewares: [AuthMiddleware()],
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
       name: subscription,
       page: () => const SubscriptionPage(),
+      middlewares: [AuthMiddleware(), BusinessOwnerMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: staff,
+      page: () => const StaffManagementPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
+    GetPage(
+      name: adminSubscriptions,
+      page: () => const SuperAdminSubscriptionsPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

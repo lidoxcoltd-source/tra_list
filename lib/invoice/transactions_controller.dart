@@ -5,12 +5,13 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'add_transaction_page.dart';
-import 'analytics_page.dart';
 import 'transaction_excel_export.dart';
 import 'transaction_model.dart';
 import 'transaction_report_pdf.dart';
 import 'transaction_service.dart';
+import 'category_service.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 enum FilterPeriod { all, today, yesterday, week, month, custom, singleDay }
 
@@ -42,6 +43,10 @@ class TransactionsController extends GetxController {
   // UI State
   final Rx<SummaryFilter> summaryFilter = SummaryFilter.all.obs;
   final Rx<SortOption> sortOption = SortOption.dateDesc.obs;
+  final RxList<String> availableShopNames = <String>[].obs;
+  final RxString selectedShopNickname = ''.obs;
+  final RxList<String> availableCategories = <String>[].obs;
+  final RxString selectedCategory = ''.obs;
   final RxBool isPdfBusy = false.obs;
   final RxBool isExcelBusy = false.obs;
   final RxBool isFetching = false.obs;
@@ -71,10 +76,19 @@ class TransactionsController extends GetxController {
     final now = DateTime.now();
     startDate.value = DateTime(now.year, now.month, now.day);
     endDate.value = startDate.value!.add(const Duration(days: 1));
+    if (!BusinessAccessService.isOwner.value) {
+      selectedShopNickname.value = BusinessAccessService.shopNickname.value
+          .trim();
+    }
 
     loadProfileColors();
     // Fetch totals and the first page of data concurrently.
-    Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
+    Future.wait([
+      fetchFirstPage(),
+      _fetchAndSetTotals(),
+      loadShopNames(),
+      loadCategoryNames(),
+    ]);
 
     scrollController.addListener(() {
       if (scrollController.position.pixels >=
@@ -85,6 +99,73 @@ class TransactionsController extends GetxController {
     searchController.addListener(() {
       applyAllFilters(searchQuery: searchController.text);
     });
+  }
+
+  Future<void> loadShopNames() async {
+    final names = <String>{};
+    try {
+      if (BusinessAccessService.isOwner.value) {
+        final profile = await ProfileService.loadOrCreate();
+        var shopNickname = profile['shopNickname']?.toString().trim() ?? '';
+        if (shopNickname.isEmpty) {
+          shopNickname = profile['name']?.toString().trim() ?? '';
+        }
+        if (shopNickname.isNotEmpty) names.add(shopNickname);
+
+        final memberships = await FirebaseFirestore.instance
+            .collection('employeeMemberships')
+            .where('businessUid', isEqualTo: BusinessAccessService.businessId)
+            .get();
+        for (final membership in memberships.docs) {
+          final name =
+              membership.data()['shopNickname']?.toString().trim() ?? '';
+          if (name.isNotEmpty) names.add(name);
+        }
+      } else {
+        final shopNickname = BusinessAccessService.shopNickname.value.trim();
+        if (shopNickname.isNotEmpty) names.add(shopNickname);
+      }
+      for (final transaction in allFetchedTransactions) {
+        if (transaction.shopNickname.trim().isNotEmpty) {
+          names.add(transaction.shopNickname.trim());
+        }
+      }
+      availableShopNames.assignAll(names.toList()..sort());
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load transaction shop names: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      Get.snackbar('error'.tr, 'transactions_shops_load_error'.tr);
+    }
+  }
+
+  Future<void> loadCategoryNames() async {
+    final names = <String>{};
+    try {
+      final categories = await CategoryService.getCategoriesFromServer();
+      names.addAll(
+        categories.docs
+            .map((category) => category.data().name.trim())
+            .where((name) => name.isNotEmpty),
+      );
+      names.addAll(
+        allFetchedTransactions
+            .map((transaction) => transaction.category.trim())
+            .where((name) => name.isNotEmpty),
+      );
+      availableCategories.assignAll(names.toList()..sort());
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load transaction category names: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      final transactionCategories =
+          allFetchedTransactions
+              .map((transaction) => transaction.category.trim())
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      availableCategories.assignAll(transactionCategories);
+      Get.snackbar('error'.tr, 'transactions_categories_load_error'.tr);
+    }
   }
 
   @override
@@ -145,6 +226,8 @@ class TransactionsController extends GetxController {
         limit: _limit,
         startDate: startDate.value,
         endDate: endDate.value,
+        shopNickname: selectedShopNickname.value,
+        category: selectedCategory.value,
       );
       _updateStateFromSnapshot(snap, isFirstPage: true);
     } catch (e) {
@@ -173,6 +256,8 @@ class TransactionsController extends GetxController {
         startAfter: lastDoc,
         startDate: startDate.value,
         endDate: endDate.value,
+        shopNickname: selectedShopNickname.value,
+        category: selectedCategory.value,
       );
       _updateStateFromSnapshot(snap, isFirstPage: false);
     } catch (e) {
@@ -201,6 +286,26 @@ class TransactionsController extends GetxController {
       allFetchedTransactions.clear();
     }
     allFetchedTransactions.addAll(newTransactions);
+    final fetchedShopNames = newTransactions
+        .map((transaction) => transaction.shopNickname.trim())
+        .where((shopNickname) => shopNickname.isNotEmpty)
+        .toSet();
+    availableShopNames.addAll(
+      fetchedShopNames.where(
+        (shopNickname) => !availableShopNames.contains(shopNickname),
+      ),
+    );
+    availableShopNames.sort();
+    final fetchedCategories = newTransactions
+        .map((transaction) => transaction.category.trim())
+        .where((category) => category.isNotEmpty)
+        .toSet();
+    availableCategories.addAll(
+      fetchedCategories.where(
+        (category) => !availableCategories.contains(category),
+      ),
+    );
+    availableCategories.sort();
     applyAllFilters();
     _recalculateTotals();
     _groupTransactions();
@@ -233,6 +338,8 @@ class TransactionsController extends GetxController {
       final totals = await TransactionService.getTotals(
         startDate: startDate.value,
         endDate: endDate.value,
+        shopNickname: selectedShopNickname.value,
+        category: selectedCategory.value,
       );
       currentIncome.value = totals['income'] ?? 0.0;
       currentExpense.value = totals['expense'] ?? 0.0;
@@ -276,7 +383,6 @@ class TransactionsController extends GetxController {
         case SortOption.amountAsc:
           return a.amount.compareTo(b.amount);
         case SortOption.dateDesc:
-        default:
           return b.date.compareTo(a.date);
       }
     });
@@ -389,6 +495,19 @@ class TransactionsController extends GetxController {
     }
   }
 
+  Future<void> setShopFilter(String shopNickname) async {
+    if (!BusinessAccessService.isOwner.value) return;
+    if (selectedShopNickname.value == shopNickname) return;
+    selectedShopNickname.value = shopNickname;
+    await Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
+  }
+
+  Future<void> setCategoryFilter(String category) async {
+    if (selectedCategory.value == category) return;
+    selectedCategory.value = category;
+    await Future.wait([fetchFirstPage(), _fetchAndSetTotals()]);
+  }
+
   void setSummaryFilter(SummaryFilter newSummaryFilter) {
     if (summaryFilter.value == newSummaryFilter) {
       summaryFilter.value = SummaryFilter.all;
@@ -398,35 +517,45 @@ class TransactionsController extends GetxController {
     applyAllFilters();
   }
 
+  void selectSummaryFilter(SummaryFilter newSummaryFilter) {
+    summaryFilter.value = newSummaryFilter;
+    applyAllFilters();
+  }
+
   Future<void> showActions(TransactionModel t) async {
+    final canEdit = BusinessAccessService.can('transactions', 'edit');
+    final canDelete = BusinessAccessService.can('transactions', 'delete');
+    if (!canEdit && !canDelete) return;
     await Get.bottomSheet(
       SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: Text('edit_transaction_title'.tr),
-              onTap: () async {
-                Get.back();
-                final result = await Get.to(
-                  () => AddTransactionPage(transaction: t),
-                );
-                if (result == true) {
-                  fetchFirstPage();
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text('transactions_delete_title'.tr),
-              onTap: () async {
-                Get.back(); // Close bottom sheet
-                final confirm = await _confirmDeleteDialog();
-                if (confirm == true) {
-                  await deleteTransaction(t);
-                }
-              },
-            ),
+            if (canEdit)
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: Text('edit_transaction_title'.tr),
+                onTap: () async {
+                  Get.back();
+                  final result = await Get.to(
+                    () => AddTransactionPage(transaction: t),
+                  );
+                  if (result == true) {
+                    fetchFirstPage();
+                  }
+                },
+              ),
+            if (canDelete)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: Text('transactions_delete_title'.tr),
+                onTap: () async {
+                  Get.back();
+                  final confirm = await _confirmDeleteDialog();
+                  if (confirm == true) {
+                    await deleteTransaction(t);
+                  }
+                },
+              ),
           ],
         ),
       ),
@@ -443,6 +572,10 @@ class TransactionsController extends GetxController {
   }
 
   Future<void> deleteTransaction(TransactionModel t) async {
+    if (!BusinessAccessService.can('transactions', 'delete')) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return;
+    }
     if (t.id == null) return;
 
     // Store the transaction and its original index for undo

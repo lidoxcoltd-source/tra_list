@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
@@ -108,6 +107,7 @@ class CompanyLogoService {
     final prefs = await _prefsSafe();
     if (prefs == null) return;
     await prefs.remove(_logoBytesKey(user.uid));
+    await prefs.remove(_logoSourceKey(user.uid));
   }
 
   static Future<Uint8List?> loadNetworkLogoBytes(String url) async {

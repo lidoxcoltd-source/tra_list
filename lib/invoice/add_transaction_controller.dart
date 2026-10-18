@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/offline_service.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 import 'category_model.dart';
 import 'category_service.dart';
 import 'transaction_model.dart';
@@ -22,6 +22,7 @@ class AddTransactionController extends GetxController {
   // UI State
   final RxBool busy = false.obs;
   final RxBool categoriesLoading = true.obs;
+  final RxString categoriesError = ''.obs;
 
   // Categories
   final RxList<CategoryModel> incomeCategories = <CategoryModel>[].obs;
@@ -172,22 +173,41 @@ class AddTransactionController extends GetxController {
 
   Future<void> loadCategories() async {
     categoriesLoading.value = true;
+    categoriesError.value = '';
     try {
       List<CategoryModel> allCategories;
-      if (isOnline.value) {
-        try {
-          final snapshot = await CategoryService.getCategoriesStream().first;
-          allCategories = snapshot.docs.map((doc) => doc.data()).toList();
-          await OfflineService.cacheCategories(allCategories);
-        } catch (e) {
-          allCategories = await OfflineService.getCachedCategories();
-        }
-      } else {
+      try {
+        final snapshot = await CategoryService.getCategoriesFromServer();
+        allCategories = snapshot.docs.map((doc) => doc.data()).toList();
+        await OfflineService.cacheCategories(allCategories);
+      } catch (error, stackTrace) {
+        debugPrint('Could not load categories from Firestore: $error');
+        debugPrintStack(stackTrace: stackTrace);
         allCategories = await OfflineService.getCachedCategories();
+        if (isOnline.value) {
+          categoriesError.value = 'categories_load_failed'.tr;
+        } else if (allCategories.isEmpty) {
+          categoriesError.value = 'categories_offline_empty'.tr;
+        }
       }
+      final pendingCategories = await OfflineService.getPendingCategories();
+      final knownCategories = allCategories
+          .map((category) => '${category.type.name}:${category.name.trim()}')
+          .toSet();
+      allCategories.addAll(
+        pendingCategories.where(
+          (category) => knownCategories.add(
+            '${category.type.name}:${category.name.trim()}',
+          ),
+        ),
+      );
       _updateCategoryState(allCategories);
-    } catch (e) {
-      _useDefaultCategories();
+    } catch (error, stackTrace) {
+      debugPrint('Could not load transaction categories: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      categoriesError.value = 'categories_load_failed'.tr;
+      incomeCategories.clear();
+      expenseCategories.clear();
     } finally {
       categoriesLoading.value = false;
     }
@@ -202,41 +222,43 @@ class AddTransactionController extends GetxController {
         .toList();
   }
 
-  void _useDefaultCategories() {
-    expenseCategories.value = [
-      CategoryModel(name: 'Food & Dining', type: TransactionType.expense),
-      CategoryModel(name: 'Transportation', type: TransactionType.expense),
-    ];
-    incomeCategories.value = [
-      CategoryModel(name: 'Salary', type: TransactionType.income),
-      CategoryModel(name: 'Business', type: TransactionType.income),
-    ];
-  }
-
   Future<void> addNewCategory(String newCategoryName) async {
+    final name = newCategoryName.trim();
+    if (name.isEmpty) return;
+
+    final categories = isExpense.value ? expenseCategories : incomeCategories;
+    final existingCategory = categories.firstWhereOrNull(
+      (category) => category.name.trim().toLowerCase() == name.toLowerCase(),
+    );
+    if (existingCategory != null) {
+      selectedCategory.value = existingCategory.name;
+      Get.snackbar('category'.tr, 'category_already_exists'.tr);
+      return;
+    }
+
+    final newCategory = CategoryModel(
+      name: name,
+      type: isExpense.value ? TransactionType.expense : TransactionType.income,
+    );
+    categories.add(newCategory);
+    selectedCategory.value = name;
+
     try {
-      final newCategory = CategoryModel(
-        name: newCategoryName,
-        type: isExpense.value
-            ? TransactionType.expense
-            : TransactionType.income,
-      );
-
-      // Optimistically update the UI
-      if (isExpense.value) {
-        expenseCategories.add(newCategory);
+      if (isOnline.value) {
+        await CategoryService.addCategory(newCategory);
+        Get.snackbar('success'.tr, 'category_added_success'.tr);
       } else {
-        incomeCategories.add(newCategory);
+        await OfflineService.saveCategoryOffline(newCategory);
+        Get.snackbar('Saved Offline'.tr, 'category_saved_offline'.tr);
       }
-      selectedCategory.value = newCategoryName;
-
-      // Persist to the database
-      await CategoryService.addCategory(newCategory);
-      Get.snackbar('Success', 'Category added successfully');
-    } catch (e) {
-      debugPrint('Failed to add category: $e');
-      Get.snackbar('Error', 'Failed to add category');
-      await loadCategories(); // Reload from DB to revert optimistic update on failure
+      await loadCategories();
+      selectedCategory.value = name;
+    } catch (error, stackTrace) {
+      debugPrint('Failed to save category "$name": $error');
+      debugPrintStack(stackTrace: stackTrace);
+      categories.removeWhere((category) => category.name == name);
+      if (selectedCategory.value == name) selectedCategory.value = '';
+      Get.snackbar('error'.tr, 'category_add_failed'.tr);
     }
   }
 
@@ -246,6 +268,16 @@ class AddTransactionController extends GetxController {
       if (user == null) throw Exception('User not authenticated.');
 
       final amount = double.parse(amountC.text.replaceAll(',', ''));
+      var shopNickname = _originalTransaction?.shopNickname ?? '';
+      if (shopNickname.isEmpty && !BusinessAccessService.isOwner.value) {
+        shopNickname = BusinessAccessService.shopNickname.value.trim();
+      } else if (shopNickname.isEmpty) {
+        final profile = await ProfileService.loadOrCreate();
+        shopNickname = profile['shopNickname']?.toString().trim() ?? '';
+        if (shopNickname.isEmpty) {
+          shopNickname = profile['name']?.toString().trim() ?? '';
+        }
+      }
       final transaction = TransactionModel(
         id: _originalTransaction?.id,
         uid: user.uid,
@@ -256,6 +288,7 @@ class AddTransactionController extends GetxController {
             : TransactionType.income,
         category: selectedCategory.value,
         date: selectedDate.value,
+        shopNickname: shopNickname,
       );
 
       if (_originalTransaction != null &&

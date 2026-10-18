@@ -69,7 +69,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDN57Q5fHVCnd93XUS-nW8TjgwpLhf0fbQ',
-    appId: '1:903048450592:android:99b78274d70f7613876245',
+    appId: '1:903048450592:android:4480a8d923dc2f3f876245',
     messagingSenderId: '903048450592',
     projectId: 'tra-verify',
     storageBucket: 'tra-verify.firebasestorage.app',
@@ -83,5 +83,4 @@ class DefaultFirebaseOptions {
     authDomain: 'tra-verify.firebaseapp.com',
     storageBucket: 'tra-verify.firebasestorage.app',
   );
-
 }

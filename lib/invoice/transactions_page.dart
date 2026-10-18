@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:tra_list/invoice/transaction_form.dart' hide AddTransactionPage;
-import 'package:tra_list/routes.dart';
-import 'package:tra_list/invoice/transaction_report_pdf.dart';
-import 'package:tra_list/invoice/transaction_excel_export.dart'; // Add this import
 import 'add_transaction_page.dart';
 import 'transaction_model.dart';
-import 'transaction_service.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'analytics_page.dart';
 import 'transactions_controller.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -23,6 +18,40 @@ class TransactionsPage extends StatefulWidget {
 
 class _TransactionsPageState extends State<TransactionsPage> {
   final TransactionsController controller = Get.put(TransactionsController());
+
+  @override
+  void initState() {
+    super.initState();
+    final arguments = Get.arguments;
+    final type = arguments is Map
+        ? arguments['type']?.toString()
+        : arguments?.toString();
+    final periodName = arguments is Map
+        ? arguments['period']?.toString()
+        : null;
+    switch (type) {
+      case 'income':
+        controller.selectSummaryFilter(SummaryFilter.income);
+        break;
+      case 'expense':
+        controller.selectSummaryFilter(SummaryFilter.expense);
+        break;
+    }
+    if (type == 'income' || type == 'expense') {
+      final period = switch (periodName) {
+        'yesterday' => FilterPeriod.yesterday,
+        'thisWeek' => FilterPeriod.week,
+        'thisMonth' => FilterPeriod.month,
+        _ => FilterPeriod.today,
+      };
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        while (mounted && controller.isFetching.value) {
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+        if (mounted) controller.setFilter(period);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +75,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
           ],
         ),
       ),
-      floatingActionButton: _buildSpeedDialFab(),
+      floatingActionButton: BusinessAccessService.can('transactions', 'create')
+          ? _buildSpeedDialFab()
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
@@ -258,6 +289,16 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${'transactions_shop'.tr}: ${t.shopNickname.isEmpty ? 'transactions_shop_not_recorded'.tr : t.shopNickname}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -288,29 +329,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  // This widget is no longer used, but I'll leave it here in case you want to
-  // re-implement a "Load More" button instead of infinite scrolling.
-  Widget _buildLoader() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20.0),
-        child: Center(
-          child: controller.loadingMore.value
-              ? const CircularProgressIndicator()
-              : controller.hasMore.value
-              ? ElevatedButton(
-                  onPressed: controller.fetchNextPage,
-                  child: Text('transactions_load_more'.tr),
-                )
-              : Text(
-                  'transactions_end_of_list'.tr,
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
         ),
       ),
     );
@@ -449,12 +467,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         PopupMenuButton<SortOption>(
           tooltip: 'Sort by'.tr,
           icon: const Icon(Icons.sort),
-          onSelected: (newSortOption) {
-            if (controller.sortOption.value != newSortOption) {
-              controller.sortOption.value = newSortOption;
-              controller.applyAllFilters(); // Re-sort and re-group the list
-            }
-          },
+          onSelected: controller.setSortOption,
           itemBuilder: (context) => [
             PopupMenuItem(
               enabled: false,
@@ -581,8 +594,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
     return SliverPersistentHeader(
       pinned: true,
       delegate: _SliverFilterChipsDelegate(
-        minHeight: 70,
-        maxHeight: 100, // Adjusted for a single row of chips
+        minHeight: 112,
+        maxHeight: 112,
         child: Obx(
           () => Container(
             color: controller.brandColor.value, // Match app bar color
@@ -596,22 +609,135 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   Widget _buildFilterChipsPanel() {
-    return Wrap(
-      spacing: 8.0,
-      runSpacing: 4.0,
-      alignment: WrapAlignment.start,
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildFilterChip(FilterPeriod.all, 'transactions_all_time'.tr),
-        _buildFilterChip(FilterPeriod.today, 'transactions_today'.tr),
-        _buildFilterChip(FilterPeriod.yesterday, 'yesterday'.tr),
-        _buildFilterChip(FilterPeriod.week, 'transactions_this_week'.tr),
-        _buildFilterChip(FilterPeriod.month, 'transactions_this_month'.tr),
-        ActionChip(
-          avatar: const Icon(Icons.calendar_today, size: 16),
-          label: Text('transactions_custom_range'.tr),
-          onPressed: () => controller.setFilter(FilterPeriod.custom),
+        Row(
+          children: [
+            if (BusinessAccessService.isOwner.value) ...[
+              Expanded(
+                child: _buildSelectionFilter(
+                  title: 'transactions_filter_shop'.tr,
+                  value: controller.selectedShopNickname.value.isEmpty
+                      ? 'transactions_all_shops'.tr
+                      : controller.selectedShopNickname.value,
+                  icon: Icons.storefront_outlined,
+                  items: [
+                    ('', 'transactions_all_shops'.tr),
+                    for (final shop in controller.availableShopNames)
+                      (shop, shop),
+                  ],
+                  onSelected: controller.setShopFilter,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: _buildSelectionFilter(
+                title: 'transactions_filter_category'.tr,
+                value: controller.selectedCategory.value.isEmpty
+                    ? 'transactions_all_categories'.tr
+                    : controller.selectedCategory.value,
+                icon: Icons.category_outlined,
+                items: [
+                  ('', 'transactions_all_categories'.tr),
+                  for (final category in controller.availableCategories)
+                    (category, category),
+                ],
+                onSelected: controller.setCategoryFilter,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildFilterChip(
+                FilterPeriod.all,
+                'transactions_all_time'.tr,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Expanded(
+              child: _buildFilterChip(
+                FilterPeriod.today,
+                'transactions_today'.tr,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Expanded(
+              child: _buildFilterChip(FilterPeriod.yesterday, 'yesterday'.tr),
+            ),
+            const SizedBox(width: 3),
+            Expanded(
+              child: _buildFilterChip(
+                FilterPeriod.week,
+                'transactions_this_week'.tr,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Expanded(
+              child: _buildFilterChip(
+                FilterPeriod.month,
+                'transactions_this_month'.tr,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Expanded(
+              child: _buildFilterChip(
+                FilterPeriod.custom,
+                'transactions_custom_range'.tr,
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildSelectionFilter({
+    required String title,
+    required String value,
+    required IconData icon,
+    required List<(String, String)> items,
+    required ValueChanged<String> onSelected,
+  }) {
+    return PopupMenuButton<String>(
+      tooltip: title,
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final item in items)
+          PopupMenuItem(value: item.$1, child: Text(item.$2)),
+      ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withOpacity(0.24)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, color: Colors.white),
+          ],
+        ),
+      ),
     );
   }
 
@@ -655,7 +781,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   ),
                 ),
               )
-            // NEW: Use SliverMainAxisGroup to group items by date
             : SliverMainAxisGroup(
                 slivers: controller.groupedTransactions.entries.map((entry) {
                   final date = entry.key;
@@ -681,16 +806,22 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Widget _buildFilterChip(FilterPeriod p, String label) {
     final selected = controller.filter.value == p;
     return ChoiceChip(
-      label: Text(label),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(label, maxLines: 1, softWrap: false),
+      ),
       labelStyle: TextStyle(
         color: selected ? Colors.blue.shade800 : Colors.black87,
+        fontSize: 11,
       ),
       selected: selected,
       onSelected: (_) => controller.setFilter(p),
       selectedColor: controller.accentColor.value.withOpacity(0.3),
       backgroundColor: controller.brandColor.value.withOpacity(0.1),
       elevation: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+      visualDensity: const VisualDensity(horizontal: -4, vertical: -2),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }

@@ -36,48 +36,46 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   Widget build(BuildContext context) {
     final isNew = widget.transaction == null;
+    const canvas = Color(0xFFF4F7F7);
 
     return Scaffold(
+      backgroundColor: canvas,
       appBar: AppBar(
+        backgroundColor: canvas,
+        foregroundColor: const Color(0xFF19313A),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
         title: Text(
           isNew ? 'add_transaction_title'.tr : 'edit_transaction_title'.tr,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 19),
         ),
-        actions: [
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.only(right: 16.0),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: TransactionForm(
+                controller: controller,
+                isSaving: _isSaving,
+                onSave: (saveAction) async {
+                  setState(() => _isSaving = true);
+                  try {
+                    await saveAction();
+                    if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
+                    Get.back(result: true);
+                  } finally {
+                    if (mounted) setState(() => _isSaving = false);
+                  }
+                },
+                onCancel: () => Get.back(result: false),
               ),
             ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: TransactionForm(
-          controller: controller, // Pass the controller instance directly.
-          isSaving: _isSaving, // Pass saving state to the form
-          onSave: (saveAction) async {
-            setState(() => _isSaving = true);
-            try {
-              await saveAction(); // Execute the save logic from the form
-              // The controller now handles the snackbar and navigation.
-              // The onSave in the form will trigger the controller's save, which then closes the page.
-              // For mobile, we need to explicitly close.
-              if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
-              Get.back(result: true); // This was missing.
-            } finally {
-              if (mounted) setState(() => _isSaving = false);
-            }
-          },
-          onCancel: () => Get.back(result: false),
+          ),
         ),
       ),
     );

@@ -60,8 +60,8 @@ class PDFService {
       // -------- Helpers --------
       const double fontScale = 1.2; // was 1.3
       // Slightly lighter text colors
-      final PdfColor textColor = PdfColor(0.28, 0.28, 0.28); // was 0.28
-      final PdfColor textColorBold = PdfColor(0.22, 0.22, 0.22); // was 0.22
+      final PdfColor textColor = PdfColors.black;
+      final PdfColor textColorBold = PdfColors.black;
       const double kLetterSpacing = 0.2; // was 0.2
 
       String money(num? v) {

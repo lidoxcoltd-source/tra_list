@@ -9,13 +9,15 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/document_design_service.dart';
+import 'package:tra_list/services/document_terms_service.dart';
 import '../profile_service.dart';
 
 class AdvancePaymentPdf {
   static Future<void> generate(Map<String, dynamic> data) async {
     try {
-      final withCompany = await _ensureCompany(data);
-      final bytes = await _buildPdfBytes(withCompany);
+      final preparedData = await _prepareData(data);
+      final bytes = await _buildPdfBytes(preparedData);
       await Printing.layoutPdf(onLayout: (_) async => bytes);
       Get.snackbar(
         'Success',
@@ -35,14 +37,24 @@ class AdvancePaymentPdf {
     Map<String, dynamic> data, {
     required String fileName,
   }) async {
-    final withCompany = await _ensureCompany(data);
-    final bytes = await _buildPdfBytes(withCompany);
+    final preparedData = await _prepareData(data);
+    final bytes = await _buildPdfBytes(preparedData);
     return pdf_saver.savePdf(bytes, fileName);
   }
 
   static Future<Uint8List> generateBytes(Map<String, dynamic> data) async {
-    final withCompany = await _ensureCompany(data);
-    return _buildPdfBytes(withCompany);
+    final preparedData = await _prepareData(data);
+    return _buildPdfBytes(preparedData);
+  }
+
+  static Future<Map<String, dynamic>> _prepareData(
+    Map<String, dynamic> data,
+  ) async {
+    final withTerms = await DocumentTermsService.applySelected(
+      await _ensureCompany(data),
+      'advance_payment',
+    );
+    return DocumentDesignService.applySelected(withTerms, 'advance_payment');
   }
 
   static Future<Map<String, dynamic>> _ensureCompany(
@@ -59,6 +71,10 @@ class AdvancePaymentPdf {
     final pdf = pw.Document();
 
     final company = (data['company'] as Map?)?.cast<String, dynamic>() ?? {};
+    final documentTerms = Map<String, dynamic>.from(
+      data['documentTerms'] as Map? ??
+          DocumentTermsService.defaultVersion(documentType: 'advance_payment'),
+    );
     final client = (data['client'] as Map?)?.cast<String, dynamic>() ?? {};
     final invoice = (data['invoice'] as Map?)?.cast<String, dynamic>() ?? {};
     final items =
@@ -106,63 +122,67 @@ class AdvancePaymentPdf {
       socialIcons = pw.MemoryImage(socialBytes.buffer.asUint8List());
     } catch (_) {}
 
-    final colors = (company['colors'] as Map?) ?? {};
-    final brandColor = colors['brand'] is int
-        ? PdfColor.fromInt(colors['brand'])
-        : PdfColor.fromInt(0xFFF15A24);
-    final accentColor = colors['accent'] is int
-        ? PdfColor.fromInt(colors['accent'])
-        : PdfColor.fromInt(0xFF1976D2);
-    final footerColor = colors['footer'] is int
-        ? PdfColor.fromInt(colors['footer'])
-        : PdfColors.grey800;
-    final t = _Theme(brand: brandColor, accent: accentColor);
+    final design = DocumentDesign.fromData(data, company);
+    final brandColor = design.brand;
+    final footerColor = design.footer;
+    final t = _Theme(
+      brand: design.brand,
+      accent: design.accent,
+      design: design,
+    );
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.only(top: 36, bottom: 0, left: 0, right: 0),
-        footer: (ctx) => _footer(t, company, footerColor, socialIcons, ctx),
+        pageTheme: design.pageTheme(),
+        footer: (_) => _footer(t, company, footerColor, socialIcons),
         build: (ctx) => [
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(horizontal: 36),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    if (logo != null)
-                      pw.Container(
-                        width: 120,
-                        height: 60,
-                        alignment: pw.Alignment.centerLeft,
-                        child: pw.Image(logo, fit: pw.BoxFit.contain),
-                      ),
-                    pw.Spacer(),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('ADVANCE INVOICE', style: t.h1),
-                        pw.SizedBox(height: 6),
-                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
-                        pw.Text(
-                          company['address']?.toString() ?? '',
-                          style: t.small,
-                          textAlign: pw.TextAlign.right,
+                design.wrapHeader(
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      if (logo != null)
+                        pw.Container(
+                          width: 120,
+                          height: 60,
+                          alignment: pw.Alignment.centerLeft,
+                          child: pw.Image(logo, fit: pw.BoxFit.contain),
                         ),
-                        if (company['taxId'] != null)
+                      pw.Spacer(),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text('ADVANCE INVOICE', style: t.h1),
+                          pw.SizedBox(height: 6),
                           pw.Text(
-                            'Tax Id: ${company['taxId']}',
-                            style: t.small,
+                            company['name']?.toString() ?? '',
+                            style: t.h2,
                           ),
-                        if (company['email'] != null)
-                          pw.Text(company['email'].toString(), style: t.small),
-                        if (company['phone'] != null)
-                          pw.Text('Tel: ${company['phone']}', style: t.small),
-                      ],
-                    ),
-                  ],
+                          pw.Text(
+                            company['address']?.toString() ?? '',
+                            style: t.small,
+                            textAlign: pw.TextAlign.right,
+                          ),
+                          if (company['taxId'] != null)
+                            pw.Text(
+                              'Tax Id: ${company['taxId']}',
+                              style: t.small,
+                            ),
+                          if (company['email'] != null)
+                            pw.Text(
+                              company['email'].toString(),
+                              style: t.small,
+                            ),
+                          if (company['phone'] != null)
+                            pw.Text('Tel: ${company['phone']}', style: t.small),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 pw.SizedBox(height: 24),
                 pw.Row(
@@ -315,6 +335,8 @@ class AdvancePaymentPdf {
                     ),
                   ],
                 ),
+                _noteAndDelivery(t, documentTerms),
+                _termsAndConditions(t, documentTerms),
               ],
             ),
           ),
@@ -341,10 +363,7 @@ class AdvancePaymentPdf {
 
   static pw.Widget _tableHeader(_Theme t, PdfColor brandColor) {
     return pw.Container(
-      decoration: pw.BoxDecoration(
-        color: brandColor,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
+      decoration: t.design.tableHeaderDecoration(),
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: pw.Row(
         children: [
@@ -385,7 +404,8 @@ class AdvancePaymentPdf {
     double unit,
     double amount,
   ) {
-    return pw.Padding(
+    return pw.Container(
+      decoration: t.design.rowDecoration(),
       padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       child: pw.Row(
         children: [
@@ -443,15 +463,19 @@ class AdvancePaymentPdf {
     );
   }
 
-  static pw.Widget _noteAndDelivery(_Theme t) {
-    const note =
-        'We kindly request that the remaining balance be settled upon project completion. '
-        'This ensures smooth delivery and maintains our quality of service.';
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+  static pw.Widget _noteAndDelivery(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final note = documentTerms['note']?.toString().trim() ?? '';
+    final delivery = documentTerms['delivery']?.toString().trim() ?? '';
+    if (note.isEmpty && delivery.isEmpty) return pw.SizedBox();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        pw.Expanded(
-          child: pw.Container(
+        if (note.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 10),
             padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: pw.BoxDecoration(
               border: pw.Border(
@@ -460,40 +484,37 @@ class AdvancePaymentPdf {
             ),
             child: pw.Text(note, style: t.smallGrey),
           ),
-        ),
-        pw.SizedBox(width: 18),
-        pw.Container(
-          width: 220,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: pw.BoxDecoration(
-            border: pw.Border(
-              left: pw.BorderSide(color: PdfColors.black, width: 3),
+        if (delivery.isNotEmpty)
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 8),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                left: pw.BorderSide(color: PdfColors.black, width: 3),
+              ),
             ),
+            child: pw.Text(delivery, style: t.smallRed),
           ),
-          child: pw.RichText(
-            text: pw.TextSpan(
-              style: t.smallRed,
-              children: [
-                pw.TextSpan(text: 'Delivery Time  '),
-                pw.TextSpan(text: 'Max '),
-                pw.TextSpan(
-                  text: '7 Days ',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(text: 'Min '),
-                pw.TextSpan(
-                  text: '5 Days\n',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TextSpan(
-                  text: 'From Payment Day',
-                  style: t.smallRed.copyWith(fontWeight: pw.FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
+    );
+  }
+
+  static pw.Widget _termsAndConditions(
+    _Theme t,
+    Map<String, dynamic> documentTerms,
+  ) {
+    final conditions = documentTerms['conditions']?.toString().trim() ?? '';
+    if (conditions.isEmpty) return pw.SizedBox();
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('TERMS AND CONDITIONS', style: t.h3Bold),
+          pw.SizedBox(height: 6),
+          pw.Text(conditions, style: t.small),
+        ],
+      ),
     );
   }
 
@@ -502,18 +523,10 @@ class AdvancePaymentPdf {
     Map<String, dynamic> company,
     PdfColor footerColor,
     pw.ImageProvider? socialIcons,
-    pw.Context ctx,
   ) {
     return pw.Column(
       mainAxisSize: pw.MainAxisSize.min,
-      children: [
-        if (ctx.pageNumber == ctx.pagesCount)
-          pw.Padding(
-            padding: const pw.EdgeInsets.fromLTRB(36, 0, 36, 8),
-            child: _noteAndDelivery(t),
-          ),
-        _footerBar(t, company, footerColor, socialIcons),
-      ],
+      children: [_footerBar(t, company, footerColor, socialIcons)],
     );
   }
 
@@ -557,8 +570,9 @@ class AdvancePaymentPdf {
 class _Theme {
   final PdfColor brand;
   final PdfColor accent;
+  final DocumentDesign design;
 
-  _Theme({required this.brand, required this.accent});
+  _Theme({required this.brand, required this.accent, required this.design});
 
   final PdfColor grey = PdfColors.grey600;
 
@@ -571,7 +585,7 @@ class _Theme {
   pw.TextStyle get header => pw.TextStyle(
     fontSize: 10,
     fontWeight: pw.FontWeight.bold,
-    color: PdfColors.white,
+    color: design.lightTableHeader ? brand : PdfColors.white,
   );
   pw.TextStyle get medium => pw.TextStyle(fontSize: 10, color: PdfColors.black);
   pw.TextStyle get mediumBold => pw.TextStyle(

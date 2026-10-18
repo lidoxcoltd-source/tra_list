@@ -11,6 +11,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 import 'package:get/get.dart';
 
 /// Improved and professional re-design of the original ProfilePage.
@@ -35,6 +36,7 @@ class _ProfilePageState extends State<ProfilePage> {
       : Get.put(LanguageController());
 
   final nameC = TextEditingController();
+  final shopNicknameC = TextEditingController();
   final addressC = TextEditingController();
   final phoneC = TextEditingController();
   final emailC = TextEditingController();
@@ -80,6 +82,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final data = await ProfileService.loadOrCreate();
       if (!mounted) return;
       nameC.text = data['name']?.toString() ?? '';
+      shopNicknameC.text = data['shopNickname']?.toString() ?? '';
       addressC.text = data['address']?.toString() ?? '';
       phoneC.text = data['phone']?.toString() ?? '';
       emailC.text = data['email']?.toString() ?? '';
@@ -142,6 +145,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     nameC.dispose();
+    shopNicknameC.dispose();
     addressC.dispose();
     phoneC.dispose();
     emailC.dispose();
@@ -389,6 +393,12 @@ class _ProfilePageState extends State<ProfilePage> {
           icon: Icons.business_outlined,
           children: [
             _buildTextField(nameC, 'Company Name', Icons.label_outline),
+            _buildTextField(
+              shopNicknameC,
+              'profile_shop_nickname'.tr,
+              Icons.storefront_outlined,
+              enabled: BusinessAccessService.isOwner.value,
+            ),
             _buildTextField(addressC, 'Address', Icons.location_on_outlined),
             _buildTextField(phoneC, 'Phone', Icons.phone_outlined),
             _buildTextField(emailC, 'Email', Icons.email_outlined),
@@ -643,11 +653,13 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildTextField(
     TextEditingController controller,
     String label,
-    IconData icon,
-  ) => Padding(
+    IconData icon, {
+    bool enabled = true,
+  }) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
     child: TextFormField(
       controller: controller,
+      enabled: enabled,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         prefixIcon: Icon(icon, size: 18, color: Colors.grey.shade500),
@@ -1121,6 +1133,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _save() async {
     if (busy) return;
+    if (!BusinessAccessService.can('profile', 'edit')) {
+      Get.snackbar('Error', 'staff_no_permission'.tr);
+      return;
+    }
     try {
       setState(() => busy = true);
       String? newUrl = logoUrl;
@@ -1139,6 +1155,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await ProfileService.save({
         'name': nameC.text.trim(),
+        'shopNickname': shopNicknameC.text.trim(),
         'address': addressC.text.trim(),
         'phone': phoneC.text.trim(),
         'email': emailC.text.trim(),
@@ -1181,9 +1198,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<String?> _uploadBytes(Uint8List bytes, String? ext) async {
     final storage = FirebaseStorage.instance;
     try {
+      if (!BusinessAccessService.can('profile', 'edit')) {
+        throw StateError(
+          'You do not have permission to change the business logo.',
+        );
+      }
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not signed in');
-      final uid = user.uid;
+      final uid = BusinessAccessService.businessId;
 
       final safeExt = (ext == 'jpg' || ext == 'jpeg') ? 'jpg' : 'png';
       final ts = DateTime.now().millisecondsSinceEpoch;

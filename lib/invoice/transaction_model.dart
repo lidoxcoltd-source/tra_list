@@ -10,6 +10,7 @@ class TransactionModel {
   final DateTime date;
   final String category;
   final String uid;
+  final String shopNickname;
 
   TransactionModel({
     this.id,
@@ -19,6 +20,7 @@ class TransactionModel {
     required this.date,
     required this.category,
     required this.uid,
+    this.shopNickname = '',
   });
 
   factory TransactionModel.fromFirestore(DocumentSnapshot doc) {
@@ -33,6 +35,7 @@ class TransactionModel {
       date: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
       category: data['category'] ?? 'Uncategorized',
       uid: data['uid'] ?? '',
+      shopNickname: data['shopNickname']?.toString() ?? '',
     );
   }
 
@@ -51,6 +54,7 @@ class TransactionModel {
           : (json['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
       category: json['category'] ?? 'Uncategorized',
       uid: json['uid'] ?? '',
+      shopNickname: json['shopNickname']?.toString() ?? '',
     );
   }
 
@@ -62,6 +66,7 @@ class TransactionModel {
       'date': Timestamp.fromDate(date),
       'category': category,
       'uid': uid,
+      'shopNickname': shopNickname,
     };
   }
 
@@ -75,6 +80,7 @@ class TransactionModel {
       'date': date.toIso8601String(), // Use ISO8601 for JSON compatibility
       'category': category,
       'uid': uid,
+      'shopNickname': shopNickname,
     };
   }
 }

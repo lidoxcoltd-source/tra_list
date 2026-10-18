@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'ReceiptPage.dart';
 import 'AddReceiptPage.dart';
+import 'services/business_access_service.dart';
 
 class ReceiptsListPageHybrid extends StatelessWidget {
   const ReceiptsListPageHybrid({super.key});
@@ -17,21 +18,25 @@ class ReceiptsListPageHybrid extends StatelessWidget {
         foregroundColor: Colors.black87,
         elevation: 0,
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddReceiptPage()),
-              );
-            },
-            icon: const Icon(Icons.add),
-            tooltip: 'Add New Receipt',
-          ),
+          if (BusinessAccessService.can('receipts', 'create'))
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddReceiptPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              tooltip: 'Add New Receipt',
+            ),
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('receipts')
+            .where('businessUid', isEqualTo: BusinessAccessService.businessId)
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -162,17 +167,21 @@ class ReceiptsListPageHybrid extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddReceiptPage()),
-          );
-        },
-        backgroundColor: const Color(0xFFFFE500),
-        foregroundColor: Colors.black87,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: BusinessAccessService.can('receipts', 'create')
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddReceiptPage(),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFFFFE500),
+              foregroundColor: Colors.black87,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
@@ -242,10 +251,11 @@ class ReceiptsListPageHybrid extends StatelessWidget {
                             value: 'view',
                             child: Text('View'),
                           ),
-                          const PopupMenuItem<String>(
-                            value: 'edit',
-                            child: Text('Edit'),
-                          ),
+                          if (BusinessAccessService.can('receipts', 'edit'))
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Text('Edit'),
+                            ),
                         ],
                   ),
                 ],

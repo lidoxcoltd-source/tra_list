@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/services/company_logo_service.dart';
+import 'package:tra_list/services/document_design_service.dart';
 import '../profile_service.dart';
 
 class DeliveryNotePdf {
@@ -59,7 +60,11 @@ class DeliveryNotePdf {
     }
   }
 
-  static Future<Uint8List> _buildPdfBytes(Map<String, dynamic> data) async {
+  static Future<Uint8List> _buildPdfBytes(Map<String, dynamic> input) async {
+    final data = await DocumentDesignService.applySelected(
+      input,
+      'delivery_note',
+    );
     final pdf = pw.Document();
 
     final company = data['company'] as Map<String, dynamic>? ?? {};
@@ -93,22 +98,18 @@ class DeliveryNotePdf {
     } catch (_) {}
 
     // Read brand color from profile; fallback default.
-    final colors = (company['colors'] as Map?) ?? {};
-    final brandColor = colors['brand'] is int
-        ? PdfColor.fromInt(colors['brand'])
-        : PdfColor.fromInt(0xFFF15A24);
-    final accentColor = colors['accent'] is int
-        ? PdfColor.fromInt(colors['accent'])
-        : PdfColor.fromInt(0xFF1976D2);
-    final footerColor = colors['footer'] is int
-        ? PdfColor.fromInt(colors['footer'])
-        : PdfColors.grey800;
-    final t = _Theme(brand: brandColor, accent: accentColor);
+    final design = DocumentDesign.fromData(data, company);
+    final brandColor = design.brand;
+    final footerColor = design.footer;
+    final t = _Theme(
+      brand: design.brand,
+      accent: design.accent,
+      design: design,
+    );
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.only(top: 36, bottom: 0, left: 0, right: 0),
+        pageTheme: design.pageTheme(),
         footer: (ctx) => _footer(t, company, footerColor, socialIcons, ctx),
         build: (ctx) => [
           pw.Padding(
@@ -117,35 +118,43 @@ class DeliveryNotePdf {
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 // Header
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    if (logo != null)
-                      pw.Container(
-                        width: 120,
-                        height: 60,
-                        alignment: pw.Alignment.centerLeft,
-                        child: pw.Image(logo!, fit: pw.BoxFit.contain),
-                      ),
-                    pw.Spacer(),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('DELIVERY NOTE', style: t.h1),
-                        pw.SizedBox(height: 6),
-                        pw.Text(company['name']?.toString() ?? '', style: t.h2),
-                        pw.Text(
-                          company['address']?.toString() ?? '',
-                          style: t.small,
-                          textAlign: pw.TextAlign.right,
+                design.wrapHeader(
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      if (logo != null)
+                        pw.Container(
+                          width: 120,
+                          height: 60,
+                          alignment: pw.Alignment.centerLeft,
+                          child: pw.Image(logo!, fit: pw.BoxFit.contain),
                         ),
-                        if ((company['email'] ?? '').toString().isNotEmpty)
-                          pw.Text(company['email'].toString(), style: t.small),
-                        if ((company['phone'] ?? '').toString().isNotEmpty)
-                          pw.Text('Tel: ${company['phone']}', style: t.small),
-                      ],
-                    ),
-                  ],
+                      pw.Spacer(),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text('DELIVERY NOTE', style: t.h1),
+                          pw.SizedBox(height: 6),
+                          pw.Text(
+                            company['name']?.toString() ?? '',
+                            style: t.h2,
+                          ),
+                          pw.Text(
+                            company['address']?.toString() ?? '',
+                            style: t.small,
+                            textAlign: pw.TextAlign.right,
+                          ),
+                          if ((company['email'] ?? '').toString().isNotEmpty)
+                            pw.Text(
+                              company['email'].toString(),
+                              style: t.small,
+                            ),
+                          if ((company['phone'] ?? '').toString().isNotEmpty)
+                            pw.Text('Tel: ${company['phone']}', style: t.small),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 pw.SizedBox(height: 24),
 
@@ -262,10 +271,7 @@ class DeliveryNotePdf {
 
   // pass brandColor from profile
   static pw.Widget _tableHeader(_Theme t, PdfColor brandColor) => pw.Container(
-    decoration: pw.BoxDecoration(
-      color: brandColor,
-      borderRadius: pw.BorderRadius.circular(8),
-    ),
+    decoration: t.design.tableHeaderDecoration(),
     padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
     child: pw.Row(
       children: [
@@ -282,7 +288,8 @@ class DeliveryNotePdf {
     ),
   );
 
-  static pw.Widget _row(_Theme t, String desc, double qty) => pw.Padding(
+  static pw.Widget _row(_Theme t, String desc, double qty) => pw.Container(
+    decoration: t.design.rowDecoration(),
     padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
     child: pw.Row(
       children: [
@@ -349,8 +356,9 @@ class DeliveryNotePdf {
 class _Theme {
   final PdfColor brand;
   final PdfColor accent;
+  final DocumentDesign design;
 
-  _Theme({required this.brand, required this.accent});
+  _Theme({required this.brand, required this.accent, required this.design});
 
   pw.TextStyle get h1 =>
       pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold, color: brand);
@@ -359,7 +367,7 @@ class _Theme {
   pw.TextStyle get header => pw.TextStyle(
     fontSize: 10,
     fontWeight: pw.FontWeight.bold,
-    color: PdfColors.white,
+    color: design.lightTableHeader ? brand : PdfColors.white,
   );
   pw.TextStyle get medium => pw.TextStyle(fontSize: 10, color: PdfColors.black);
   pw.TextStyle get small => pw.TextStyle(fontSize: 9, color: PdfColors.black);

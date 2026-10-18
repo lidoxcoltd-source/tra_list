@@ -1,12 +1,14 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/app_translations.dart';
 import 'package:tra_list/invoice/language_controller.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 import 'firebase_options.dart';
 
@@ -14,6 +16,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await GetStorage.init(); // Initialize GetStorage for language persistence
+  if (FirebaseAuth.instance.currentUser != null) {
+    try {
+      await BusinessAccessService.initializeForCurrentUser();
+    } on DisabledAccountException {
+      await FirebaseAuth.instance.signOut();
+      BusinessAccessService.clear();
+    }
+  }
   debugPrint('Storage bucket (runtime) = ${FirebaseStorage.instance.bucket}');
   runApp(MyApp());
 }
@@ -26,9 +36,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String initialRoute = FirebaseAuth.instance.currentUser != null
-        ? AppRoutes.home
-        : AppRoutes.login;
+    // Web deep links (e.g. /receipt/123) must skip the splash screen.
+    final isDeepLink = kIsWeb && Uri.base.path.length > 1;
+    final String initialRoute = isDeepLink
+        ? (FirebaseAuth.instance.currentUser != null
+              ? AppRoutes.home
+              : AppRoutes.login)
+        : AppRoutes.splash;
 
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
