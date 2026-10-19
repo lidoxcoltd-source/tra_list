@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'transaction_model.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 
 class TransactionService {
   static final _auth = FirebaseAuth.instance;
@@ -52,6 +53,12 @@ class TransactionService {
     }
     _requireAssignedShop(transaction);
     await getCollectionRef().add(transaction);
+    await NotificationService.notifyOwner(
+      action: 'transaction',
+      summary:
+          'added ${transaction.type.name} TSH ${transaction.amount.toStringAsFixed(0)} — ${transaction.description}',
+      amount: transaction.amount,
+    );
   }
 
   static Future<void> updateTransaction(
@@ -63,6 +70,12 @@ class TransactionService {
     }
     _requireAssignedShop(transaction);
     await getCollectionRef().doc(id).set(transaction);
+    await NotificationService.notifyOwner(
+      action: 'transaction',
+      summary:
+          'updated ${transaction.type.name} to TSH ${transaction.amount.toStringAsFixed(0)} — ${transaction.description}',
+      amount: transaction.amount,
+    );
   }
 
   static Future<void> deleteTransaction(String id) async {
@@ -70,6 +83,10 @@ class TransactionService {
       throw StateError('You do not have permission to delete transactions.');
     }
     await getCollectionRef().doc(id).delete();
+    await NotificationService.notifyOwner(
+      action: 'transaction',
+      summary: 'deleted a transaction',
+    );
   }
 
   static Future<QuerySnapshot<TransactionModel>> getTransactions({

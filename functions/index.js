@@ -4,10 +4,68 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
 
 const db = getFirestore();
+
+async function sendToTokens(tokens, title, body, data) {
+  for (let i = 0; i < tokens.length; i += 500) {
+    const chunk = tokens.slice(i, i + 500);
+    const result = await getMessaging().sendEachForMulticast({
+      tokens: chunk,
+      notification: { title, body },
+      data,
+      android: { priority: "high", notification: { channelId: "default" } },
+    });
+    // Drop tokens that are no longer valid.
+    const stale = [];
+    result.responses.forEach((r, idx) => {
+      const code = r.error?.code;
+      if (
+        code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token"
+      ) {
+        stale.push(chunk[idx]);
+      }
+    });
+    await Promise.all(
+      stale.map((t) => db.collection("deviceTokens").doc(t).delete()),
+    );
+  }
+}
+
+// Staff activity -> push to the business owner's devices.
+exports.pushStaffActivity = onDocumentCreated(
+  "users/{businessUid}/notifications/{id}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    const snap = await db
+      .collection("deviceTokens")
+      .where("uid", "==", event.params.businessUid)
+      .get();
+    const tokens = snap.docs.map((d) => d.id);
+    if (!tokens.length) return;
+    await sendToTokens(tokens, String(data.actorName || "Staff"), String(data.summary || ""), {
+      type: "activity",
+    });
+  },
+);
+
+// Super Admin announcement -> push to every registered device.
+exports.pushAnnouncement = onDocumentCreated("announcements/{id}", async (event) => {
+  const data = event.data?.data();
+  if (!data) return;
+  const snap = await db.collection("deviceTokens").get();
+  const tokens = snap.docs.map((d) => d.id);
+  if (!tokens.length) return;
+  await sendToTokens(tokens, String(data.title || "Mjasi POS"), String(data.body || ""), {
+    type: "announcement",
+  });
+});
 
 exports.deleteMyAccount = onCall(async (request) => {
   const uid = request.auth?.uid;

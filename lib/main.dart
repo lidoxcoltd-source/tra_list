@@ -9,6 +9,7 @@ import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/app_translations.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/app_version_gate.dart';
 
 import 'firebase_options.dart';
 
@@ -38,7 +39,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Web deep links (e.g. /receipt/123) must skip the splash screen.
     final isDeepLink = kIsWeb && Uri.base.path.length > 1;
-    final String initialRoute = isDeepLink
+    final isDownloads =
+        kIsWeb &&
+        Uri.base.path.replaceAll(RegExp(r'/+$'), '') == AppRoutes.downloads;
+    final String initialRoute = isDownloads
+        ? AppRoutes.downloads
+        : isDeepLink
         ? (FirebaseAuth.instance.currentUser != null
               ? AppRoutes.home
               : AppRoutes.login)
@@ -58,6 +64,8 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: initialRoute,
       getPages: AppRoutes.pages, // <-- wire routes
+      builder: (context, child) =>
+          AppVersionGate(child: child ?? const SizedBox.shrink()),
       defaultTransition: Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
     );

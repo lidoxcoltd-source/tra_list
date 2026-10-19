@@ -16,6 +16,17 @@ import 'InvoicePage.dart' as invoice_page;
 import 'advance_invoice_page.dart';
 import 'quotation_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
+
+String _deletedSummary(DocumentSnapshot<Map<String, dynamic>> doc) {
+  final data = doc.data() ?? const <String, dynamic>{};
+  final kind = (data['kind'] ?? 'invoice').toString();
+  final invoice = data['invoice'];
+  final number = invoice is Map ? (invoice['number'] ?? '').toString() : '';
+  final total = (data['total'] as num?)?.toDouble();
+  return 'deleted $kind $number${total == null ? '' : ' (TSH ${total.toStringAsFixed(0)})'}'
+      .replaceAll('  ', ' ');
+}
 
 class InvoicesPage extends StatefulWidget {
   const InvoicesPage({super.key});
@@ -543,7 +554,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
         background: _swipeBg(),
         confirmDismiss: (dir) => _confirmDismiss(context),
         onDismissed: (_) async {
+          final deletedInfo = _deletedSummary(doc);
           await doc.reference.delete();
+          await NotificationService.notifyOwner(
+            action: 'invoice',
+            summary: deletedInfo,
+          );
           Get.snackbar(
             'Deleted',
             'Document moved to trash',
@@ -908,7 +924,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
                     Navigator.pop(context);
                     final ok = await _confirmDismiss(context);
                     if (ok == true) {
+                      final deletedInfo = _deletedSummary(doc);
                       await doc.reference.delete();
+                      await NotificationService.notifyOwner(
+                        action: 'invoice',
+                        summary: deletedInfo,
+                      );
                       Get.snackbar(
                         'Deleted',
                         'Document removed',

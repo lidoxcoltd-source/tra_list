@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
 
 class InvoicePage extends StatefulWidget {
@@ -707,6 +708,12 @@ class _InvoicePageState extends State<InvoicePage> {
           'kind': kind,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        await NotificationService.notifyOwner(
+          action: kind == 'quotation' ? 'quotation' : 'invoice',
+          summary:
+              'edited $kind ${_invoiceNoController.text.trim()} (TSH ${_total.toStringAsFixed(0)})',
+          amount: _total,
+        );
       } else {
         // Create new document
         final docRef = col.doc();
@@ -718,6 +725,12 @@ class _InvoicePageState extends State<InvoicePage> {
           'uid': user.uid,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        await NotificationService.notifyOwner(
+          action: kind == 'quotation' ? 'quotation' : 'invoice',
+          summary:
+              'created $kind ${_invoiceNoController.text.trim()} (TSH ${_total.toStringAsFixed(0)})',
+          amount: _total,
+        );
       }
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {

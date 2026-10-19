@@ -9,6 +9,7 @@ import 'LocalStorageService.dart';
 import 'UrlHelper.dart';
 import 'services/profile_service.dart';
 import 'services/business_access_service.dart';
+import 'services/notification_service.dart';
 import 'utils/url_launcher_platform.dart';
 
 class AddReceiptPage extends StatefulWidget {
@@ -309,6 +310,11 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
         print('Successfully saved to Firestore!');
         savedToFirestore = true;
+        await NotificationService.notifyOwner(
+          action: 'receipt',
+          summary:
+              'created receipt ${_receiptNoController.text} (TSH ${_totalInclTaxController.text})',
+        );
       } catch (firestoreError) {
         print('Firestore error: $firestoreError');
         if (firestoreError is FirebaseException &&

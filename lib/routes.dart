@@ -12,6 +12,12 @@ import 'package:tra_list/subscription_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/staff_management_page.dart';
 import 'package:tra_list/services/super_admin_subscriptions_page.dart';
+import 'package:tra_list/services/app_version_management_page.dart';
+import 'package:tra_list/services/downloads_page.dart';
+import 'package:tra_list/services/admin_analytics_page.dart';
+import 'package:tra_list/services/admin_announcements_page.dart';
+import 'package:tra_list/services/notifications_page.dart';
+import 'package:tra_list/services/download_center_management_page.dart';
 
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/FirebaseTestPage.dart';
@@ -93,6 +99,12 @@ class AppRoutes {
   static const String subscription = '/subscription';
   static const String staff = '/staff';
   static const String adminSubscriptions = '/admin-subscriptions';
+  static const String adminAppVersions = '/admin-app-versions';
+  static const String downloads = '/downloads';
+  static const String adminDownloads = '/admin-downloads';
+  static const String adminAnalytics = '/admin-analytics';
+  static const String notifications = '/notifications';
+  static const String adminAnnouncements = '/admin-announcements';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
@@ -204,6 +216,41 @@ class AppRoutes {
     GetPage(
       name: adminSubscriptions,
       page: () => const SuperAdminSubscriptionsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminAppVersions,
+      page: () => const AppVersionManagementPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: downloads,
+      page: () => const DownloadsPage(),
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: adminDownloads,
+      page: () => const DownloadCenterManagementPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminAnalytics,
+      page: () => const AdminAnalyticsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: notifications,
+      page: () => const NotificationsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminAnnouncements,
+      page: () => const AdminAnnouncementsPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

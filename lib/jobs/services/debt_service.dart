@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tra_list/jobs/models/debt.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 
 class DebtService {
   static final _db = FirebaseFirestore.instance;
@@ -89,6 +90,12 @@ class DebtService {
     } else {
       await reference.set(savedDebt);
     }
+    await NotificationService.notifyOwner(
+      action: 'debt',
+      summary:
+          '${isEditing ? 'updated' : 'added'} debt for ${savedDebt.debtorName} (TSH ${savedDebt.principal.toStringAsFixed(0)})',
+      amount: savedDebt.principal,
+    );
   }
 
   static Future<void> recordPayment({
@@ -130,6 +137,11 @@ class DebtService {
         'recordedBy': userId,
       });
     });
+    await NotificationService.notifyOwner(
+      action: 'debt',
+      summary: 'recorded a debt payment of TSH ${amount.toStringAsFixed(0)}',
+      amount: amount,
+    );
   }
 
   static Stream<QuerySnapshot<DebtPayment>> watchPayments(String debtId) {

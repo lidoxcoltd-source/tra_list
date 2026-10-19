@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tra_list/jobs/models/job.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 
 class JobService {
   static final _auth = FirebaseAuth.instance;
@@ -31,6 +32,10 @@ class JobService {
     }
     // The model generates an ID, so we use `doc(job.id).set(job)`
     await getCollectionRef().doc(job.id).set(job);
+    await NotificationService.notifyOwner(
+      action: 'job',
+      summary: 'added a job',
+    );
   }
 
   static Future<void> updateJob(String id, Map<String, dynamic> data) async {
@@ -43,6 +48,12 @@ class JobService {
     updateData.remove('createdAt');
     updateData['updatedAt'] = FieldValue.serverTimestamp();
     await getCollectionRef().doc(id).update(updateData);
+    if (data.keys.any((k) => k != 'isImportant')) {
+      await NotificationService.notifyOwner(
+        action: 'job',
+        summary: 'updated a job',
+      );
+    }
   }
 
   static Future<void> deleteJob(String id) async {
@@ -50,6 +61,10 @@ class JobService {
       throw StateError('You do not have permission to delete jobs.');
     }
     await getCollectionRef().doc(id).delete();
+    await NotificationService.notifyOwner(
+      action: 'job',
+      summary: 'deleted a job',
+    );
   }
 
   static Stream<QuerySnapshot<Job>> getJobsStream() {

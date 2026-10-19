@@ -13,6 +13,8 @@ import 'package:tra_list/services/pages/document_design_page.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/account_deletion_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notifications_page.dart';
+import 'package:tra_list/services/push_service.dart';
 import 'services/subscription_controller.dart';
 
 enum _FinancePeriod { today, yesterday, thisWeek, thisMonth }
@@ -456,6 +458,7 @@ class _HomePageState extends State<HomePage> {
               child: _buildPlanBadge(),
             ),
           _buildLanguageButton(),
+          const NotificationBell(),
           if (BusinessAccessService.can('profile', 'view') ||
               BusinessAccessService.isOwner.value)
             IconButton(
@@ -527,6 +530,30 @@ class _HomePageState extends State<HomePage> {
                   'admin_subscriptions',
                   'admin_manage_subscriptions'.tr,
                   Icons.manage_accounts_outlined,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_app_versions',
+                  'admin_manage_app_versions'.tr,
+                  Icons.system_update_alt_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_downloads',
+                  'admin_manage_downloads'.tr,
+                  Icons.cloud_download_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_analytics',
+                  'admin_manage_analytics'.tr,
+                  Icons.insights_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_announcements',
+                  'admin_manage_announcements'.tr,
+                  Icons.campaign_rounded,
                 ),
               if (_isSuperAdmin)
                 _menuItem(
@@ -666,6 +693,15 @@ class _HomePageState extends State<HomePage> {
         await _openRestrictedRoute(AppRoutes.staff);
       case 'admin_subscriptions':
         await Get.toNamed(AppRoutes.adminSubscriptions);
+      case 'admin_app_versions':
+        await Get.toNamed(AppRoutes.adminAppVersions);
+      case 'admin_downloads':
+        await Get.toNamed(AppRoutes.adminDownloads);
+      case 'admin_analytics':
+        await Get.toNamed(AppRoutes.adminAnalytics);
+        break;
+      case 'admin_announcements':
+        await Get.toNamed(AppRoutes.adminAnnouncements);
       case 'create_receipt':
         await _openRestrictedRoute(AppRoutes.addReceipt);
       case 'subscription':
@@ -685,6 +721,7 @@ class _HomePageState extends State<HomePage> {
           ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
         }
       case 'logout':
+        await PushService.unregister();
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
         Navigator.of(

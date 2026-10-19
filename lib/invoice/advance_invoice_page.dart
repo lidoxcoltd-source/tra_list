@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 import 'package:flutter/services.dart';
 
 class AdvanceInvoicePage extends StatefulWidget {
@@ -173,6 +174,12 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
         'advancePaid': _advancePaid,
         'balance': _balance,
       });
+      await NotificationService.notifyOwner(
+        action: 'invoice',
+        summary:
+            'created advance invoice ${_invoiceNoC.text.trim()} (TSH ${_total.toStringAsFixed(0)})',
+        amount: _total,
+      );
 
       if (!mounted) return;
       Navigator.of(context).pop();

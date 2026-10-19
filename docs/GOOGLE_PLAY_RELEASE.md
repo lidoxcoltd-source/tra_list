@@ -59,6 +59,18 @@ The ID is permanent once published. It is not applied yet because `google-servic
 
 The Firebase project stays the same, so existing users and data are unaffected.
 
+## Super Admin app version enforcement
+
+The Super Admin menu includes **App version control**. It stores a minimum version, minimum build number, update URL, and message for Android, Windows, and Web in `app_config/version_policy`.
+
+- Enable only the platforms that already have a working update URL. The URL must use HTTPS.
+- A user's app is blocked after sign-in when its version/build is below that platform's minimum. Super Admin accounts bypass the gate so they can correct a policy.
+- The current policy is cached locally. If the service is unavailable, a cached policy is still enforced; without a cached policy the app allows access rather than locking users out on first launch.
+- This is a client-side access gate, not a security boundary. Keep sensitive data protected by Firestore/Storage rules; an old or modified client must not be trusted for authorization.
+- Deploy the updated Firestore rules before using the page: `firebase deploy --only firestore:rules`. Verify the selected Firebase project first.
+- Increase `version:` in `pubspec.yaml` for each app release and build/publish the corresponding platform. The gate cannot affect already-installed builds until a build containing the gate has been distributed.
+- Windows users need a hosted installer or downloadable release archive at the configured URL. The current Windows output is a folder, not a self-installing package.
+
 ## 4. Data inventory (from the code)
 
 | Data | Source | Where stored | Shared |

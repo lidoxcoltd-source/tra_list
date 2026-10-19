@@ -9,6 +9,7 @@ import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/pdf/quotation_pdf.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
 
 class QuotationPage extends StatefulWidget {
@@ -231,6 +232,12 @@ class _QuotationPageState extends State<QuotationPage> {
               .doc();
 
       await docRef.set(data, SetOptions(merge: true));
+      await NotificationService.notifyOwner(
+        action: 'quotation',
+        summary:
+            '${widget.quotation == null ? 'created' : 'edited'} quotation ${_quotationNoController.text} (TSH ${_total.toStringAsFixed(0)})',
+        amount: _total.toDouble(),
+      );
 
       final fileName = 'quotation_${_quotationNoController.text}.pdf';
       final pathOrName = await QuotationPdf.generateAndSave(
