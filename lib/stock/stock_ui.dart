@@ -1,0 +1,401 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:tra_list/routes.dart';
+import 'stock_media.dart';
+import 'stock_models.dart';
+
+const kStockNavy = Color(0xFF0D2A4A);
+const kStockBlue = Color(0xFF1565C0);
+const kStockLight = Color(0xFFE8F1FB);
+const kStockBg = Color(0xFFF5F7FA);
+const kStockOk = Color(0xFF2E7D32);
+const kStockWarn = Color(0xFFEF6C00);
+const kStockBad = Color(0xFFC62828);
+
+String fmtText(String key, Map<String, String> values) {
+  var text = key.tr;
+  values.forEach((k, v) => text = text.replaceAll('@$k', v));
+  return text;
+}
+
+String unitLabel(String unit) {
+  final key = 'stk_unit_$unit';
+  final t = key.tr;
+  return t == key ? unit : t;
+}
+
+/// Translates StockException keys (and shows other errors verbatim).
+String stockErrorText(Object error) {
+  if (error is StockException) return fmtText(error.messageKey, error.args);
+  return '$error';
+}
+
+void stockToast(String title, String message, {bool error = false}) {
+  Get.snackbar(
+    title,
+    message,
+    snackPosition: SnackPosition.BOTTOM,
+    backgroundColor: error ? kStockBad : kStockOk,
+    colorText: Colors.white,
+    margin: const EdgeInsets.all(12),
+    maxWidth: 520,
+  );
+}
+
+void stockGoBack(BuildContext context) {
+  if (Navigator.of(context).canPop()) {
+    Get.back();
+  } else {
+    Get.offAllNamed(AppRoutes.home);
+  }
+}
+
+class StockScaffold extends StatelessWidget {
+  const StockScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    this.actions,
+    this.fab,
+    this.bottom,
+    this.maxWidth = 1100,
+  });
+
+  final String title;
+  final Widget body;
+  final List<Widget>? actions;
+  final Widget? fab;
+  final PreferredSizeWidget? bottom;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kStockBg,
+      appBar: AppBar(
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+        ),
+        backgroundColor: kStockNavy,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => stockGoBack(context),
+        ),
+        actions: actions,
+        bottom: bottom,
+      ),
+      floatingActionButton: fab,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: body,
+        ),
+      ),
+    );
+  }
+}
+
+class StockCard extends StatelessWidget {
+  const StockCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.onTap,
+    this.borderColor,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final VoidCallback? onTap;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor ?? const Color(0xFFE5E9F2)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class StatTile extends StatelessWidget {
+  const StatTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.color = kStockBlue,
+    this.caption,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final String? caption;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return StockCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: kStockNavy,
+                    ),
+                  ),
+                ),
+                if (caption != null)
+                  Text(
+                    caption!,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StockStateChip extends StatelessWidget {
+  const StockStateChip({super.key, required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!product.tracked) {
+      return _chip('stk_not_tracked'.tr, Colors.blueGrey);
+    }
+    return switch (product.stockState) {
+      StockState.out => _chip('stk_out_of_stock'.tr, kStockBad),
+      StockState.low => _chip('stk_low_stock'.tr, kStockWarn),
+      StockState.ok => _chip('stk_in_stock'.tr, kStockOk),
+    };
+  }
+
+  Widget _chip(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: color,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+class StockMessage extends StatelessWidget {
+  const StockMessage({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.color = Colors.grey,
+    this.action,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56, color: color.withValues(alpha: 0.6)),
+            const SizedBox(height: 12),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            if (action != null) ...[const SizedBox(height: 12), action!],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+InputDecoration stockInput(String label, {IconData? icon, String? suffix}) =>
+    InputDecoration(
+      labelText: label,
+      prefixIcon: icon == null ? null : Icon(icon),
+      suffixText: suffix,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+
+Color movementColor(MovementType t, double change) =>
+    change >= 0 ? kStockOk : kStockBad;
+
+String formatDate(DateTime? d) => d == null
+    ? ''
+    : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+String formatDateTime(DateTime? d) => d == null
+    ? ''
+    : '${formatDate(d)} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+/// Searchable product picker. Returns null when dismissed.
+Future<Product?> pickProduct(
+  BuildContext context,
+  List<Product> products, {
+  bool trackedOnly = false,
+}) {
+  final list = products
+      .where((p) => p.active && (!trackedOnly || p.tracked))
+      .toList();
+  return showModalBottomSheet<Product>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      var query = '';
+      return StatefulBuilder(
+        builder: (ctx, setState) {
+          final q = query.trim().toLowerCase();
+          final shown = list
+              .where(
+                (p) =>
+                    q.isEmpty ||
+                    p.name.toLowerCase().contains(q) ||
+                    p.sku.toLowerCase().contains(q) ||
+                    p.barcode.toLowerCase().contains(q),
+              )
+              .toList();
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.75,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: TextField(
+                        autofocus: true,
+                        decoration: stockInput(
+                          'stk_search'.tr,
+                          icon: Icons.search_rounded,
+                        ).copyWith(
+                          suffixIcon: IconButton(
+                            tooltip: 'stk_scan'.tr,
+                            icon: const Icon(Icons.qr_code_scanner),
+                            onPressed: () async {
+                              final p = await scanForProduct(
+                                ctx,
+                                list,
+                                trackedOnly: trackedOnly,
+                              );
+                              if (p != null && ctx.mounted) {
+                                Navigator.pop(ctx, p);
+                              }
+                            },
+                          ),
+                        ),
+                        onChanged: (v) => setState(() => query = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: shown.isEmpty
+                          ? StockMessage(
+                              icon: Icons.inventory_2_outlined,
+                              text: 'stk_no_products'.tr,
+                            )
+                          : ListView.separated(
+                              itemCount: shown.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, i) {
+                                final p = shown[i];
+                                return ListTile(
+                                  leading: ProductImage(
+                                    url: p.imageUrl,
+                                    size: 40,
+                                    radius: 8,
+                                  ),
+                                  title: Text(p.name),
+                                  subtitle: Text(
+                                    '${p.sku} · ${p.tracked ? '${formatQty(p.quantity)} ${unitLabel(p.unit)}' : 'stk_not_tracked'.tr}',
+                                  ),
+                                  trailing: StockStateChip(product: p),
+                                  onTap: () => Navigator.pop(ctx, p),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}

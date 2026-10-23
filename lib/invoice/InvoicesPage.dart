@@ -17,6 +17,8 @@ import 'advance_invoice_page.dart';
 import 'quotation_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
+import 'package:tra_list/stock/stock_service.dart';
+import 'package:tra_list/stock/stock_ui.dart';
 
 String _deletedSummary(DocumentSnapshot<Map<String, dynamic>> doc) {
   final data = doc.data() ?? const <String, dynamic>{};
@@ -38,11 +40,82 @@ class InvoicesPage extends StatefulWidget {
 class _InvoicesPageState extends State<InvoicesPage> {
   final _searchC = TextEditingController();
   String _query = '';
+  static const _pageSize = 30;
+  Query<Map<String, dynamic>>? _documentsQuery;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _documentsStream;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _olderDocuments = [];
+  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
+  bool _hasMoreDocuments = true;
+  bool _loadingMoreDocuments = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (FirebaseAuth.instance.currentUser != null) _initializeDocumentsQuery();
+  }
 
   @override
   void dispose() {
     _searchC.dispose();
     super.dispose();
+  }
+
+  void _initializeDocumentsQuery() {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('users')
+        .doc(BusinessAccessService.businessId)
+        .collection('invoices');
+    final canViewInvoices = BusinessAccessService.can('invoices', 'view');
+    final canViewQuotations = BusinessAccessService.can('quotations', 'view');
+    if (canViewInvoices && !canViewQuotations) {
+      query = query.where('kind', isNotEqualTo: 'quotation');
+    } else if (!canViewInvoices && canViewQuotations) {
+      query = query.where('kind', isEqualTo: 'quotation');
+    }
+    _documentsQuery = query.orderBy('createdAt', descending: true);
+    _documentsStream = _documentsQuery!.limit(_pageSize).snapshots();
+  }
+
+  Future<void> _loadMoreDocuments() async {
+    final query = _documentsQuery;
+    final cursor = _lastDocument;
+    if (_loadingMoreDocuments ||
+        !_hasMoreDocuments ||
+        query == null ||
+        cursor == null) {
+      return;
+    }
+    setState(() => _loadingMoreDocuments = true);
+    try {
+      final page = await query
+          .startAfterDocument(cursor)
+          .limit(_pageSize)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _olderDocuments.addAll(page.docs);
+        _hasMoreDocuments = page.docs.length == _pageSize;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load more documents: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar('error'.tr, 'Could not load more documents.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreDocuments = false);
+    }
+  }
+
+  Future<void> _refreshDocuments() async {
+    final query = _documentsQuery;
+    if (query == null) return;
+    setState(() {
+      _olderDocuments.clear();
+      _lastDocument = null;
+      _hasMoreDocuments = true;
+      _documentsStream = query.limit(_pageSize).snapshots();
+    });
   }
 
   // Beautiful UI colors
@@ -162,19 +235,6 @@ class _InvoicesPageState extends State<InvoicesPage> {
       );
     }
 
-    Query<Map<String, dynamic>> documentsQuery = FirebaseFirestore.instance
-        .collection('users')
-        .doc(BusinessAccessService.businessId)
-        .collection('invoices');
-    final canViewInvoices = BusinessAccessService.can('invoices', 'view');
-    final canViewQuotations = BusinessAccessService.can('quotations', 'view');
-    if (canViewInvoices && !canViewQuotations) {
-      documentsQuery = documentsQuery.where('kind', isNotEqualTo: 'quotation');
-    } else if (!canViewInvoices && canViewQuotations) {
-      documentsQuery = documentsQuery.where('kind', isEqualTo: 'quotation');
-    }
-    final stream = documentsQuery.snapshots();
-
     return Scaffold(
       backgroundColor: bgColor,
       floatingActionButton: BusinessAccessService.can('invoices', 'create')
@@ -204,7 +264,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
             )
           : null,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: stream,
+        stream: _documentsStream,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator(color: primary));
@@ -239,14 +299,22 @@ class _InvoicesPageState extends State<InvoicesPage> {
             );
           }
 
-          final all = snap.data?.docs.toList() ?? [];
-          all.sort((a, b) {
-            final aDate = _asDate(a.data()['createdAt']);
-            final bDate = _asDate(b.data()['createdAt']);
-            return (bDate ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
-              aDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-            );
-          });
+          final firstPage = snap.data?.docs ?? [];
+          if (snap.hasData) {
+            _lastDocument = _olderDocuments.isEmpty
+                ? firstPage.isEmpty
+                      ? null
+                      : firstPage.last
+                : _olderDocuments.last;
+            if (_olderDocuments.isEmpty) {
+              _hasMoreDocuments = firstPage.length == _pageSize;
+            }
+          }
+          final allById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+            for (final doc in firstPage) doc.id: doc,
+            for (final doc in _olderDocuments) doc.id: doc,
+          };
+          final all = allById.values.toList();
           final filtered = all.where((d) {
             if (_query.isEmpty) return true;
             final data = d.data();
@@ -266,9 +334,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
           return RefreshIndicator(
             color: primary,
-            onRefresh: () async {
-              setState(() {});
-            },
+            onRefresh: _refreshDocuments,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -418,7 +484,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         Row(
                           children: [
                             _StatCard(
-                              label: 'Total Invoices',
+                              label: 'Loaded Invoices',
                               value: '${filtered.length}',
                               icon: Icons.description_outlined,
                               color: const Color(0xFF8B5CF6), // Violet
@@ -426,7 +492,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             ),
                             const SizedBox(width: 16),
                             _StatCard(
-                              label: 'Total Revenue',
+                              label: 'Revenue Loaded',
                               value: 'TSH ${_money(invoiceTotalSum)}',
                               icon: Icons.account_balance_wallet_outlined,
                               color: const Color(0xFF10B981), // Emerald
@@ -476,6 +542,33 @@ class _InvoicesPageState extends State<InvoicesPage> {
                         final doc = filtered[i];
                         return _buildDocumentCard(doc);
                       }, childCount: filtered.length),
+                    ),
+                  ),
+                if (_hasMoreDocuments)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          onPressed: _loadingMoreDocuments
+                              ? null
+                              : _loadMoreDocuments,
+                          icon: _loadingMoreDocuments
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.expand_more_rounded),
+                          label: Text(
+                            _loadingMoreDocuments
+                                ? 'Loading...'
+                                : 'Load more documents',
+                          ),
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -552,7 +645,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
             ? DismissDirection.endToStart
             : DismissDirection.none,
         background: _swipeBg(),
-        confirmDismiss: (dir) => _confirmDismiss(context),
+        confirmDismiss: (dir) async {
+          if (await _confirmDismiss(context) != true) return false;
+          return _restoreStockFor(doc);
+        },
         onDismissed: (_) async {
           final deletedInfo = _deletedSummary(doc);
           await doc.reference.delete();
@@ -923,7 +1019,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   onTap: () async {
                     Navigator.pop(context);
                     final ok = await _confirmDismiss(context);
-                    if (ok == true) {
+                    if (ok == true && await _restoreStockFor(doc)) {
                       final deletedInfo = _deletedSummary(doc);
                       await doc.reference.delete();
                       await NotificationService.notifyOwner(
@@ -968,6 +1064,25 @@ class _InvoicesPageState extends State<InvoicesPage> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: const Icon(Icons.delete_outline, color: Colors.white, size: 32),
     );
+  }
+
+  /// Returns stock sold by this document before it is deleted (idempotent).
+  Future<bool> _restoreStockFor(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    try {
+      await StockService.reverseSaleForDocument(doc);
+      return true;
+    } catch (e) {
+      Get.snackbar(
+        'error'.tr,
+        stockErrorText(e),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
+    }
   }
 
   Future<bool?> _confirmDismiss(BuildContext context) async {

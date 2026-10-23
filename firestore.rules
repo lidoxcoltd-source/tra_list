@@ -20,8 +20,8 @@ service cloud.firestore {
       return signedIn()
         && isAccountEnabled(request.auth.uid)
         && exists(profilePath)
-        && get(profilePath).data.get('role', '')
-          in ['superadmin', 'super_admin', 'super-admin', 'Super Admin'];
+        && get(profilePath).data.get('role', '').lower()
+          .replace('_', '').replace('-', '').replace(' ', '') == 'superadmin';
     }
 
     // Allow a user to read their own company profile doc so the app can
@@ -38,7 +38,9 @@ service cloud.firestore {
           'durationDays',
           'version',
           'updatedAt',
-          'updatedBy'
+          'updatedBy',
+          'mobileLogos',
+          'cardLogos'
         ])
         && data.keys().hasAll([
           'amount',
@@ -400,6 +402,148 @@ service cloud.firestore {
       allow delete: if canAccessDocument(businessUid, resource.data, 'delete');
     }
 
+    function canReadProducts(businessUid) {
+      return hasPermission(businessUid, 'stock', 'view')
+        || hasPermission(businessUid, 'invoices', 'create')
+        || hasPermission(businessUid, 'invoices', 'edit')
+        || hasPermission(businessUid, 'quotations', 'create');
+    }
+
+    function canMoveSaleStock(businessUid) {
+      return hasPermission(businessUid, 'invoices', 'create')
+        || hasPermission(businessUid, 'invoices', 'delete');
+    }
+
+    // Quantity/cost may only change together with a ledger movement, written
+    // by the app in the same transaction. Staff without stock.edit may only
+    // touch these running totals.
+    function onlyStockTotalsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['quantity', 'costPrice', 'stockState', 'updatedAt']);
+    }
+
+    match /users/{businessUid}/products/{productId} {
+      allow read: if canReadProducts(businessUid);
+      allow create: if hasPermission(businessUid, 'stock', 'create')
+        && request.resource.data.businessId == businessUid;
+      allow update: if resource.data.businessId == businessUid
+        && request.resource.data.businessId == businessUid
+        && (
+          hasPermission(businessUid, 'stock', 'edit')
+          || (
+            (
+              hasPermission(businessUid, 'stock', 'create')
+              || canMoveSaleStock(businessUid)
+            )
+            && onlyStockTotalsChanged()
+          )
+        );
+      allow delete: if hasPermission(businessUid, 'stock', 'delete');
+    }
+
+    match /users/{businessUid}/productCodes/{codeId} {
+      allow read: if hasPermission(businessUid, 'stock', 'view')
+        || hasPermission(businessUid, 'stock', 'create')
+        || hasPermission(businessUid, 'stock', 'edit');
+      allow create, update: if hasPermission(businessUid, 'stock', 'create')
+        || hasPermission(businessUid, 'stock', 'edit');
+      allow delete: if hasPermission(businessUid, 'stock', 'edit')
+        || hasPermission(businessUid, 'stock', 'delete');
+    }
+
+    match /users/{businessUid}/productBarcodes/{codeId} {
+      allow read: if hasPermission(businessUid, 'stock', 'view')
+        || hasPermission(businessUid, 'stock', 'create')
+        || hasPermission(businessUid, 'stock', 'edit')
+        || canMoveSaleStock(businessUid);
+      allow create, update: if hasPermission(businessUid, 'stock', 'create')
+        || hasPermission(businessUid, 'stock', 'edit');
+      allow delete: if hasPermission(businessUid, 'stock', 'edit')
+        || hasPermission(businessUid, 'stock', 'delete');
+    }
+
+    // Immutable ledger: entries can be created but never edited or deleted.
+    match /users/{businessUid}/stockMovements/{movementId} {
+      allow get: if hasPermission(businessUid, 'stock', 'view')
+        || canMoveSaleStock(businessUid);
+      allow list: if hasPermission(businessUid, 'stock', 'view');
+      allow create: if request.auth != null
+        && request.resource.data.businessId == businessUid
+        && request.resource.data.userId == request.auth.uid
+        && (
+          hasPermission(businessUid, 'stock', 'edit')
+          || (
+            hasPermission(businessUid, 'stock', 'create')
+            && request.resource.data.type in ['purchase', 'opening_stock']
+          )
+          || (
+            canMoveSaleStock(businessUid)
+            && request.resource.data.type in ['sale', 'sale_reversal']
+          )
+        );
+      allow update, delete: if false;
+    }
+
+    match /users/{businessUid}/purchases/{purchaseId} {
+      allow read: if hasPermission(businessUid, 'stock', 'view');
+      allow create: if hasPermission(businessUid, 'stock', 'create')
+        && request.resource.data.businessId == businessUid;
+      allow update, delete: if false;
+    }
+
+    match /users/{businessUid}/tasks/{taskId} {
+      function isAssignee() {
+        return hasActiveMembership(businessUid)
+          && resource.data.assigneeUid == request.auth.uid;
+      }
+
+      allow read: if hasPermission(businessUid, 'tasks', 'view') || isAssignee();
+
+      // Staff may only progress their own task: tick steps, report collection, submit.
+      allow update: if (
+        isAssignee()
+        && resource.data.status in ['assigned', 'inProgress', 'returned']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'progress', 'status', 'startedAt', 'submittedAt', 'collectedAmount',
+          'collectedAt', 'paymentMethod', 'collectionNote', 'updatedAt'
+        ])
+        && request.resource.data.status in ['inProgress', 'submitted']
+        && (
+          request.resource.data.status != 'submitted'
+          || (
+            request.resource.data.progress.keys().size() == request.resource.data.steps.size()
+            && (
+              request.resource.data.type != 'collection'
+              || request.resource.data.collectedAmount is number
+            )
+          )
+        )
+      ) || (
+        hasPermission(businessUid, 'tasks', 'edit')
+        && resource.data.assigneeUid != request.auth.uid
+        && request.resource.data.assigneeUid == resource.data.assigneeUid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['transactionId'])
+      );
+
+      allow delete: if hasPermission(businessUid, 'tasks', 'delete');
+
+      match /history/{eventId} {
+        allow read: if hasPermission(businessUid, 'tasks', 'view')
+          || (
+            hasActiveMembership(businessUid)
+            && get(/databases/$(database)/documents/users/$(businessUid)/tasks/$(taskId))
+              .data.assigneeUid == request.auth.uid
+          );
+        allow create: if (isBusinessOwner(businessUid) || hasActiveMembership(businessUid))
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(
+            ['actorUid', 'actorName', 'action', 'note', 'createdAt']
+          )
+          && request.resource.data.createdAt == request.time;
+      }
+    }
+
     match /users/{businessUid}/jobs/{jobId} {
       allow read: if isBusinessOwner(businessUid);
       allow write: if false;
@@ -485,7 +629,7 @@ service cloud.firestore {
     match /app_config/{configId} {
       allow get: if configId == 'version_policy'
         || configId == 'download_center'
-        || (signedIn() && configId == 'subscription_plan');
+        || configId == 'subscription_plan';
       allow list: if false;
       allow create, update: if isSuperAdmin()
         && configId == 'download_center'
@@ -502,6 +646,12 @@ service cloud.firestore {
           (configId == 'subscription_plan'
             && validSubscriptionPlan(request.resource.data)
             && request.resource.data.version == resource.data.version + 1)
+           || (configId == 'subscription_plan'
+            && validSubscriptionPlan(request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['mobileLogos', 'cardLogos'])
+            && request.resource.data.get('mobileLogos', []).size() <= 12
+            && request.resource.data.get('cardLogos', []).size() <= 12)
           || (configId == 'version_policy'
             && validAppVersionPolicy(request.resource.data))
         );
@@ -527,6 +677,12 @@ service cloud.firestore {
         && request.resource.data.read == false;
     }
 
+    match /userNotifications/{uid}/items/{itemId} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+
     match /deviceTokens/{token} {
       allow create, update: if request.auth != null
         && request.resource.data.keys().hasOnly(['uid', 'platform', 'updatedAt'])
@@ -542,7 +698,7 @@ service cloud.firestore {
       allow get, list: if request.auth != null;
       allow create, update: if isSuperAdmin()
         && request.resource.data.keys().hasOnly(
-          ['title', 'body', 'audience', 'createdAt', 'expiresAt', 'createdBy'])
+          ['title', 'body', 'audience', 'createdAt', 'expiresAt', 'createdBy', 'imageUrl'])
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
@@ -550,6 +706,25 @@ service cloud.firestore {
         && request.resource.data.body.size() <= 1000
         && request.resource.data.audience in ['all', 'subscribers', 'trial', 'expired'];
       allow delete: if isSuperAdmin();
+
+      match /reads/{uid} {
+        allow create: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+        allow get, list: if isSuperAdmin();
+        allow delete: if isSuperAdmin();
+      }
+    }
+
+    match /downloadStats/{metric} {
+      allow read: if isSuperAdmin();
+      allow create: if metric in ['visits', 'click_playstore', 'click_appstore',
+          'click_apk', 'click_windows', 'click_web']
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == 1;
+      allow update: if request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == resource.data.count + 1;
     }
 
     match /appActivity/{uid} {

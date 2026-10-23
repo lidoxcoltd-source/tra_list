@@ -15,8 +15,10 @@ class BusinessAccessService {
     'receipts': 'staff_module_receipts',
     'quotations': 'staff_module_quotations',
     'jobs': 'staff_module_jobs',
+    'tasks': 'staff_module_tasks',
     'analytics': 'staff_module_analytics',
     'categories': 'staff_module_categories',
+    'stock': 'staff_module_stock',
     'profile': 'staff_module_profile',
   };
 
@@ -118,6 +120,8 @@ class BusinessAccessService {
 
   static bool canAccessRoute(String route) {
     if (isOwner.value) return true;
+    // Every active staff member can open their own assigned tasks.
+    if (route == '/tasks') return isActive.value;
     if (route == '/invoices') {
       return can('invoices', 'view') || can('quotations', 'view');
     }
@@ -131,6 +135,8 @@ class BusinessAccessService {
       '/jobs-archive' => ('jobs', 'view'),
       '/analytics' => ('analytics', 'view'),
       '/categories' => ('categories', 'view'),
+      '/stock' => ('stock', 'view'),
+      '/pos' => ('invoices', 'create'),
       _ => null,
     };
     return permission != null && can(permission.$1, permission.$2);

@@ -142,22 +142,35 @@ class TransactionService {
       query = query.where('category', isEqualTo: category);
     }
 
-    // Run two separate aggregation queries (one for income, one for expense)
-    // by applying the 'type' filter on the query before aggregation.
-    final incomeAggregateSnapshot = await query
-        .where('type', isEqualTo: 'income')
-        .aggregate(sum('amount'))
-        .get();
-
-    final expenseAggregateSnapshot = await query
-        .where('type', isEqualTo: 'expense')
-        .aggregate(sum('amount'))
-        .get();
-
-    final incomeSum = incomeAggregateSnapshot.getSum('amount') ?? 0.0;
-    final expenseSum = expenseAggregateSnapshot.getSum('amount') ?? 0.0;
-
-    return {'income': incomeSum, 'expense': expenseSum};
+    // Aggregation queries are not supported on Windows desktop, so fall back
+    // to summing the documents client-side.
+    try {
+      final incomeAggregateSnapshot = await query
+          .where('type', isEqualTo: 'income')
+          .aggregate(sum('amount'))
+          .get();
+      final expenseAggregateSnapshot = await query
+          .where('type', isEqualTo: 'expense')
+          .aggregate(sum('amount'))
+          .get();
+      return {
+        'income': incomeAggregateSnapshot.getSum('amount') ?? 0.0,
+        'expense': expenseAggregateSnapshot.getSum('amount') ?? 0.0,
+      };
+    } catch (_) {
+      var income = 0.0;
+      var expense = 0.0;
+      final snap = await query.get();
+      for (final doc in snap.docs) {
+        final t = doc.data();
+        if (t.type == TransactionType.income) {
+          income += t.amount;
+        } else {
+          expense += t.amount;
+        }
+      }
+      return {'income': income, 'expense': expense};
+    }
   }
 
   /// Checks if a category is currently used by any transaction.

@@ -1,25 +1,35 @@
 const { createHash } = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
 
 const db = getFirestore();
 
-async function sendToTokens(tokens, title, body, data) {
+async function sendToTokens(tokens, title, body, data, imageUrl) {
+  let success = 0;
+  let failure = 0;
   for (let i = 0; i < tokens.length; i += 500) {
     const chunk = tokens.slice(i, i + 500);
     const result = await getMessaging().sendEachForMulticast({
       tokens: chunk,
-      notification: { title, body },
+      notification: imageUrl ? { title, body, imageUrl } : { title, body },
       data,
-      android: { priority: "high", notification: { channelId: "default" } },
+      android: {
+        priority: "high",
+        notification: imageUrl
+          ? { channelId: "default", imageUrl }
+          : { channelId: "default" },
+      },
     });
+    success += result.successCount;
+    failure += result.failureCount;
     // Drop tokens that are no longer valid.
     const stale = [];
     result.responses.forEach((r, idx) => {
@@ -35,9 +45,10 @@ async function sendToTokens(tokens, title, body, data) {
       stale.map((t) => db.collection("deviceTokens").doc(t).delete()),
     );
   }
+  return { success, failure };
 }
 
-// Staff activity -> push to the business owner's devices.
+// users/{businessUid}/notifications/{id} -> push to the business owner's devices.
 exports.pushStaffActivity = onDocumentCreated(
   "users/{businessUid}/notifications/{id}",
   async (event) => {
@@ -55,16 +66,122 @@ exports.pushStaffActivity = onDocumentCreated(
   },
 );
 
+// Writes an in-app inbox item and pushes to the user's devices.
+async function notifyUser(uid, body, taskId, kind) {
+  await db.collection("userNotifications").doc(uid).collection("items").add({
+    body,
+    taskId,
+    kind,
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  const snap = await db.collection("deviceTokens").where("uid", "==", uid).get();
+  const tokens = snap.docs.map((d) => d.id);
+  if (tokens.length) {
+    await sendToTokens(tokens, "Kazi", body, { type: "task", taskId });
+  }
+}
+
+// Task changes -> push to the assignee, or notify the owner via the activity feed.
+exports.pushTaskChanges = onDocumentWritten(
+  "users/{businessUid}/tasks/{taskId}",
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!after) return;
+    const { businessUid } = event.params;
+    const title = String(after.title || "Task");
+
+    let toAssignee = null;
+    let toOwner = null;
+    if (!before) {
+      toAssignee = `Kazi mpya: ${title}`;
+    } else if (before.status !== after.status) {
+      if (after.status === "returned") toAssignee = `Kazi imerudishwa: ${title}`;
+      else if (after.status === "approved") toAssignee = `Kazi imeidhinishwa: ${title}`;
+      else if (after.status === "cancelled") toAssignee = `Kazi imeghairiwa: ${title}`;
+      else if (after.status === "inProgress" && before.status === "assigned")
+        toOwner = `Ameanza kazi: ${title}`;
+      else if (after.status === "submitted") {
+        const amt = after.collectedAmount;
+        toOwner = `Amewasilisha kazi: ${title}` +
+          (typeof amt === "number" ? ` (TZS ${amt})` : "");
+      }
+    } else if (
+      before.dueDate?.toMillis?.() !== after.dueDate?.toMillis?.() &&
+      after.status !== "approved" && after.status !== "cancelled"
+    ) {
+      toAssignee = `Muda wa kazi umebadilishwa: ${title}`;
+    }
+
+    if (toAssignee && after.assigneeUid) {
+      await notifyUser(after.assigneeUid, toAssignee, event.params.taskId, "task");
+    }
+    if (toOwner) {
+      // pushStaffActivity delivers this to the owner's devices.
+      await db.collection("users").doc(businessUid).collection("notifications").add({
+        actorUid: after.assigneeUid || "",
+        actorName: String(after.assigneeName || "Staff"),
+        action: "task",
+        taskId: event.params.taskId,
+        summary: toOwner,
+        createdAt: FieldValue.serverTimestamp(),
+        read: false,
+      });
+    }
+  },
+);
+
+// Hourly: remind assignees (and the owner) about tasks past their deadline, once per deadline.
+exports.notifyOverdueTasks = onSchedule("every 60 minutes", async () => {
+  const now = Date.now();
+  const snap = await db
+    .collectionGroup("tasks")
+    .where("dueDate", "<", Timestamp.fromMillis(now))
+    .where("dueDate", ">", Timestamp.fromMillis(now - 14 * 24 * 3600 * 1000))
+    .limit(500)
+    .get();
+  for (const doc of snap.docs) {
+    const t = doc.data();
+    if (!["assigned", "inProgress", "returned"].includes(t.status)) continue;
+    const due = t.dueDate.toMillis();
+    if (t.overdueNotifiedFor === due) continue;
+    await doc.ref.update({ overdueNotifiedFor: due });
+    const title = String(t.title || "Task");
+    if (t.assigneeUid) {
+      await notifyUser(t.assigneeUid, `Kazi imechelewa: ${title}`, doc.id, "overdue");
+    }
+    const businessUid = doc.ref.parent.parent.id;
+    await db.collection("users").doc(businessUid).collection("notifications").add({
+      actorUid: t.assigneeUid || "",
+      actorName: String(t.assigneeName || "Staff"),
+      action: "task",
+      taskId: doc.id,
+      summary: `Kazi imechelewa: ${title}`,
+      createdAt: FieldValue.serverTimestamp(),
+      read: false,
+    });
+  }
+});
+
 // Super Admin announcement -> push to every registered device.
 exports.pushAnnouncement = onDocumentCreated("announcements/{id}", async (event) => {
   const data = event.data?.data();
   if (!data) return;
   const snap = await db.collection("deviceTokens").get();
   const tokens = snap.docs.map((d) => d.id);
-  if (!tokens.length) return;
-  await sendToTokens(tokens, String(data.title || "Mjasi POS"), String(data.body || ""), {
-    type: "announcement",
-  });
+  if (!tokens.length) {
+    await event.data.ref.update({ sentCount: 0, failureCount: 0 });
+    return;
+  }
+  const { success, failure } = await sendToTokens(
+    tokens,
+    String(data.title || "Mjasi POS"),
+    String(data.body || ""),
+    { type: "announcement" },
+    data.imageUrl || undefined,
+  );
+  await event.data.ref.update({ sentCount: success, failureCount: failure });
 });
 
 exports.deleteMyAccount = onCall(async (request) => {

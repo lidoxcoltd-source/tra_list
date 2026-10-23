@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DownloadItemDef {
   const DownloadItemDef(this.key, this.title, this.subtitle, this.icon);
@@ -128,5 +129,39 @@ class DownloadCenterService {
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': user.uid,
     });
+  }
+
+  static final _stats = FirebaseFirestore.instance.collection('downloadStats');
+
+  static Future<void> _bump(String metric) async {
+    try {
+      await _stats.doc(metric).set({
+        'count': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+    } catch (error) {
+      debugPrint('Download stat skipped: $error');
+    }
+  }
+
+  /// Counts one visit per browser per day.
+  static Future<void> trackVisit() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      if (prefs.getString('downloads_last_visit') == today) return;
+      await prefs.setString('downloads_last_visit', today);
+    } catch (_) {}
+    await _bump('visits');
+  }
+
+  static Future<void> trackDownload(String key) => _bump('click_$key');
+
+  /// Super Admin only. Returns metric -> count.
+  static Future<Map<String, int>> loadStats() async {
+    final snap = await _stats.get();
+    return {
+      for (final doc in snap.docs)
+        doc.id: (doc.data()['count'] as num?)?.toInt() ?? 0,
+    };
   }
 }

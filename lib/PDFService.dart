@@ -17,7 +17,7 @@ class PDFService {
       final itemsRaw = (data['items'] as List?) ?? const [];
       final items = itemsRaw
           .cast<Map>()
-          .map((e) => Map<String, dynamic>.from(e as Map))
+          .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
       // Optional: auto compute totals if not provided

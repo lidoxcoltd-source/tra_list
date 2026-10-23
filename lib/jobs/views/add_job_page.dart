@@ -250,7 +250,7 @@ class _AddJobPageState extends State<AddJobPage> {
 
     final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final due = j.dueDate != null
-        ? DateFormat('yyyy-MM-dd').format(j.dueDate!)
+        ? DateFormat('yyyy-MM-dd').format(j.dueDate)
         : '';
     final desc = _description.text.trim();
     final lineDesc = [

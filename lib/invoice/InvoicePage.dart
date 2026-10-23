@@ -19,6 +19,9 @@ import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
+import 'package:tra_list/stock/stock_models.dart';
+import 'package:tra_list/stock/stock_service.dart';
+import 'package:tra_list/stock/stock_ui.dart';
 
 class InvoicePage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? invoice;
@@ -53,6 +56,7 @@ class _InvoicePageState extends State<InvoicePage> {
   );
 
   final List<Map<String, dynamic>> _items = [];
+  String? _savedDocId;
 
   static String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
@@ -84,6 +88,8 @@ class _InvoicePageState extends State<InvoicePage> {
               'desc': itemMap['description'] ?? '',
               'qty': itemMap['qty'] ?? 1,
               'unit': itemMap['unit'] ?? 0.0,
+              if (itemMap['productId'] != null)
+                'productId': itemMap['productId'],
             };
           }),
         );
@@ -108,6 +114,31 @@ class _InvoicePageState extends State<InvoicePage> {
   String _money(num v) => v
       .toStringAsFixed(0)
       .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+
+  num _parseQty(String v) {
+    final d = double.tryParse(v.trim());
+    if (d == null || d <= 0) return 1;
+    return d == d.roundToDouble() ? d.toInt() : d;
+  }
+
+  Future<void> _addFromStock() async {
+    try {
+      final products = await StockService.current().watchProducts().first;
+      if (!mounted) return;
+      final p = await pickProduct(context, products);
+      if (p == null) return;
+      setState(() {
+        _items.add({
+          'desc': p.name,
+          'qty': 1,
+          'unit': p.sellPrice,
+          'productId': p.id,
+        });
+      });
+    } catch (e) {
+      Get.snackbar('error'.tr, stockErrorText(e));
+    }
+  }
 
   Future<void> _loadCompanyAndColors() async {
     try {
@@ -432,6 +463,16 @@ class _InvoicePageState extends State<InvoicePage> {
                               title: 'Items',
                             ),
                             const Spacer(),
+                            if (widget.invoice == null)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: IconButton.outlined(
+                                  tooltip: 'stk_from_stock'.tr,
+                                  color: _brandColor,
+                                  onPressed: _addFromStock,
+                                  icon: const Icon(Icons.inventory_2_outlined),
+                                ),
+                              ),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: _brandColor,
@@ -528,9 +569,12 @@ class _InvoicePageState extends State<InvoicePage> {
                                     decoration: const InputDecoration(
                                       labelText: 'Qty',
                                     ),
-                                    keyboardType: TextInputType.number,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
                                     onChanged: (v) => setState(
-                                      () => it['qty'] = int.tryParse(v) ?? 1,
+                                      () => it['qty'] = _parseQty(v),
                                     ),
                                   ),
                                 ),
@@ -689,8 +733,12 @@ class _InvoicePageState extends State<InvoicePage> {
         Get.snackbar('Sign in required', 'Please sign in to save to cloud');
         return;
       }
-      final permissionAction = widget.invoice == null ? 'create' : 'edit';
-      if (!BusinessAccessService.can('invoices', permissionAction)) {
+      final existingId = widget.invoice?.id ?? _savedDocId;
+      if (!BusinessAccessService.can(
+        'invoices',
+        existingId == null ? 'create' : 'edit',
+      )) {
+        if (_savedDocId != null) return; // already saved by this session
         Get.snackbar('error'.tr, 'staff_no_permission'.tr);
         return;
       }
@@ -700,10 +748,10 @@ class _InvoicePageState extends State<InvoicePage> {
           .doc(BusinessAccessService.businessId)
           .collection('invoices');
 
-      if (widget.invoice != null) {
+      if (existingId != null) {
         // Update existing document
-        debugPrint('Updating ${widget.invoice!.id}');
-        await col.doc(widget.invoice!.id).update({
+        debugPrint('Updating $existingId');
+        await col.doc(existingId).update({
           ...data,
           'kind': kind,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -718,13 +766,42 @@ class _InvoicePageState extends State<InvoicePage> {
         // Create new document
         final docRef = col.doc();
         debugPrint('Saving to ${docRef.path}');
-        await docRef.set({
+        final saleData = {
           ...data,
           'kind': kind,
           'id': docRef.id,
           'uid': user.uid,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        };
+        final stockLines = kind == 'invoice'
+            ? _items
+                  .where((e) => e['productId'] != null)
+                  .map(
+                    (e) => SaleLine(
+                      productId: e['productId'].toString(),
+                      quantity: (e['qty'] as num).toDouble(),
+                    ),
+                  )
+                  .toList()
+            : <SaleLine>[];
+        if (stockLines.isEmpty) {
+          await docRef.set(saleData);
+        } else {
+          // Sale record and stock deduction commit together or not at all.
+          try {
+            await StockService.current().finalizeSale(
+              saleRef: docRef,
+              saleData: saleData,
+              lines: stockLines,
+            );
+          } on FirebaseException catch (e) {
+            if (e.code == 'permission-denied') {
+              throw StockException('stk_err_permission');
+            }
+            rethrow;
+          }
+        }
+        _savedDocId = docRef.id;
         await NotificationService.notifyOwner(
           action: kind == 'quotation' ? 'quotation' : 'invoice',
           summary:
@@ -764,6 +841,7 @@ class _InvoicePageState extends State<InvoicePage> {
               'description': e['desc'],
               'qty': e['qty'],
               'unit': e['unit'],
+              if (e['productId'] != null) 'productId': e['productId'],
               'amount': (e['qty'] as num) * (e['unit'] as num),
             },
           )
@@ -1007,7 +1085,9 @@ class _InvoicePageState extends State<InvoicePage> {
     } catch (e) {
       Get.snackbar(
         'Error',
-        'Failed to save PDF: $e',
+        e is StockException
+            ? stockErrorText(e)
+            : 'Failed to save PDF: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

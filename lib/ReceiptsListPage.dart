@@ -33,10 +33,22 @@ class ReceiptsListPage extends StatefulWidget {
 class _ReceiptsListPageState extends State<ReceiptsListPage> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  static const _pageSize = 30;
+  late final Query<Map<String, dynamic>> _receiptsQuery;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _receiptsStream;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _olderReceipts = [];
+  DocumentSnapshot<Map<String, dynamic>>? _lastReceipt;
+  bool _hasMoreReceipts = true;
+  bool _loadingMoreReceipts = false;
 
   @override
   void initState() {
     super.initState();
+    _receiptsQuery = FirebaseFirestore.instance
+        .collection('receipts')
+        .where('businessUid', isEqualTo: BusinessAccessService.businessId)
+        .orderBy('createdAt', descending: true);
+    _receiptsStream = _receiptsQuery.limit(_pageSize).snapshots();
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.toLowerCase().trim());
     });
@@ -48,22 +60,69 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
     super.dispose();
   }
 
+  Future<void> _loadMoreReceipts() async {
+    final cursor = _lastReceipt;
+    if (_loadingMoreReceipts || !_hasMoreReceipts || cursor == null) return;
+    setState(() => _loadingMoreReceipts = true);
+    try {
+      final page = await _receiptsQuery
+          .startAfterDocument(cursor)
+          .limit(_pageSize)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _olderReceipts.addAll(page.docs);
+        _hasMoreReceipts = page.docs.length == _pageSize;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load more receipts: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load more receipts.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreReceipts = false);
+    }
+  }
+
+  Future<void> _refreshReceipts() async {
+    setState(() {
+      _olderReceipts.clear();
+      _lastReceipt = null;
+      _hasMoreReceipts = true;
+      _receiptsStream = _receiptsQuery.limit(_pageSize).snapshots();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('receipts')
-            .where('businessUid', isEqualTo: BusinessAccessService.businessId)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _receiptsStream,
         builder: (context, snapshot) {
-          final allDocs = snapshot.data?.docs ?? [];
+          final firstPage = snapshot.data?.docs ?? [];
+          if (snapshot.hasData) {
+            _lastReceipt = _olderReceipts.isEmpty
+                ? firstPage.isEmpty
+                      ? null
+                      : firstPage.last
+                : _olderReceipts.last;
+            if (_olderReceipts.isEmpty) {
+              _hasMoreReceipts = firstPage.length == _pageSize;
+            }
+          }
+          final allById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+            for (final doc in firstPage) doc.id: doc,
+            for (final doc in _olderReceipts) doc.id: doc,
+          };
+          final allDocs = allById.values.toList();
           final docs = _query.isEmpty
               ? allDocs
               : allDocs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   final customer =
                       (data['customer'] as Map<String, dynamic>? ?? {});
                   final meta = (data['meta'] as Map<String, dynamic>? ?? {});
@@ -74,35 +133,66 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
                   return name.contains(_query) || receiptNo.contains(_query);
                 }).toList();
 
-          return CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(context, allDocs.length),
-              if (snapshot.hasError)
-                SliverFillRemaining(
-                  child: _buildErrorState(context, snapshot.error),
-                )
-              else if (snapshot.connectionState == ConnectionState.waiting)
-                const SliverFillRemaining(child: _LoadingState())
-              else if (docs.isEmpty)
-                const SliverFillRemaining(child: _EmptyState())
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      return _ReceiptCard(
-                        data: data,
-                        onView: () => _viewReceipt(context, data),
-                        onEdit: BusinessAccessService.can('receipts', 'edit')
-                            ? () => _editReceipt(context, data)
-                            : null,
-                        onDownload: () => _downloadReceipt(context, data),
-                      );
-                    }, childCount: docs.length),
+          return RefreshIndicator(
+            onRefresh: _refreshReceipts,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                _buildSliverAppBar(context, allDocs.length),
+                if (snapshot.hasError)
+                  SliverFillRemaining(
+                    child: _buildErrorState(context, snapshot.error),
+                  )
+                else if (snapshot.connectionState == ConnectionState.waiting)
+                  const SliverFillRemaining(child: _LoadingState())
+                else if (docs.isEmpty)
+                  const SliverFillRemaining(child: _EmptyState())
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final data = docs[index].data();
+                        return _ReceiptCard(
+                          data: data,
+                          onView: () => _viewReceipt(context, data),
+                          onEdit: BusinessAccessService.can('receipts', 'edit')
+                              ? () => _editReceipt(context, data)
+                              : null,
+                          onDownload: () => _downloadReceipt(context, data),
+                        );
+                      }, childCount: docs.length),
+                    ),
                   ),
-                ),
-            ],
+                if (_hasMoreReceipts)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          onPressed: _loadingMoreReceipts
+                              ? null
+                              : _loadMoreReceipts,
+                          icon: _loadingMoreReceipts
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.expand_more_rounded),
+                          label: Text(
+                            _loadingMoreReceipts
+                                ? 'Loading...'
+                                : 'Load more receipts',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           );
         },
       ),
@@ -199,7 +289,7 @@ class _ReceiptsListPageState extends State<ReceiptsListPage> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 62),
                 child: _StatChip(
                   icon: Icons.receipt_long_rounded,
-                  label: 'Total Receipts',
+                  label: 'Loaded Receipts',
                   value: '$totalCount',
                 ),
               ),

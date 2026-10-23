@@ -127,7 +127,7 @@ class DeliveryNotePdf {
                           width: 120,
                           height: 60,
                           alignment: pw.Alignment.centerLeft,
-                          child: pw.Image(logo!, fit: pw.BoxFit.contain),
+                          child: pw.Image(logo, fit: pw.BoxFit.contain),
                         ),
                       pw.Spacer(),
                       pw.Column(

@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
+import 'package:tra_list/invoice/transaction_model.dart';
+import 'package:tra_list/invoice/transaction_service.dart';
 import 'business_access_service.dart';
 import 'profile_service.dart';
 import 'staff_service.dart';
@@ -159,8 +162,16 @@ class StaffManagementPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  for (final member in staff)
-                    _staffCard(context, member.data(), member.id),
+                  _StaffInsights(
+                    staff: staff,
+                    cardBuilder: (member, perf, rank) => _staffCard(
+                      context,
+                      member.data(),
+                      member.id,
+                      perf: perf,
+                      rank: rank,
+                    ),
+                  ),
                 ],
               );
             },
@@ -238,8 +249,10 @@ class StaffManagementPage extends StatelessWidget {
   Widget _staffCard(
     BuildContext context,
     Map<String, dynamic> data,
-    String employeeUid,
-  ) {
+    String employeeUid, {
+    _Perf? perf,
+    int? rank,
+  }) {
     final active = data['active'] == true;
     final removed = data['removed'] == true;
     final name = data['name']?.toString() ?? '';
@@ -257,18 +270,26 @@ class StaffManagementPage extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: active
-                  ? const Color(0xFFE5F0F0)
-                  : const Color(0xFFF0F2F3),
-              child: Text(
-                name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-                style: const TextStyle(
-                  color: _brand,
-                  fontWeight: FontWeight.w700,
+            Column(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: active
+                      ? const Color(0xFFE5F0F0)
+                      : const Color(0xFFF0F2F3),
+                  child: Text(
+                    name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+                    style: const TextStyle(
+                      color: _brand,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
+                if (rank != null) ...[
+                  const SizedBox(height: 6),
+                  _rankBadge(rank),
+                ],
+              ],
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -316,6 +337,33 @@ class StaffManagementPage extends StatelessWidget {
                       style: const TextStyle(color: _muted, fontSize: 12),
                     ),
                   ],
+                  if (perf != null) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _perfChip(
+                          Icons.south_west_rounded,
+                          _money(perf.income),
+                          const Color(0xFF237A52),
+                          const Color(0xFFEAF5EF),
+                        ),
+                        _perfChip(
+                          Icons.north_east_rounded,
+                          _money(perf.expense),
+                          const Color(0xFFB64D4D),
+                          const Color(0xFFFAEEEE),
+                        ),
+                        _perfChip(
+                          Icons.receipt_long_outlined,
+                          '${perf.count}',
+                          _brand,
+                          const Color(0xFFE5F0F0),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 7),
                 ],
               ),
@@ -361,6 +409,59 @@ class StaffManagementPage extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static String _money(double v) => NumberFormat('#,##0').format(v);
+
+  static Widget _perfChip(IconData icon, String text, Color fg, Color bg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color _rankColor(int rank) => switch (rank) {
+    1 => const Color(0xFFD4A017),
+    2 => const Color(0xFF8A99A3),
+    3 => const Color(0xFFB87333),
+    _ => const Color(0xFF9AA8AF),
+  };
+
+  static Widget _rankBadge(int rank) {
+    final color = _rankColor(rank);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '#$rank',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -506,6 +607,325 @@ class StaffManagementPage extends StatelessWidget {
         snackPosition: SnackPosition.BOTTOM,
       );
     }
+  }
+}
+
+class _Perf {
+  double income = 0;
+  double expense = 0;
+  int count = 0;
+}
+
+enum _Range { today, yesterday, week, month }
+
+class _StaffInsights extends StatefulWidget {
+  const _StaffInsights({required this.staff, required this.cardBuilder});
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> staff;
+  final Widget Function(
+    QueryDocumentSnapshot<Map<String, dynamic>> member,
+    _Perf perf,
+    int? rank,
+  )
+  cardBuilder;
+
+  @override
+  State<_StaffInsights> createState() => _StaffInsightsState();
+}
+
+class _StaffInsightsState extends State<_StaffInsights> {
+  static const _ink = Color(0xFF19313A);
+  static const _muted = Color(0xFF75838A);
+  static const _brand = Color(0xFF0E5962);
+
+  _Range _range = _Range.month;
+  Map<String, _Perf> _perf = {};
+  bool _loading = true;
+  bool _failed = false;
+  int _request = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  String _label(_Range r) => switch (r) {
+    _Range.today => 'transactions_today'.tr,
+    _Range.yesterday => 'yesterday'.tr,
+    _Range.week => 'transactions_this_week'.tr,
+    _Range.month => 'transactions_this_month'.tr,
+  };
+
+  Future<void> _load() async {
+    final request = ++_request;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final (start, end) = switch (_range) {
+      _Range.today => (today, today.add(const Duration(days: 1))),
+      _Range.yesterday => (today.subtract(const Duration(days: 1)), today),
+      _Range.week => (
+        today.subtract(Duration(days: now.weekday - 1)),
+        today
+            .subtract(Duration(days: now.weekday - 1))
+            .add(const Duration(days: 7)),
+      ),
+      _Range.month => (
+        DateTime(now.year, now.month, 1),
+        DateTime(now.year, now.month + 1, 1),
+      ),
+    };
+    try {
+      final snap = await TransactionService.getTransactions(
+        limit: 2000,
+        startDate: start,
+        endDate: end,
+      );
+      final result = <String, _Perf>{};
+      for (final doc in snap.docs) {
+        final t = doc.data();
+        final p = result.putIfAbsent(t.uid, _Perf.new);
+        p.count++;
+        if (t.type == TransactionType.income) {
+          p.income += t.amount;
+        } else {
+          p.expense += t.amount;
+        }
+      }
+      if (!mounted || request != _request) return;
+      setState(() {
+        _perf = result;
+        _loading = false;
+      });
+    } catch (error) {
+      debugPrint('Could not load staff performance: $error');
+      if (!mounted || request != _request) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final members = [...widget.staff]
+      ..sort((a, b) {
+        final ra = a.data()['removed'] == true ? 1 : 0;
+        final rb = b.data()['removed'] == true ? 1 : 0;
+        if (ra != rb) return ra.compareTo(rb);
+        final ia = _perf[a.id]?.income ?? 0;
+        final ib = _perf[b.id]?.income ?? 0;
+        return ib.compareTo(ia);
+      });
+    final ranked = members.where((m) => m.data()['removed'] != true).toList();
+    final ownerPerf = _perf[BusinessAccessService.businessId];
+    final teamIncome = _perf.values.fold<double>(0, (s, p) => s + p.income);
+    final teamExpense = _perf.values.fold<double>(0, (s, p) => s + p.expense);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final r in _Range.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(_label(r)),
+                    selected: _range == r,
+                    selectedColor: _brand,
+                    labelStyle: TextStyle(
+                      color: _range == r ? Colors.white : _ink,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    showCheckmark: false,
+                    onSelected: (_) {
+                      if (_range == r) return;
+                      _range = r;
+                      _load();
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _brand,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              _teamStat('income'.tr, teamIncome, const Color(0xFF6EE7B7)),
+              _teamStat('expenses'.tr, teamExpense, const Color(0xFFFCA5A5)),
+              _teamStat('net'.tr, teamIncome - teamExpense, Colors.white),
+            ],
+          ),
+        ),
+        if (ownerPerf != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${'hs_owner'.tr}: ${StaffManagementPage._money(ownerPerf.income)} · ${ownerPerf.count}',
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+        ],
+        const SizedBox(height: 14),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator(color: _brand)),
+          )
+        else if (_failed)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'staff_load_error'.tr,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _muted),
+            ),
+          )
+        else ...[
+          if (ranked.where((m) => (_perf[m.id]?.income ?? 0) > 0).isNotEmpty)
+            _podium(ranked),
+          for (final m in members)
+            widget.cardBuilder(
+              m,
+              _perf[m.id] ?? _Perf(),
+              m.data()['removed'] == true ? null : ranked.indexOf(m) + 1,
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _teamStat(String label, double value, Color color) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              StaffManagementPage._money(value),
+              style: TextStyle(
+                color: color,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _podium(List<QueryDocumentSnapshot<Map<String, dynamic>>> ranked) {
+    final top = ranked
+        .where((m) => (_perf[m.id]?.income ?? 0) > 0)
+        .take(3)
+        .toList();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5EAEC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.emoji_events_rounded,
+                color: Color(0xFFD4A017),
+                size: 20,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'staff_top'.tr,
+                style: const TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (var i = 0; i < top.length; i++)
+                Expanded(
+                  child: Container(
+                    margin: EdgeInsets.only(right: i == top.length - 1 ? 0 : 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: StaffManagementPage._rankColor(
+                        i + 1,
+                      ).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        StaffManagementPage._rankBadge(i + 1),
+                        const SizedBox(height: 6),
+                        Text(
+                          top[i].data()['name']?.toString() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _ink,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            StaffManagementPage._money(
+                              _perf[top[i].id]!.income,
+                            ),
+                            style: const TextStyle(
+                              color: Color(0xFF237A52),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

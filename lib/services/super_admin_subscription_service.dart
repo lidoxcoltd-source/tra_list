@@ -37,11 +37,52 @@ class ManagedBusinessSubscription {
   final int? durationDays;
 }
 
+class PaymentLogo {
+  const PaymentLogo({required this.name, required this.url});
+  final String name;
+  final String url;
+
+  static List<PaymentLogo> listFrom(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (m) => PaymentLogo(
+            name: (m['name'] ?? '').toString(),
+            url: (m['url'] ?? '').toString(),
+          ),
+        )
+        .where((l) => l.url.startsWith('http'))
+        .toList();
+  }
+
+  // One logo per line: "Name | https://image-url".
+  static String toText(List<PaymentLogo> logos) =>
+      logos.map((l) => '${l.name} | ${l.url}').join('\n');
+
+  static List<PaymentLogo> fromText(String text) {
+    final result = <PaymentLogo>[];
+    for (final line in text.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final sep = trimmed.lastIndexOf('|');
+      final name = sep > 0 ? trimmed.substring(0, sep).trim() : '';
+      final url = (sep >= 0 ? trimmed.substring(sep + 1) : trimmed).trim();
+      if (Uri.tryParse(url)?.hasAuthority == true && url.startsWith('http')) {
+        result.add(PaymentLogo(name: name, url: url));
+      }
+    }
+    return result;
+  }
+}
+
 class SubscriptionPlanSettings {
   const SubscriptionPlanSettings({
     required this.amount,
     required this.durationDays,
     this.version = 1,
+    this.mobileLogos = const [],
+    this.cardLogos = const [],
   });
 
   static const defaults = SubscriptionPlanSettings(
@@ -52,6 +93,8 @@ class SubscriptionPlanSettings {
   final int amount;
   final int durationDays;
   final int version;
+  final List<PaymentLogo> mobileLogos;
+  final List<PaymentLogo> cardLogos;
 
   factory SubscriptionPlanSettings.fromMap(Map<String, dynamic>? data) {
     if (data == null) return defaults;
@@ -60,6 +103,8 @@ class SubscriptionPlanSettings {
       durationDays:
           (data['durationDays'] as num?)?.toInt() ?? defaults.durationDays,
       version: (data['version'] as num?)?.toInt() ?? defaults.version,
+      mobileLogos: PaymentLogo.listFrom(data['mobileLogos']),
+      cardLogos: PaymentLogo.listFrom(data['cardLogos']),
     );
   }
 }
@@ -180,6 +225,8 @@ class SuperAdminSubscriptionService {
         amount: amount,
         durationDays: durationDays,
         version: current.version + 1,
+        mobileLogos: current.mobileLogos,
+        cardLogos: current.cardLogos,
       );
       transaction.set(_planRef, {
         'amount': amount,
@@ -187,9 +234,27 @@ class SuperAdminSubscriptionService {
         'version': updated.version,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': adminUid,
-      });
+      }, SetOptions(merge: true));
       return updated;
     });
+  }
+
+  static Future<void> savePaymentLogos({
+    required List<PaymentLogo> mobile,
+    required List<PaymentLogo> card,
+  }) async {
+    await _requireSuperAdmin();
+    if (!(await _planRef.get()).exists) {
+      await savePlanSettings(
+        amount: SubscriptionPlanSettings.defaults.amount,
+        durationDays: SubscriptionPlanSettings.defaults.durationDays,
+      );
+    }
+    Map<String, String> map(PaymentLogo l) => {'name': l.name, 'url': l.url};
+    await _planRef.set({
+      'mobileLogos': mobile.map(map).toList(),
+      'cardLogos': card.map(map).toList(),
+    }, SetOptions(merge: true));
   }
 
   static Future<DateTime> setSubscribed(

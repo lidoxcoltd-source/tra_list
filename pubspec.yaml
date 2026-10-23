@@ -2,7 +2,7 @@ name: tra_list
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.8.1
@@ -42,11 +42,37 @@ dependencies:
   cloud_functions: ^6.5.0
   share_plus: ^12.0.2
   firebase_messaging: ^16.7.0
+  webview_flutter: ^4.13.1
 
+  http: any
+  path: any
+  image: ^4.3.0
+  mobile_scanner: ^7.4.2
+  zxing_lib: ^1.1.4
+  web: ^1.1.1
 dev_dependencies:
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
+  # Vendored copy of fake_cloud_firestore 4.1.1 with a one-line fix for
+  # cloud_firestore 6.10 (the published releases need a newer Flutter SDK).
+  fake_cloud_firestore:
+    path: packages/fake_cloud_firestore
+
+flutter_launcher_icons:
+  image_path: "assets/mjas.png"
+  android: "ic_launcher"
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/mjas.png"
+    background_color: "#002868"
+    theme_color: "#002868"
+  windows:
+    generate: true
+    image_path: "assets/mjas.png"
+    icon_size: 256
 
 flutter:
   uses-material-design: true

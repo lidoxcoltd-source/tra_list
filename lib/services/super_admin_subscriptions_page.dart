@@ -1,3 +1,5 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +23,10 @@ class _SuperAdminSubscriptionsPageState
   final _planAmountController = TextEditingController();
   final _planMonthsController = TextEditingController();
   final _planDaysController = TextEditingController();
+  final _mobileLogosController = TextEditingController();
+  final _cardLogosController = TextEditingController();
+  bool _savingLogos = false;
+  bool _uploadingLogo = false;
   List<ManagedBusinessSubscription> _businesses = [];
   SubscriptionPlanSettings _plan = SubscriptionPlanSettings.defaults;
   bool _loading = true;
@@ -43,6 +49,8 @@ class _SuperAdminSubscriptionsPageState
     _planAmountController.dispose();
     _planMonthsController.dispose();
     _planDaysController.dispose();
+    _mobileLogosController.dispose();
+    _cardLogosController.dispose();
     super.dispose();
   }
 
@@ -71,6 +79,8 @@ class _SuperAdminSubscriptionsPageState
         _businesses = businesses;
         _plan = plan;
         _planAmountController.text = '${plan.amount}';
+        _mobileLogosController.text = PaymentLogo.toText(plan.mobileLogos);
+        _cardLogosController.text = PaymentLogo.toText(plan.cardLogos);
         _setPlanDurationFields(plan.durationDays);
         _loading = false;
       });
@@ -115,6 +125,111 @@ class _SuperAdminSubscriptionsPageState
       };
       return matchesQuery && matchesStatus;
     }).toList();
+  }
+
+  Widget _uploadButton(TextEditingController target) {
+    return IconButton(
+      tooltip: 'admin_logos_upload'.tr,
+      onPressed: _uploadingLogo ? null : () => _uploadLogo(target),
+      icon: _uploadingLogo
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.upload_rounded),
+    );
+  }
+
+  Future<void> _uploadLogo(TextEditingController target) async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final file = picked?.files.single;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+    if (bytes.length > 1024 * 1024) {
+      Get.snackbar('error'.tr, 'admin_logos_too_big'.tr);
+      return;
+    }
+    final ext = file.name.contains('.')
+        ? file.name.split('.').last.toLowerCase()
+        : 'png';
+    final type = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'svg' => 'image/svg+xml',
+      _ => 'image/jpeg',
+    };
+    if (type == 'image/svg+xml') {
+      Get.snackbar('error'.tr, 'admin_logos_no_svg'.tr);
+      return;
+    }
+    final defaultName = file.name.contains('.')
+        ? file.name.substring(0, file.name.lastIndexOf('.'))
+        : file.name;
+    if (!mounted) return;
+    final nameController = TextEditingController(text: defaultName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('admin_logos_name'.tr),
+        content: TextField(controller: nameController, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: Text('admin_logos_add'.tr),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+    if (!mounted || name == null || name.isEmpty) return;
+    setState(() => _uploadingLogo = true);
+    try {
+      final ref = FirebaseStorage.instance.ref(
+        'payment_logos/${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      await ref.putData(bytes, SettableMetadata(contentType: type));
+      final url = await ref.getDownloadURL();
+      final current = target.text.trimRight();
+      target.text = current.isEmpty
+          ? '${name.replaceAll('|', ' ')} | $url'
+          : '$current\n${name.replaceAll('|', ' ')} | $url';
+    } catch (e) {
+      Get.snackbar('error'.tr, e.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingLogo = false);
+    }
+  }
+
+  Future<void> _saveLogos() async {
+    setState(() => _savingLogos = true);
+    try {
+      await SuperAdminSubscriptionService.savePaymentLogos(
+        mobile: PaymentLogo.fromText(_mobileLogosController.text),
+        card: PaymentLogo.fromText(_cardLogosController.text),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('admin_logos_saved'.tr)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: const Color(0xFFB34343),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingLogos = false);
+    }
   }
 
   Future<void> _savePlan() async {
@@ -733,6 +848,66 @@ class _SuperAdminSubscriptionsPageState
                 ],
               );
             },
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'admin_logos_help'.tr,
+              style: const TextStyle(color: Color(0xFF75838A), fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _mobileLogosController,
+            minLines: 2,
+            maxLines: 6,
+            keyboardType: TextInputType.multiline,
+            decoration: InputDecoration(
+              labelText: 'admin_logos_mobile'.tr,
+              hintText: 'M-Pesa | https://.../mpesa.png',
+              prefixIcon: const Icon(Icons.phone_iphone_rounded),
+              suffixIcon: _uploadButton(_mobileLogosController),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _cardLogosController,
+            minLines: 2,
+            maxLines: 6,
+            keyboardType: TextInputType.multiline,
+            decoration: InputDecoration(
+              labelText: 'admin_logos_card'.tr,
+              hintText: 'Visa | https://.../visa.png',
+              prefixIcon: const Icon(Icons.credit_card_rounded),
+              suffixIcon: _uploadButton(_cardLogosController),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _savingLogos || _loading ? null : _saveLogos,
+              icon: _savingLogos
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text('admin_logos_save'.tr),
+            ),
           ),
         ],
       ),

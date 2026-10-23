@@ -292,10 +292,10 @@ class AddTransactionController extends GetxController {
       );
 
       if (_originalTransaction != null &&
-          (_originalTransaction!.id ?? '').isNotEmpty) {
+          (_originalTransaction.id ?? '').isNotEmpty) {
         // Use TransactionService to update
         await TransactionService.updateTransaction(
-          _originalTransaction!.id!,
+          _originalTransaction.id!,
           transaction,
         );
       } else {

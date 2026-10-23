@@ -48,13 +48,33 @@ class TransactionForm extends StatelessWidget {
                 children: [
                   _buildTypeToggle(),
                   const SizedBox(height: 20),
-                  _buildDescriptionField(),
-                  const SizedBox(height: 16),
-                  _buildAmountField(context),
-                  const SizedBox(height: 16),
-                  _buildCategorySelector(),
-                  const SizedBox(height: 12),
-                  _buildDateField(),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFE1E8E9)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildAmountField(context),
+                        const SizedBox(height: 16),
+                        _buildDescriptionField(),
+                        const SizedBox(height: 16),
+                        _buildCategorySelector(),
+                        const SizedBox(height: 12),
+                        _buildDateField(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

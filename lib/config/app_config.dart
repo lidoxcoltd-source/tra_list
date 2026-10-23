@@ -1,5 +1,4 @@
 // Centralized configuration for all external URLs, emails, and contact information
-import 'package:get/get.dart';
 // import 'package:mbokashopping/controllers/contact_config_controller.dart';
 
 class AppConfig {

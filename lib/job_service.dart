@@ -5,6 +5,7 @@ import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 
 class JobService {
+  static const int pageSize = 30;
   static final _auth = FirebaseAuth.instance;
   static final _db = FirebaseFirestore.instance;
 
@@ -70,7 +71,16 @@ class JobService {
   static Stream<QuerySnapshot<Job>> getJobsStream() {
     return getCollectionRef()
         .orderBy('createdAt', descending: true)
+        .limit(pageSize)
         .snapshots();
+  }
+
+  static Future<QuerySnapshot<Job>> getJobsAfter(DocumentSnapshot<Job> cursor) {
+    return getCollectionRef()
+        .orderBy('createdAt', descending: true)
+        .startAfterDocument(cursor)
+        .limit(pageSize)
+        .get();
   }
 
   // Example of a specific update

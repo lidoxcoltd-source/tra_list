@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'download_center_service.dart';
 
@@ -30,7 +31,9 @@ class _DownloadCenterManagementPageState
   bool _saving = false;
   String? _error;
 
-  static String get publicUrl => '${Uri.base.origin}/downloads';
+  static const publicUrl = 'https://mjasipos.web.app/downloads';
+  final Future<Map<String, int>> _statsFuture =
+      DownloadCenterService.loadStats();
 
   final Map<String, double?> _uploadProgress = {};
 
@@ -157,6 +160,41 @@ class _DownloadCenterManagementPageState
     }
   }
 
+  Future<void> _sharePublicPage() async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          title: 'MJASI POS downloads',
+          text: 'Download MJASI POS: $publicUrl',
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not share downloads page: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share the link.')),
+      );
+    }
+  }
+
+  Future<void> _copyPublicPage() async {
+    try {
+      await Clipboard.setData(const ClipboardData(text: publicUrl));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Link copied.')));
+    } catch (error, stackTrace) {
+      debugPrint('Could not copy downloads page link: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not copy the link.')));
+    }
+  }
+
   String? _httpsValidator(String key, String? value) {
     final text = value?.trim() ?? '';
     if (!_enabled[key]!) return null;
@@ -184,18 +222,25 @@ class _DownloadCenterManagementPageState
                       leading: const Icon(Icons.public_rounded),
                       title: const Text('Public page'),
                       subtitle: SelectableText(publicUrl),
-                      trailing: IconButton(
-                        tooltip: 'Copy link',
-                        icon: const Icon(Icons.copy_rounded),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: publicUrl));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Link copied.')),
-                          );
-                        },
+                      trailing: Wrap(
+                        spacing: 4,
+                        children: [
+                          IconButton(
+                            tooltip: 'Share download page',
+                            icon: const Icon(Icons.share_rounded),
+                            onPressed: _sharePublicPage,
+                          ),
+                          IconButton(
+                            tooltip: 'Copy link',
+                            icon: const Icon(Icons.copy_rounded),
+                            onPressed: _copyPublicPage,
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _StatsCard(future: _statsFuture),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _title,
@@ -304,6 +349,107 @@ class _DownloadCenterManagementPageState
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _StatsCard extends StatelessWidget {
+  const _StatsCard({required this.future});
+
+  final Future<Map<String, int>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: FutureBuilder<Map<String, int>>(
+          future: future,
+          builder: (context, snap) {
+            final stats = snap.data ?? const <String, int>{};
+            final visits = stats['visits'] ?? 0;
+            final clicks = {
+              for (final d in downloadItemDefs)
+                d.key: stats['click_${d.key}'] ?? 0,
+            };
+            final totalClicks = clicks.values.fold<int>(0, (a, b) => a + b);
+            final rate = visits > 0
+                ? '${(totalClicks / visits * 100).toStringAsFixed(1)}%'
+                : '—';
+            Widget metric(IconData icon, String label, String value) {
+              return Expanded(
+                child: Column(
+                  children: [
+                    Icon(icon, color: const Color(0xFF0E5962)),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      label,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Page statistics',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+                const SizedBox(height: 12),
+                if (snap.connectionState == ConnectionState.waiting)
+                  const LinearProgressIndicator()
+                else ...[
+                  Row(
+                    children: [
+                      metric(Icons.visibility_outlined, 'Visitors', '$visits'),
+                      metric(
+                        Icons.download_rounded,
+                        'Download clicks',
+                        '$totalClicks',
+                      ),
+                      metric(Icons.percent_rounded, 'Click rate', rate),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  for (final d in downloadItemDefs)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Icon(d.icon, size: 18, color: Colors.grey.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(d.title)),
+                          Text(
+                            '${clicks[d.key]}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (snap.hasError)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Could not load statistics.',
+                        style: TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

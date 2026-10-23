@@ -5,17 +5,21 @@ import 'package:tra_list/HomePage.dart';
 import 'package:tra_list/AddReceiptPage.dart';
 import 'package:tra_list/ReceiptsListPage.dart';
 import 'package:tra_list/invoice/categories_page.dart';
+import 'package:tra_list/stock/stock_dashboard_page.dart';
+import 'package:tra_list/stock/pos_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';
 import 'package:tra_list/jobs/views/archived_jobs_page.dart';
 import 'package:tra_list/subscription_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/staff_management_page.dart';
+import 'package:tra_list/tasks/tasks_page.dart';
 import 'package:tra_list/services/super_admin_subscriptions_page.dart';
 import 'package:tra_list/services/app_version_management_page.dart';
 import 'package:tra_list/services/downloads_page.dart';
 import 'package:tra_list/services/admin_analytics_page.dart';
 import 'package:tra_list/services/admin_announcements_page.dart';
+import 'package:tra_list/services/super_admin_hub_page.dart';
 import 'package:tra_list/services/notifications_page.dart';
 import 'package:tra_list/services/download_center_management_page.dart';
 
@@ -91,6 +95,8 @@ class AppRoutes {
   static const String invoicesList = '/invoices';
   static const String transactions = '/transactions';
   static const String categories = '/categories';
+  static const String stock = '/stock';
+  static const String pos = '/pos';
   static const String analytics = '/analytics';
   static const String jobs = '/jobs';
   static const String jobsArchive = '/jobs-archive';
@@ -98,6 +104,7 @@ class AppRoutes {
   static const String clientCredit = '/client-credit';
   static const String subscription = '/subscription';
   static const String staff = '/staff';
+  static const String tasks = '/tasks';
   static const String adminSubscriptions = '/admin-subscriptions';
   static const String adminAppVersions = '/admin-app-versions';
   static const String downloads = '/downloads';
@@ -105,6 +112,7 @@ class AppRoutes {
   static const String adminAnalytics = '/admin-analytics';
   static const String notifications = '/notifications';
   static const String adminAnnouncements = '/admin-announcements';
+  static const String adminHub = '/admin-hub';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
@@ -179,6 +187,18 @@ class AppRoutes {
       transition: Transition.rightToLeft,
     ),
     GetPage(
+      name: stock,
+      page: () => const StockDashboardPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: pos,
+      page: () => const PosPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
       name: analytics,
       page: () => const AnalyticsPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
@@ -212,6 +232,12 @@ class AppRoutes {
       name: staff,
       page: () => const StaffManagementPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
+    GetPage(
+      name: tasks,
+      page: () => const TasksPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
     ),
     GetPage(
       name: adminSubscriptions,
@@ -251,6 +277,12 @@ class AppRoutes {
     GetPage(
       name: adminAnnouncements,
       page: () => const AdminAnnouncementsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminHub,
+      page: () => const SuperAdminHubPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),
