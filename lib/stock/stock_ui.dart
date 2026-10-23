@@ -4,10 +4,10 @@ import 'package:tra_list/routes.dart';
 import 'stock_media.dart';
 import 'stock_models.dart';
 
-const kStockNavy = Color(0xFF0D2A4A);
-const kStockBlue = Color(0xFF1565C0);
-const kStockLight = Color(0xFFE8F1FB);
-const kStockBg = Color(0xFFF5F7FA);
+const kStockNavy = Color(0xFF101F3C);
+const kStockBlue = Color(0xFF2457D6);
+const kStockLight = Color(0xFFEDF3FF);
+const kStockBg = Color(0xFFF6F8FC);
 const kStockOk = Color(0xFF2E7D32);
 const kStockWarn = Color(0xFFEF6C00);
 const kStockBad = Color(0xFFC62828);
@@ -75,11 +75,17 @@ class StockScaffold extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 19,
+            letterSpacing: -0.4,
+          ),
         ),
-        backgroundColor: kStockNavy,
-        foregroundColor: Colors.white,
+        backgroundColor: kStockBg,
+        foregroundColor: kStockNavy,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: const Icon(Icons.arrow_back_rounded),
@@ -118,15 +124,17 @@ class StockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(20),
+      elevation: 0,
+      shadowColor: const Color(0x10101F3C),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor ?? const Color(0xFFE5E9F2)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor ?? const Color(0xFFE8EDF5)),
           ),
           child: child,
         ),
@@ -185,8 +193,9 @@ class StatTile extends StatelessWidget {
                   child: Text(
                     value,
                     style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 21,
+                      letterSpacing: -0.5,
+                      fontWeight: FontWeight.w800,
                       color: kStockNavy,
                     ),
                   ),
@@ -222,16 +231,17 @@ class StockStateChip extends StatelessWidget {
   }
 
   Widget _chip(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(8),
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
       text,
       style: TextStyle(
         color: color,
         fontSize: 11,
+        letterSpacing: 0.1,
         fontWeight: FontWeight.w700,
       ),
     ),
@@ -260,12 +270,20 @@ class StockMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 56, color: color.withValues(alpha: 0.6)),
-            const SizedBox(height: 12),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(icon, size: 42, color: color.withValues(alpha: 0.75)),
+            ),
+            const SizedBox(height: 18),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: Colors.blueGrey.shade600, height: 1.45),
             ),
             if (action != null) ...[const SizedBox(height: 12), action!],
           ],
@@ -281,8 +299,20 @@ InputDecoration stockInput(String label, {IconData? icon, String? suffix}) =>
       prefixIcon: icon == null ? null : Icon(icon),
       suffixText: suffix,
       filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      fillColor: const Color(0xFFF8FAFD),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE4EAF3)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE4EAF3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: kStockBlue, width: 1.5),
+      ),
     );
 
 Color movementColor(MovementType t, double change) =>
@@ -310,7 +340,7 @@ Future<Product?> pickProduct(
     isScrollControlled: true,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (ctx) {
       var query = '';
@@ -332,32 +362,33 @@ Future<Product?> pickProduct(
                 bottom: MediaQuery.of(ctx).viewInsets.bottom,
               ),
               child: SizedBox(
-                height: MediaQuery.of(ctx).size.height * 0.75,
+                height: MediaQuery.of(ctx).size.height * 0.78,
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
                       child: TextField(
                         autofocus: true,
-                        decoration: stockInput(
-                          'stk_search'.tr,
-                          icon: Icons.search_rounded,
-                        ).copyWith(
-                          suffixIcon: IconButton(
-                            tooltip: 'stk_scan'.tr,
-                            icon: const Icon(Icons.qr_code_scanner),
-                            onPressed: () async {
-                              final p = await scanForProduct(
-                                ctx,
-                                list,
-                                trackedOnly: trackedOnly,
-                              );
-                              if (p != null && ctx.mounted) {
-                                Navigator.pop(ctx, p);
-                              }
-                            },
-                          ),
-                        ),
+                        decoration:
+                            stockInput(
+                              'stk_search'.tr,
+                              icon: Icons.search_rounded,
+                            ).copyWith(
+                              suffixIcon: IconButton(
+                                tooltip: 'stk_scan'.tr,
+                                icon: const Icon(Icons.qr_code_scanner),
+                                onPressed: () async {
+                                  final p = await scanForProduct(
+                                    ctx,
+                                    list,
+                                    trackedOnly: trackedOnly,
+                                  );
+                                  if (p != null && ctx.mounted) {
+                                    Navigator.pop(ctx, p);
+                                  }
+                                },
+                              ),
+                            ),
                         onChanged: (v) => setState(() => query = v),
                       ),
                     ),
@@ -377,7 +408,7 @@ Future<Product?> pickProduct(
                                   leading: ProductImage(
                                     url: p.imageUrl,
                                     size: 40,
-                                    radius: 8,
+                                    radius: 12,
                                   ),
                                   title: Text(p.name),
                                   subtitle: Text(

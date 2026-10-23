@@ -42,7 +42,6 @@ class _AppColors {
   static const border = Color(0xFFE2E8F0);
   static const borderSoft = Color(0xFFF1F5F9);
   static const brand = Color(0xFF1E40AF);
-  static const brandDark = Color(0xFF1E3A8A);
   static const brandDeep = Color(0xFF0F172A);
   static const positive = Color(0xFF059669);
   static const positiveBg = Color(0xFFECFDF5);
@@ -502,7 +501,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 2000),
+                          constraints: const BoxConstraints(maxWidth: 1440),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -576,13 +575,12 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       child: SizedBox(
-        height: 68,
+        height: compact ? 60 : 68,
         child: Row(
           children: [
-            // Brand mark
             Container(
-              width: 40,
-              height: 40,
+              width: compact ? 36 : 40,
+              height: compact ? 36 : 40,
               decoration: BoxDecoration(
                 color: _AppColors.brand,
                 borderRadius: BorderRadius.circular(_Radius.sm),
@@ -593,47 +591,36 @@ class _HomePageState extends State<HomePage> {
                 size: 20,
               ),
             ),
-            const SizedBox(width: _Spacing.md),
-            // Store identity
+            SizedBox(width: compact ? _Spacing.sm : _Spacing.md),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    shopNickname.isNotEmpty
-                        ? shopNickname
-                        : storeName.isEmpty
-                        ? 'Mjasi POS'
-                        : storeName,
+                    'MJASI POS',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      letterSpacing: -0.2,
+                      fontSize: 14,
+                      letterSpacing: 0.35,
                     ),
                   ),
-                  if (shopNickname.isNotEmpty && storeName.isNotEmpty)
-                    Text(
-                      storeName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  Text(
+                    'home_dashboard_label'.tr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.58),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
                     ),
+                  ),
                 ],
               ),
             ),
-            if (subscriptionBadge.isNotEmpty && !compact)
-              Padding(
-                padding: const EdgeInsets.only(right: _Spacing.sm),
-                child: _buildPlanBadge(),
-              ),
             if (_isSuperAdmin && !compact)
               _headerIconButton(
                 icon: Icons.admin_panel_settings_outlined,
@@ -642,9 +629,8 @@ class _HomePageState extends State<HomePage> {
               ),
             if (!compact) _buildLanguageButton(),
             const NotificationBell(),
-            if (!compact &&
-                (BusinessAccessService.can('profile', 'view') ||
-                    BusinessAccessService.isOwner.value))
+            if (BusinessAccessService.can('profile', 'view') ||
+                BusinessAccessService.isOwner.value)
               _headerIconButton(
                 icon: Icons.person_outline_rounded,
                 tooltip: 'home_profile'.tr,
@@ -669,11 +655,23 @@ class _HomePageState extends State<HomePage> {
     required String tooltip,
     required VoidCallback onPressed,
   }) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 22),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        tooltip: tooltip,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: .08),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_Radius.sm),
+          ),
+        ),
+        icon: Icon(icon, color: Colors.white.withValues(alpha: 0.92), size: 20),
+      ),
     );
   }
 
@@ -692,10 +690,6 @@ class _HomePageState extends State<HomePage> {
       elevation: 8,
       onSelected: _handleMenuSelection,
       itemBuilder: (context) => [
-        if (compact &&
-            (BusinessAccessService.can('profile', 'view') ||
-                BusinessAccessService.isOwner.value))
-          _menuItem('profile', 'home_profile'.tr, Icons.person_outline),
         if (compact && _isSuperAdmin)
           _menuItem(
             'admin_hub',
@@ -807,52 +801,6 @@ class _HomePageState extends State<HomePage> {
             destructive: true,
           ),
       ],
-    );
-  }
-
-  Widget _buildPlanBadge() {
-    final color = isSubscribed
-        ? _AppColors.positive
-        : isTrial
-        ? _AppColors.warning
-        : _AppColors.muted;
-    final bg = isSubscribed
-        ? _AppColors.positiveBg
-        : isTrial
-        ? _AppColors.warningBg
-        : _AppColors.borderSoft;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 160),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(_Radius.pill),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              subscriptionBadge,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1067,18 +1015,55 @@ class _HomePageState extends State<HomePage> {
         : storeName.isNotEmpty
         ? storeName
         : 'Mjasi POS';
+    final greeting = 'home_greeting'.trParams({'name': displayName});
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(_Radius.lg),
       child: Stack(
         children: [
-          // Solid base
-          Positioned.fill(child: Container(color: _AppColors.brandDark)),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF123B74), Color(0xFF1E40AF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -55,
+            top: -90,
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: .07),
+                  width: 34,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 75,
+            bottom: -105,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: .035),
+              ),
+            ),
+          ),
           // Content
           Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: wide ? _Spacing.lg : _Spacing.md,
-              vertical: _Spacing.md,
+              horizontal: wide ? _Spacing.xl : _Spacing.lg,
+              vertical: wide ? _Spacing.xl : _Spacing.lg,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -1091,14 +1076,14 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           Expanded(
                             child: Text(
-                              'Karibu, $displayName',
+                              greeting,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: wide ? 18 : 15,
+                                fontSize: wide ? 22 : 18,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: -0.3,
+                                letterSpacing: -0.45,
                               ),
                             ),
                           ),
@@ -1134,6 +1119,9 @@ class _HomePageState extends State<HomePage> {
                                 : 'hs_invoices'.tr,
                             (staffCount ?? docCount).toDouble(),
                             Colors.white,
+                            icon: staffCount != null
+                                ? Icons.groups_2_rounded
+                                : Icons.receipt_long_rounded,
                             count: true,
                             onTap: () => _openRestrictedRoute(
                               staffCount != null
@@ -1146,6 +1134,7 @@ class _HomePageState extends State<HomePage> {
                             'hs_tasks_assigned'.tr,
                             taskCount.toDouble(),
                             const Color(0xFF34D399),
+                            icon: Icons.task_alt_rounded,
                             count: true,
                             onTap: () => _openRestrictedRoute(AppRoutes.tasks),
                           ),
@@ -1154,6 +1143,7 @@ class _HomePageState extends State<HomePage> {
                             'hs_net'.tr,
                             financeIncome - financeExpense,
                             const Color(0xFFFBBF24),
+                            icon: Icons.account_balance_wallet_rounded,
                             onTap: () => _openRestrictedRoute(
                               AppRoutes.transactions,
                               refreshFinance: true,
@@ -1315,6 +1305,7 @@ class _HomePageState extends State<HomePage> {
     String label,
     double amount,
     Color valueColor, {
+    required IconData icon,
     bool count = false,
     VoidCallback? onTap,
   }) {
@@ -1325,22 +1316,38 @@ class _HomePageState extends State<HomePage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(_Radius.sm),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_Radius.sm),
+              border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      icon,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: .78),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.76),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 5),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -1348,8 +1355,9 @@ class _HomePageState extends State<HomePage> {
                     count ? amount.toInt().toString() : _formatAmount(amount),
                     style: TextStyle(
                       color: valueColor,
-                      fontSize: 14,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ),
@@ -1552,87 +1560,62 @@ class _HomePageState extends State<HomePage> {
               ),
             )
           else ...[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 460;
-                final incomeCard = _amountTile(
-                  title: 'income'.tr,
-                  amount: financeIncome,
-                  icon: Icons.south_west_rounded,
-                  color: _AppColors.positive,
-                  background: _AppColors.positiveBg,
-                  actionLabel: 'home_view_income'.tr,
-                  onTap: () => _openTransactionsByType(TransactionType.income),
-                );
-                final expenseCard = _amountTile(
-                  title: 'expenses'.tr,
-                  amount: financeExpense,
-                  icon: Icons.north_east_rounded,
-                  color: _AppColors.negative,
-                  background: _AppColors.negativeBg,
-                  actionLabel: 'home_view_expenses'.tr,
-                  onTap: () => _openTransactionsByType(TransactionType.expense),
-                );
-                if (stacked) {
-                  return Column(
-                    children: [
-                      incomeCard,
-                      const SizedBox(height: _Spacing.md),
-                      expenseCard,
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: incomeCard),
-                    const SizedBox(width: _Spacing.md),
-                    Expanded(child: expenseCard),
-                  ],
-                );
-              },
+            Row(
+              children: [
+                Expanded(
+                  child: _amountTile(
+                    title: 'income'.tr,
+                    amount: financeIncome,
+                    icon: Icons.south_west_rounded,
+                    color: _AppColors.positive,
+                    background: _AppColors.positiveBg,
+                    actionLabel: 'home_view_income'.tr,
+                    onTap: () =>
+                        _openTransactionsByType(TransactionType.income),
+                  ),
+                ),
+                const SizedBox(width: _Spacing.sm),
+                Expanded(
+                  child: _amountTile(
+                    title: 'expenses'.tr,
+                    amount: financeExpense,
+                    icon: Icons.north_east_rounded,
+                    color: _AppColors.negative,
+                    background: _AppColors.negativeBg,
+                    actionLabel: 'home_view_expenses'.tr,
+                    onTap: () =>
+                        _openTransactionsByType(TransactionType.expense),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: _Spacing.md),
             _buildNetAmount(net),
           ],
           const SizedBox(height: _Spacing.lg),
           if (BusinessAccessService.can('transactions', 'create'))
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 460;
-                final buttons = [
-                  _financeAction(
+            Row(
+              children: [
+                Expanded(
+                  child: _financeAction(
                     label: 'home_add_income'.tr,
                     icon: Icons.add_rounded,
                     color: _AppColors.positive,
                     onPressed: () =>
                         _openTransactionForm(TransactionType.income),
                   ),
-                  _financeAction(
+                ),
+                const SizedBox(width: _Spacing.sm),
+                Expanded(
+                  child: _financeAction(
                     label: 'home_add_expense'.tr,
                     icon: Icons.remove_rounded,
                     color: _AppColors.negative,
                     onPressed: () =>
                         _openTransactionForm(TransactionType.expense),
                   ),
-                ];
-                if (stacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      buttons[0],
-                      const SizedBox(height: _Spacing.sm),
-                      buttons[1],
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: buttons[0]),
-                    const SizedBox(width: _Spacing.md),
-                    Expanded(child: buttons[1]),
-                  ],
-                );
-              },
+                ),
+              ],
             ),
         ],
       ),
@@ -1655,28 +1638,30 @@ class _HomePageState extends State<HomePage> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(_Radius.sm),
         child: Padding(
-          padding: EdgeInsets.all(_desktop ? _Spacing.lg : _Spacing.md),
+          padding: EdgeInsets.all(_desktop ? _Spacing.md : _Spacing.sm),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: _desktop ? 32 : 27,
+                    height: _desktop ? 32 : 27,
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(_Radius.sm),
                     ),
-                    child: Icon(icon, color: color, size: 18),
+                    child: Icon(icon, color: color, size: _desktop ? 18 : 15),
                   ),
-                  const SizedBox(width: _Spacing.sm),
+                  const SizedBox(width: _Spacing.xs),
                   Expanded(
                     child: Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: color,
-                        fontSize: 12,
+                        fontSize: _desktop ? 12 : 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.1,
                       ),
@@ -1684,7 +1669,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              const SizedBox(height: _Spacing.md),
+              SizedBox(height: _desktop ? _Spacing.md : _Spacing.sm),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
@@ -1692,22 +1677,26 @@ class _HomePageState extends State<HomePage> {
                   'TSh ${_formatAmount(amount)}',
                   style: TextStyle(
                     color: _AppColors.ink,
-                    fontSize: _desktop ? 24 : 18,
+                    fontSize: _desktop ? 22 : 16,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
-              const SizedBox(height: _Spacing.sm),
+              const SizedBox(height: _Spacing.xs),
               Row(
                 children: [
-                  Text(
-                    actionLabel,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      actionLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -1785,7 +1774,7 @@ class _HomePageState extends State<HomePage> {
   }) {
     return SizedBox(
       height: 44,
-      child: FilledButton.icon(
+      child: FilledButton(
         onPressed: () async {
           if (!await _checkCurrentSubscriptionAccess()) {
             _showSubscriptionRequiredDialog();
@@ -1793,20 +1782,32 @@ class _HomePageState extends State<HomePage> {
             onPressed();
           }
         },
-        icon: Icon(icon, size: 18),
-        label: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
-        ),
         style: FilledButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
           elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(_Radius.sm),
           ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 17),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11.5,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1844,41 +1845,37 @@ class _HomePageState extends State<HomePage> {
       ];
       return LayoutBuilder(
         builder: (context, constraints) {
-          final columns = wide && constraints.maxWidth >= 640 ? 3 : 2;
-          const spacing = _Spacing.md;
-          final width =
-              (constraints.maxWidth - spacing * (columns - 1)) / columns;
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: metrics
-                .map(
-                  (metric) => SizedBox(
-                    width: width,
-                    child: _debtMetricCard(metric, wide: wide),
+          const spacing = _Spacing.sm;
+          return Row(
+            children: [
+              for (var i = 0; i < metrics.length; i++) ...[
+                if (i > 0) const SizedBox(width: spacing),
+                Expanded(
+                  child: _debtMetricCard(
+                    metrics[i],
+                    wide: wide,
+                    compact: constraints.maxWidth < 500,
                   ),
-                )
-                .toList(),
+                ),
+              ],
+            ],
           );
         },
       );
     });
   }
 
-  Widget _debtMetricCard(_DebtMetric metric, {bool wide = false}) {
+  Widget _debtMetricCard(
+    _DebtMetric metric, {
+    bool wide = false,
+    bool compact = false,
+  }) {
     return Container(
-      padding: EdgeInsets.all(wide ? _Spacing.lg : _Spacing.md),
+      padding: EdgeInsets.all(compact ? 8 : 12),
       decoration: BoxDecoration(
-        color: _AppColors.surface,
+        color: metric.background,
         borderRadius: BorderRadius.circular(_Radius.md),
-        border: Border.all(color: _AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x04000000),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: metric.color.withValues(alpha: .13)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1886,50 +1883,72 @@ class _HomePageState extends State<HomePage> {
           Row(
             children: [
               Container(
-                width: wide ? 36 : 30,
-                height: wide ? 36 : 30,
+                width: compact
+                    ? 24
+                    : wide
+                    ? 34
+                    : 28,
+                height: compact
+                    ? 24
+                    : wide
+                    ? 34
+                    : 28,
                 decoration: BoxDecoration(
-                  color: metric.background,
-                  borderRadius: BorderRadius.circular(_Radius.sm),
+                  color: Colors.white.withValues(alpha: .78),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   metric.icon,
-                  size: wide ? 18 : 15,
+                  size: compact
+                      ? 13
+                      : wide
+                      ? 17
+                      : 14,
                   color: metric.color,
                 ),
               ),
-              const Spacer(),
-              Icon(
-                Icons.more_horiz_rounded,
-                size: 16,
-                color: _AppColors.muted.withValues(alpha: 0.5),
+              const SizedBox(width: _Spacing.xs),
+              Expanded(
+                child: Text(
+                  metric.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _AppColors.inkSoft,
+                    fontSize: compact
+                        ? 9
+                        : wide
+                        ? 11.5
+                        : 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
-          SizedBox(height: wide ? _Spacing.md : _Spacing.sm),
+          SizedBox(
+            height: compact
+                ? 3
+                : wide
+                ? 10
+                : 6,
+          ),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               metric.value,
               style: TextStyle(
-                color: _AppColors.ink,
-                fontSize: wide ? 20 : 16,
+                color: metric.color,
+                fontSize: compact
+                    ? 13
+                    : wide
+                    ? 19
+                    : 15,
                 fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
+                letterSpacing: -0.35,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            metric.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _AppColors.muted,
-              fontSize: wide ? 12 : 10.5,
-              fontWeight: FontWeight.w500,
             ),
           ),
         ],

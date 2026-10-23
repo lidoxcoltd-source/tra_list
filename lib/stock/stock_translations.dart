@@ -93,6 +93,10 @@ const Map<String, String> stockTranslationsEn = {
   'stk_cam_slow':
       'Camera is taking too long to start. Try again or scan from a photo.',
   'stk_cam_starting': 'Starting camera…',
+  'stk_cam_ready': 'Ready',
+  'stk_cam_connecting': 'Connecting',
+  'stk_cam_error_short': 'Unavailable',
+  'stk_scan_controls': 'Scan options',
   'stk_cam_decoder_unavailable':
       'Camera is open, but this Chrome version cannot scan barcodes live. Use Take photo or Upload image.',
   'stk_scan_upload': 'Upload image',
@@ -139,6 +143,7 @@ const Map<String, String> stockTranslationsEn = {
   'stk_unit_metre': 'Metre',
   'stk_scan': 'Scan barcode / QR',
   'stk_scan_hint': 'Point the camera at the product barcode or QR code',
+  'stk_scan_align': 'Align the barcode inside the frame',
   'stk_scan_manual_hint': 'Type the code, or scan it with a USB scanner.',
   'stk_scan_type': 'Type code',
   'stk_scan_not_found': 'No product found for code @code',
@@ -268,6 +273,10 @@ const Map<String, String> stockTranslationsSw = {
   'stk_cam_slow':
       'Camera inachelewa kuwaka. Jaribu tena au soma msimbo kutoka kwenye picha.',
   'stk_cam_starting': 'Inawasha camera…',
+  'stk_cam_ready': 'Tayari',
+  'stk_cam_connecting': 'Inaunganisha',
+  'stk_cam_error_short': 'Haipatikani',
+  'stk_scan_controls': 'Njia za kuscan',
   'stk_cam_decoder_unavailable':
       'Camera imefunguka, lakini toleo hili la Chrome haliwezi kusoma barcode moja kwa moja. Tumia Piga picha au Pakia picha.',
   'stk_scan_upload': 'Pakia picha',
@@ -312,6 +321,7 @@ const Map<String, String> stockTranslationsSw = {
   'stk_unit_metre': 'Mita',
   'stk_scan': 'Scan barcode / QR',
   'stk_scan_hint': 'Elekeza kamera kwenye barcode au QR code ya bidhaa',
+  'stk_scan_align': 'Weka barcode ndani ya fremu',
   'stk_scan_manual_hint': 'Andika kodi, au tumia scanner ya USB.',
   'stk_scan_type': 'Andika kodi',
   'stk_scan_not_found': 'Hakuna bidhaa yenye kodi @code',

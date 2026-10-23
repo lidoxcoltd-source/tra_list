@@ -468,6 +468,8 @@ class AppTranslations extends Translations {
           'Category saved on this device and will sync when online.',
       'category_add_failed': 'Could not save the category. Please try again.',
       'home_finance_summary': 'Income & expenses',
+      'home_greeting': 'Welcome, @name',
+      'home_dashboard_label': 'Business dashboard',
       'home_month_to_date': 'This month',
       'home_finance_period': 'Choose date range',
       'home_quick_access': 'Quick access',
@@ -496,6 +498,7 @@ class AppTranslations extends Translations {
       'splash_welcome_back_name': 'Welcome back, @name!',
       'splash_tagline':
           'Manage your sales, expenses and customers in one place.',
+      'splash_loading': 'Preparing your workspace',
       'staff_login_business_email': 'Business owner email',
       'staff_login_hint':
           'Use the business owner’s email, the shop nickname assigned to you, and the password your owner gave you. Do not use your contact email here.',
@@ -1341,6 +1344,8 @@ class AppTranslations extends Translations {
       'category_add_failed':
           'Imeshindwa kuhifadhi aina. Tafadhali jaribu tena.',
       'home_finance_summary': 'Muhtasari wa fedha',
+      'home_greeting': 'Karibu, @name',
+      'home_dashboard_label': 'Dashibodi ya biashara',
       'home_month_to_date': 'Mwezi huu',
       'home_finance_period': 'Chagua kipindi',
       'home_quick_access': 'Huduma za haraka',
@@ -1368,6 +1373,7 @@ class AppTranslations extends Translations {
       'splash_welcome_back': 'Karibu tena!',
       'splash_welcome_back_name': 'Karibu tena, @name!',
       'splash_tagline': 'Simamia mauzo, matumizi na wateja wako sehemu moja.',
+      'splash_loading': 'Inaandaa sehemu yako ya kazi',
       'staff_login_business_email': 'Barua pepe ya mwenye biashara',
       'staff_login_hint':
           'Tumia barua pepe ya mwenye biashara, jina la duka ulilopangiwa na nenosiri ulilopewa na mwenye biashara. Usiweke barua pepe yako ya mawasiliano hapa.',

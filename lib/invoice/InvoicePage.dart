@@ -18,6 +18,7 @@ import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
+import 'package:tra_list/services/document_terms_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
 import 'package:tra_list/stock/stock_models.dart';
 import 'package:tra_list/stock/stock_service.dart';
@@ -44,6 +45,8 @@ class _InvoicePageState extends State<InvoicePage> {
   Color _accentColor = const Color(0xFFFFA000);
 
   final _clientController = TextEditingController(text: '');
+  final _invoiceNameController = TextEditingController();
+  final _termsController = TextEditingController();
   final _invoiceNoController = TextEditingController(
     text:
         'INV-${DateTime.now().toIso8601String().split("T").first}-${(DateTime.now().millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
@@ -56,9 +59,13 @@ class _InvoicePageState extends State<InvoicePage> {
   );
 
   final List<Map<String, dynamic>> _items = [];
+  Map<String, dynamic> _baseDocumentTerms = {};
   String? _savedDocId;
 
   static String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
+  static String get _defaultConditions => Get.locale?.languageCode == 'sw'
+      ? 'Malipo yanapaswa kufanyika baada ya kupokea hati hii. Tafadhali wasiliana nasi ikiwa una maswali.'
+      : 'Payment is due upon receipt. Please contact us if you have any questions.';
 
   @override
   void initState() {
@@ -74,7 +81,11 @@ class _InvoicePageState extends State<InvoicePage> {
         final itemsData = data['items'] as List<dynamic>? ?? [];
 
         _clientController.text = clientData['name'] ?? '';
-        _invoiceNoController.text = invoiceData['number'] ?? '';
+        _invoiceNameController.text = invoiceData['name'] ?? '';
+        final savedTerms = data['documentTerms'] as Map<String, dynamic>? ?? {};
+        _termsController.text = savedTerms['conditions']?.toString() ?? '';
+        _invoiceNoController.text =
+            invoiceData['numberCode'] ?? invoiceData['number'] ?? '';
         _issueDateController.text =
             invoiceData['issueDate'] ?? _fmtDate(DateTime.now());
         _dueDateController.text =
@@ -100,6 +111,8 @@ class _InvoicePageState extends State<InvoicePage> {
   @override
   void dispose() {
     _clientController.dispose();
+    _invoiceNameController.dispose();
+    _termsController.dispose();
     _invoiceNoController.dispose();
     _issueDateController.dispose();
     _dueDateController.dispose();
@@ -154,10 +167,34 @@ class _InvoicePageState extends State<InvoicePage> {
       }
       final profile = await ProfileService.loadOrCreate();
       final logoBytes = await CompanyLogoService.resolveLogoBytes(profile);
+      final selectedTerms = DocumentTermsService.selectedFor(
+        profile,
+        'invoice',
+      );
+      final savedData = widget.invoice?.data();
+      final savedTerms = savedData?['documentTerms'] as Map? ?? const {};
+      final savedConditions = savedTerms['conditions']?.toString().trim() ?? '';
+      final selectedConditions =
+          selectedTerms['conditions']?.toString().trim() ?? '';
+      final fallbackConditions = selectedConditions.isNotEmpty
+          ? selectedConditions
+          : _defaultConditions;
       if (!mounted) return;
       setState(() {
         _company = profile ?? {};
         _companyLogoBytes = logoBytes;
+        _baseDocumentTerms = {
+          ...selectedTerms,
+          if (savedTerms.isNotEmpty) ...Map<String, dynamic>.from(savedTerms),
+          'conditions': savedConditions.isNotEmpty
+              ? savedConditions
+              : fallbackConditions,
+        };
+        if (_termsController.text.trim().isEmpty) {
+          _termsController.text = savedConditions.isNotEmpty
+              ? savedConditions
+              : fallbackConditions;
+        }
         if (profile.containsKey('colors')) {
           final colors = profile['colors'] as Map<String, dynamic>;
           _brandColor = Color(colors['brand'] as int? ?? 0xFF1976D2);
@@ -181,11 +218,15 @@ class _InvoicePageState extends State<InvoicePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         elevation: 0,
         foregroundColor: Colors.white,
+        title: const Text(
+          'Create document',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
         flexibleSpace: Container(
-          // Apply consistent gradient
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [_brandColor, _accentColor],
@@ -195,454 +236,732 @@ class _InvoicePageState extends State<InvoicePage> {
           ),
         ),
       ),
-      // Replaces FAB with a sticky bottom action bar
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+      bottomNavigationBar: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          return Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 20,
+              vertical: compact ? 10 : 12,
             ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Total (TSH)',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    Text(
-                      _money(_total),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: _brandColor,
-                      ),
-                    ),
-                  ],
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -3),
                 ),
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _brandColor,
-                  side: BorderSide(color: _brandColor),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: _busy ? null : _chooseDocTypeAndPreview,
-                icon: const Icon(Icons.preview_outlined),
-                label: const Text('Preview'),
-              ),
-              const SizedBox(width: 8),
-              IconButton.outlined(
-                tooltip: 'Share as image',
-                style: IconButton.styleFrom(
-                  foregroundColor: _brandColor,
-                  side: BorderSide(color: _brandColor),
-                  padding: const EdgeInsets.all(14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: _busy ? null : _chooseDocTypeAndShare,
-                icon: const Icon(Icons.share_outlined),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _brandColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: _busy ? null : _chooseDocTypeAndSave,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text(_busy ? 'Please wait...' : 'Generate PDF'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: Theme(
-        data: Theme.of(context).copyWith(
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300),
+              ],
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-              borderSide: BorderSide(
-                color: Color(0xFF1976D2),
-                width: 1.6,
-              ), // Kept for consistency
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
-            ),
-          ),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 900;
-            return Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildCompanyHeaderCard(),
-                  const SizedBox(height: 16),
-                  // Top info section (responsive two columns)
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      SizedBox(
-                        width: isWide
-                            ? (constraints.maxWidth - 16) / 2
-                            : constraints.maxWidth,
-                        child: _buildCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionHeader(
-                                icon: Icons.person_outline,
-                                title: 'Bill To',
-                              ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _clientController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Client name',
-                                ),
-                                validator: (v) => (v == null || v.isEmpty)
-                                    ? 'Required'
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: isWide
-                            ? (constraints.maxWidth - 16) / 2
-                            : constraints.maxWidth,
-                        child: _buildCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _sectionHeader(
-                                icon: Icons.description_outlined,
-                                title: 'Invoice Details',
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _invoiceNoController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Invoice No',
-                                        prefixIcon: Icon(
-                                          Icons.confirmation_number_outlined,
-                                        ),
-                                      ),
-                                      validator: (v) => (v == null || v.isEmpty)
-                                          ? 'Required'
-                                          : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _issueDateController,
-                                      readOnly: true,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Issue date',
-                                        prefixIcon: Icon(Icons.event),
-                                      ),
-                                      onTap: () async {
-                                        final picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: DateTime.now(),
-                                          firstDate: DateTime(2020),
-                                          lastDate: DateTime(2100),
-                                        );
-                                        if (picked != null) {
-                                          _issueDateController.text = _fmtDate(
-                                            picked,
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _dueDateController,
-                                      readOnly: true,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Due date',
-                                        prefixIcon: Icon(Icons.event_available),
-                                      ),
-                                      onTap: () async {
-                                        final picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: DateTime.now(),
-                                          firstDate: DateTime(2020),
-                                          lastDate: DateTime(2100),
-                                        );
-                                        if (picked != null) {
-                                          _dueDateController.text = _fmtDate(
-                                            picked,
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Items section (styled table)
-                  _buildCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            child: SafeArea(
+              top: false,
+              child: compact
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
-                            _sectionHeader(
-                              icon: Icons.list_alt,
-                              title: 'Items',
+                            const Icon(
+                              Icons.receipt_long_rounded,
+                              size: 18,
+                              color: Colors.black54,
                             ),
-                            const Spacer(),
-                            if (widget.invoice == null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: IconButton.outlined(
-                                  tooltip: 'stk_from_stock'.tr,
-                                  color: _brandColor,
-                                  onPressed: _addFromStock,
-                                  icon: const Icon(Icons.inventory_2_outlined),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Total (TSH)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: _brandColor,
-                                side: BorderSide(color: _brandColor),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                            ),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  _money(_total),
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w800,
+                                    color: _brandColor,
+                                  ),
                                 ),
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _items.add({
-                                    'desc': 'New Item',
-                                    'qty': 1,
-                                    'unit': 0.0,
-                                  });
-                                });
-                              },
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add Item'),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: _brandColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 10,
-                            horizontal: 12,
-                          ),
-                          child: Row(
-                            children: const [
-                              Expanded(
-                                flex: 5,
-                                child: Text(
-                                  'DESCRIPTION',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _brandColor,
+                                  side: BorderSide(
+                                    color: _brandColor.withValues(alpha: .35),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                ),
+                                onPressed: _busy
+                                    ? null
+                                    : _chooseDocTypeAndPreview,
+                                icon: const Icon(
+                                  Icons.preview_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('Preview'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.outlined(
+                              tooltip: 'Share as image',
+                              style: IconButton.styleFrom(
+                                foregroundColor: _brandColor,
+                                side: BorderSide(
+                                  color: _brandColor.withValues(alpha: .35),
+                                ),
+                                minimumSize: const Size(46, 46),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(11),
                                 ),
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'QTY',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontWeight: FontWeight.w700),
+                              onPressed: _busy ? null : _chooseDocTypeAndShare,
+                              icon: const Icon(Icons.share_outlined, size: 19),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _brandColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                ),
+                                onPressed: _busy ? null : _chooseDocTypeAndSave,
+                                icon: _busy
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.picture_as_pdf_outlined,
+                                        size: 18,
+                                      ),
+                                label: Text(_busy ? 'Wait...' : 'Save PDF'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Total (TSH)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
                                 ),
                               ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  'UNIT PRICE',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(fontWeight: FontWeight.w700),
+                              Text(
+                                _money(_total),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: _brandColor,
                                 ),
                               ),
-                              SizedBox(width: 44),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        ..._items.asMap().entries.map((e) {
-                          final i = e.key;
-                          final it = e.value;
-                          return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _brandColor,
+                            side: BorderSide(color: _brandColor),
                             padding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 8,
+                              horizontal: 18,
+                              vertical: 14,
                             ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.grey.shade200),
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 5,
-                                  child: TextFormField(
-                                    initialValue: it['desc']?.toString() ?? '',
-                                    decoration: const InputDecoration(
-                                      labelText: 'Description',
-                                    ),
-                                    onChanged: (v) => it['desc'] = v,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 2,
-                                  child: TextFormField(
-                                    initialValue: (it['qty'] ?? 1).toString(),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Qty',
-                                    ),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    onChanged: (v) => setState(
-                                      () => it['qty'] = _parseQty(v),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 3,
-                                  child: TextFormField(
-                                    initialValue:
-                                        ThousandsSeparatorFormatter.format(
-                                          (it['unit'] as num?) ?? 0,
-                                        ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Unit Price',
-                                    ),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    inputFormatters: const [
-                                      ThousandsSeparatorFormatter(),
-                                    ],
-                                    onChanged: (v) => setState(
-                                      () => it['unit'] =
-                                          ThousandsSeparatorFormatter.parse(
-                                            v,
-                                          ) ??
-                                          0.0,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  tooltip: 'Remove',
-                                  onPressed: () {
-                                    setState(() {
-                                      _items.removeAt(i);
-                                    });
-                                  },
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                              ],
+                          ),
+                          onPressed: _busy ? null : _chooseDocTypeAndPreview,
+                          icon: const Icon(Icons.preview_outlined),
+                          label: const Text('Preview'),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.outlined(
+                          tooltip: 'Share as image',
+                          style: IconButton.styleFrom(
+                            foregroundColor: _brandColor,
+                            side: BorderSide(color: _brandColor),
+                            padding: const EdgeInsets.all(14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          );
-                        }),
-                        const Divider(height: 24),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            'Total: TSH ${_money(_total)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              color: _brandColor,
+                          ),
+                          onPressed: _busy ? null : _chooseDocTypeAndShare,
+                          icon: const Icon(Icons.share_outlined),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _brandColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
                             ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: _busy ? null : _chooseDocTypeAndSave,
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.picture_as_pdf),
+                          label: Text(
+                            _busy ? 'Please wait...' : 'Generate PDF',
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+            ),
+          );
+        },
+      ),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _brandColor, width: 1.6),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 13,
+                ),
               ),
-            );
-          },
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 900;
+                final isCompact = constraints.maxWidth < 600;
+                final horizontalPadding = isCompact ? 12.0 : 20.0;
+                final contentWidth =
+                    constraints.maxWidth - horizontalPadding * 2;
+                return Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      isCompact ? 12 : 20,
+                      horizontalPadding,
+                      24,
+                    ),
+                    children: [
+                      _buildCompanyHeaderCard(),
+                      const SizedBox(height: 16),
+                      // Top info section (responsive two columns)
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          SizedBox(
+                            width: isWide
+                                ? (contentWidth - 16) / 2
+                                : contentWidth,
+                            child: _buildCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionHeader(
+                                    icon: Icons.person_outline,
+                                    title: 'Bill To',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _clientController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Client name',
+                                    ),
+                                    validator: (v) => (v == null || v.isEmpty)
+                                        ? 'Required'
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: isWide
+                                ? (contentWidth - 16) / 2
+                                : contentWidth,
+                            child: _buildCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _sectionHeader(
+                                    icon: Icons.description_outlined,
+                                    title: 'Invoice Details',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  if (isCompact) ...[
+                                    Row(
+                                      children: [
+                                        Expanded(child: _invoiceNameField()),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: _invoiceNumberField()),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _dateField(
+                                            _issueDateController,
+                                            'Issue date',
+                                            Icons.event_outlined,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: _dateField(
+                                            _dueDateController,
+                                            'Due date',
+                                            Icons.event_available_outlined,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 2,
+                                          child: _invoiceNameField(),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          flex: 3,
+                                          child: _invoiceNumberField(),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          flex: 2,
+                                          child: _dateField(
+                                            _issueDateController,
+                                            'Issue date',
+                                            Icons.event_outlined,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          flex: 2,
+                                          child: _dateField(
+                                            _dueDateController,
+                                            'Due date',
+                                            Icons.event_available_outlined,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+                      _buildCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionHeader(
+                              icon: Icons.gavel_outlined,
+                              title: 'Terms & Conditions',
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _termsController,
+                              minLines: 3,
+                              maxLines: 6,
+                              textCapitalization: TextCapitalization.sentences,
+                              decoration: InputDecoration(
+                                hintText:
+                                    'Add terms for this document. Leave empty to use the default terms.',
+                                alignLabelWithHint: true,
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: _brandColor,
+                                    width: 1.6,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'These terms will appear on the generated document.',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Items section (styled table)
+                      _buildCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                _sectionHeader(
+                                  icon: Icons.list_alt,
+                                  title: 'Items',
+                                ),
+                                const Spacer(),
+                                if (widget.invoice == null)
+                                  if (isCompact)
+                                    IconButton.outlined(
+                                      tooltip: 'stk_from_stock'.tr,
+                                      color: _brandColor,
+                                      onPressed: _addFromStock,
+                                      icon: const Icon(
+                                        Icons.inventory_2_outlined,
+                                      ),
+                                    )
+                                  else
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: IconButton.outlined(
+                                        tooltip: 'stk_from_stock'.tr,
+                                        color: _brandColor,
+                                        onPressed: _addFromStock,
+                                        icon: const Icon(
+                                          Icons.inventory_2_outlined,
+                                        ),
+                                      ),
+                                    ),
+                                if (isCompact)
+                                  IconButton.filled(
+                                    tooltip: 'Add Item',
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: _brandColor,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: _addEmptyItem,
+                                    icon: const Icon(Icons.add_rounded),
+                                  )
+                                else
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _brandColor,
+                                      side: BorderSide(color: _brandColor),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    onPressed: _addEmptyItem,
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Item'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (!isCompact)
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: _brandColor.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                  horizontal: 12,
+                                ),
+                                child: Row(
+                                  children: const [
+                                    Expanded(
+                                      flex: 5,
+                                      child: Text(
+                                        'DESCRIPTION',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'QTY',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        'UNIT PRICE',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 44),
+                                  ],
+                                ),
+                              ),
+                            if (!isCompact) const SizedBox(height: 6),
+                            ..._items.asMap().entries.map((e) {
+                              final i = e.key;
+                              final it = e.value;
+                              return _buildItemEditor(
+                                i,
+                                it,
+                                compact: isCompact,
+                              );
+                            }),
+                            if (!isCompact) ...[
+                              const Divider(height: 24),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'Total: TSH ${_money(_total)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: _brandColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  void _addEmptyItem() {
+    setState(() {
+      _items.add({'desc': 'New Item', 'qty': 1, 'unit': 0.0});
+    });
+  }
+
+  Widget _dateField(
+    TextEditingController controller,
+    String label,
+    IconData icon,
+  ) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2100),
+        );
+        if (picked != null) controller.text = _fmtDate(picked);
+      },
+    );
+  }
+
+  Widget _invoiceNameField() {
+    return TextFormField(
+      controller: _invoiceNameController,
+      textCapitalization: TextCapitalization.words,
+      maxLength: 32,
+      decoration: const InputDecoration(
+        labelText: 'Name (optional)',
+        hintText: 'Short name, e.g. Office chairs',
+        prefixIcon: Icon(Icons.label_outline_rounded),
+        counterText: '',
+      ),
+    );
+  }
+
+  Widget _invoiceNumberField() {
+    return TextFormField(
+      controller: _invoiceNoController,
+      decoration: const InputDecoration(
+        labelText: 'Invoice No',
+        prefixIcon: Icon(Icons.confirmation_number_outlined),
+      ),
+      validator: (value) =>
+          value == null || value.trim().isEmpty ? 'Required' : null,
+    );
+  }
+
+  String get _displayInvoiceNumber {
+    final number = _invoiceNoController.text.trim();
+    final name = _invoiceNameController.text.trim();
+    if (name.isEmpty) return number;
+    return '$number - $name';
+  }
+
+  Map<String, dynamic> _dataForStorage(Map<String, dynamic> data) {
+    final invoice = Map<String, dynamic>.from(
+      data['invoice'] as Map<String, dynamic>,
+    );
+    invoice['number'] = invoice.remove('numberCode');
+    return {...data, 'invoice': invoice};
+  }
+
+  Widget _buildItemEditor(
+    int index,
+    Map<String, dynamic> item, {
+    required bool compact,
+  }) {
+    final description = TextFormField(
+      initialValue: item['desc']?.toString() ?? '',
+      decoration: const InputDecoration(
+        labelText: 'Description',
+        prefixIcon: Icon(Icons.inventory_2_outlined),
+      ),
+      onChanged: (value) => item['desc'] = value,
+    );
+    final quantity = TextFormField(
+      initialValue: (item['qty'] ?? 1).toString(),
+      decoration: const InputDecoration(labelText: 'Qty'),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (value) => setState(() => item['qty'] = _parseQty(value)),
+    );
+    final unitPrice = TextFormField(
+      initialValue: ThousandsSeparatorFormatter.format(
+        (item['unit'] as num?) ?? 0,
+      ),
+      decoration: const InputDecoration(labelText: 'Unit Price'),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: const [ThousandsSeparatorFormatter()],
+      onChanged: (value) => setState(
+        () => item['unit'] = ThousandsSeparatorFormatter.parse(value) ?? 0.0,
+      ),
+    );
+    final removeButton = IconButton(
+      tooltip: 'Remove',
+      onPressed: () => setState(() => _items.removeAt(index)),
+      style: IconButton.styleFrom(
+        foregroundColor: Colors.red.shade700,
+        backgroundColor: Colors.red.shade50,
+      ),
+      icon: const Icon(Icons.delete_outline_rounded),
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.all(compact ? 10 : 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: compact
+          ? Column(
+              children: [
+                description,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(flex: 2, child: quantity),
+                    const SizedBox(width: 8),
+                    Expanded(flex: 3, child: unitPrice),
+                    const SizedBox(width: 4),
+                    removeButton,
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(flex: 5, child: description),
+                const SizedBox(width: 8),
+                Expanded(flex: 2, child: quantity),
+                const SizedBox(width: 8),
+                Expanded(flex: 3, child: unitPrice),
+                const SizedBox(width: 6),
+                removeButton,
+              ],
+            ),
     );
   }
 
@@ -683,6 +1002,8 @@ class _InvoicePageState extends State<InvoicePage> {
                 if (phone.isNotEmpty || email.isNotEmpty)
                   Text(
                     [phone, email].where((e) => e.isNotEmpty).join('  •  '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.grey.shade700),
                   ),
               ],
@@ -694,10 +1015,21 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   Widget _buildCard({required Widget child}) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(padding: const EdgeInsets.all(14), child: child),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE6EAF0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x080F172A),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
@@ -728,6 +1060,7 @@ class _InvoicePageState extends State<InvoicePage> {
     String kind,
   ) async {
     try {
+      final storageData = _dataForStorage(data);
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         Get.snackbar('Sign in required', 'Please sign in to save to cloud');
@@ -752,14 +1085,14 @@ class _InvoicePageState extends State<InvoicePage> {
         // Update existing document
         debugPrint('Updating $existingId');
         await col.doc(existingId).update({
-          ...data,
+          ...storageData,
           'kind': kind,
           'updatedAt': FieldValue.serverTimestamp(),
         });
         await NotificationService.notifyOwner(
           action: kind == 'quotation' ? 'quotation' : 'invoice',
           summary:
-              'edited $kind ${_invoiceNoController.text.trim()} (TSH ${_total.toStringAsFixed(0)})',
+              'edited $kind $_displayInvoiceNumber (TSH ${_total.toStringAsFixed(0)})',
           amount: _total,
         );
       } else {
@@ -767,7 +1100,7 @@ class _InvoicePageState extends State<InvoicePage> {
         final docRef = col.doc();
         debugPrint('Saving to ${docRef.path}');
         final saleData = {
-          ...data,
+          ...storageData,
           'kind': kind,
           'id': docRef.id,
           'uid': user.uid,
@@ -805,7 +1138,7 @@ class _InvoicePageState extends State<InvoicePage> {
         await NotificationService.notifyOwner(
           action: kind == 'quotation' ? 'quotation' : 'invoice',
           summary:
-              'created $kind ${_invoiceNoController.text.trim()} (TSH ${_total.toStringAsFixed(0)})',
+              'created $kind $_displayInvoiceNumber (TSH ${_total.toStringAsFixed(0)})',
           amount: _total,
         );
       }
@@ -825,12 +1158,25 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   Map<String, dynamic> _buildData() {
+    final conditions = _termsController.text.trim();
+    final documentTerms = {
+      ..._baseDocumentTerms,
+      'conditions': conditions.isNotEmpty
+          ? conditions
+          : (_baseDocumentTerms['conditions']?.toString().trim().isNotEmpty ??
+                false)
+          ? _baseDocumentTerms['conditions']
+          : _defaultConditions,
+    };
     return {
       // Include loaded company; PDFs also auto-fetch if empty
       'company': _company,
       'client': {'name': _clientController.text.trim()},
+      'documentTerms': documentTerms,
       'invoice': {
-        'number': _invoiceNoController.text.trim(),
+        'number': _displayInvoiceNumber,
+        'numberCode': _invoiceNoController.text.trim(),
+        'name': _invoiceNameController.text.trim(),
         'issueDate': _issueDateController.text.trim(),
         'dueDate': _dueDateController.text.trim(),
         'paymentMethod': _company['paymentMethod'],
@@ -973,8 +1319,11 @@ class _InvoicePageState extends State<InvoicePage> {
     setState(() => _busy = true);
     try {
       final bytes = await _bytesFor(kind, data);
-      final invNo = _invoiceNoController.text.trim();
-      final base = '${kind}_${invNo.isEmpty ? 'document' : invNo}';
+      final invNo = _displayInvoiceNumber;
+      final base = '${kind}_${invNo.isEmpty ? 'document' : invNo}'.replaceAll(
+        RegExp(r'[\\/:*?"<>|]'),
+        '-',
+      );
       final files = <XFile>[];
       final names = <String>[];
       var i = 0;
@@ -1050,16 +1399,20 @@ class _InvoicePageState extends State<InvoicePage> {
       // Save a record to Firestore before generating the PDF
       await _trySaveToFirestore(data, kind);
 
-      final invNo = (_invoiceNoController.text.trim().isEmpty)
+      final invNo = (_displayInvoiceNumber.trim().isEmpty)
           ? DateTime.now().millisecondsSinceEpoch.toString()
-          : _invoiceNoController.text.trim();
+          : _displayInvoiceNumber;
 
       final fileNameBase = switch (kind) {
         'delivery' => 'delivery_note_$invNo',
         'reminder' => 'payment_reminder_$invNo',
         _ => '${kind}_$invNo',
       };
-      final fileName = '$fileNameBase.pdf';
+      final safeFileNameBase = fileNameBase.replaceAll(
+        RegExp(r'[\\/:*?"<>|]'),
+        '-',
+      );
+      final fileName = '$safeFileNameBase.pdf';
 
       final pathOrName = await ({
         'invoice': () => InvoicePdf.generateAndSave(data, fileName: fileName),
@@ -1085,9 +1438,7 @@ class _InvoicePageState extends State<InvoicePage> {
     } catch (e) {
       Get.snackbar(
         'Error',
-        e is StockException
-            ? stockErrorText(e)
-            : 'Failed to save PDF: $e',
+        e is StockException ? stockErrorText(e) : 'Failed to save PDF: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

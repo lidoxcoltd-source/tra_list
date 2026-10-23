@@ -55,6 +55,16 @@ class DocumentTermsService {
     Map<String, dynamic> data,
     String documentType,
   ) async {
+    final suppliedTerms = data['documentTerms'];
+    if (suppliedTerms is Map) {
+      return {
+        ...data,
+        'documentTerms': _withDefaults(
+          Map<String, dynamic>.from(suppliedTerms),
+          documentType,
+        ),
+      };
+    }
     final company = Map<String, dynamic>.from(data['company'] as Map? ?? {});
     var profile = company;
     if (BusinessAccessService.canReadBusinessProfile()) {

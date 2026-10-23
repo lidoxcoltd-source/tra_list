@@ -8,6 +8,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:zxing_lib/common.dart';
 import 'package:zxing_lib/zxing.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'scan_frame.dart';
 import 'stock_models.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
@@ -121,7 +122,12 @@ bool get _cameraPhotoSupported =>
 /// asks for the code to be typed or scanned with a USB scanner instead.
 Future<String?> scanCode(BuildContext context) async {
   if (!cameraScanSupported) return _typeCodeDialog(context);
-  if (kIsWeb) return live_scanner.scanLiveCamera(context);
+  if (kIsWeb) {
+    return live_scanner.scanLiveCamera(
+      context,
+      scanImage: (source) => scanFromImage(context, source),
+    );
+  }
   return Navigator.of(
     context,
   ).push<String>(MaterialPageRoute(builder: (_) => const _ScannerPage()));
@@ -324,114 +330,265 @@ class _ScannerPageState extends State<_ScannerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF071525),
       appBar: AppBar(
         title: Text('stk_scan'.tr),
-        backgroundColor: kStockNavy,
+        backgroundColor: const Color(0xFF0D2239),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'stk_torch'.tr,
-            icon: const Icon(Icons.flashlight_on_outlined),
-            onPressed: () => _controller.toggleTorch(),
-          ),
-          IconButton(
-            tooltip: 'stk_camera_switch'.tr,
-            icon: const Icon(Icons.cameraswitch_outlined),
-            onPressed: () => _controller.switchCamera(),
-          ),
-          IconButton(
-            tooltip: 'stk_scan_upload'.tr,
-            icon: const Icon(Icons.image_outlined),
-            onPressed: () => _fromImage(ImageSource.gallery),
-          ),
-          IconButton(
-            tooltip: 'stk_scan_type'.tr,
-            icon: const Icon(Icons.keyboard_outlined),
-            onPressed: () async {
-              final code = await _typeCodeDialog(context);
-              if (code != null && mounted) _finish(code);
-            },
-          ),
-        ],
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          MobileScanner(
-            controller: _controller,
-            placeholderBuilder: (context) => ScannerLoadingFallback(
-              onPhoto: () => _fromImage(ImageSource.camera),
-              onUpload: () => _fromImage(ImageSource.gallery),
-              onRetry: _retryCamera,
-            ),
-            onDetect: (capture) {
-              for (final b in capture.barcodes) {
-                final v = b.rawValue;
-                if (v != null && v.isNotEmpty) {
-                  _finish(v);
-                  return;
-                }
-              }
-            },
-            errorBuilder: (context, error) =>
-                _fallbackPanel(switch (error.errorCode) {
-                  MobileScannerErrorCode.permissionDenied => 'denied',
-                  MobileScannerErrorCode.unsupported => 'notfound',
-                  _ => 'other',
-                }),
-          ),
-          Center(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 32,
-            left: 24,
-            right: 24,
-            child: Column(
-              children: [
-                Text(
-                  'stk_scan_hint'.tr,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white),
+      body: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF183654), Color(0xFF10263D)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  alignment: WrapAlignment.center,
+                child: Row(
                   children: [
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFC629).withValues(alpha: .15),
+                        borderRadius: BorderRadius.circular(15),
                       ),
-                      icon: const Icon(Icons.photo_camera_outlined),
-                      label: Text('stk_scan_take_photo'.tr),
-                      onPressed: () => _fromImage(ImageSource.camera),
+                      child: const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        color: Color(0xFFFFC629),
+                      ),
                     ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'stk_scan_align'.tr,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'stk_scan_hint'.tr,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .7),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
-                      icon: const Icon(Icons.image_outlined),
-                      label: Text('stk_scan_upload'.tr),
-                      onPressed: () => _fromImage(ImageSource.gallery),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF55D6A2).withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.circle,
+                            color: Color(0xFF55D6A2),
+                            size: 8,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'stk_cam_ready'.tr,
+                            style: const TextStyle(
+                              color: Color(0xFF55D6A2),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF101D2B),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .14),
+                    ),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      MobileScanner(
+                        controller: _controller,
+                        placeholderBuilder: (context) =>
+                            ScannerLoadingFallback(
+                              onPhoto: () => _fromImage(ImageSource.camera),
+                              onUpload: () => _fromImage(ImageSource.gallery),
+                              onRetry: _retryCamera,
+                            ),
+                        onDetect: (capture) {
+                          for (final b in capture.barcodes) {
+                            final v = b.rawValue;
+                            if (v != null && v.isNotEmpty) {
+                              _finish(v);
+                              return;
+                            }
+                          }
+                        },
+                        errorBuilder: (context, error) => _fallbackPanel(
+                          switch (error.errorCode) {
+                            MobileScannerErrorCode.permissionDenied =>
+                              'denied',
+                            MobileScannerErrorCode.unsupported => 'notfound',
+                            _ => 'other',
+                          },
+                        ),
+                      ),
+                      Center(
+                        child: ScanFrame(
+                          width: MediaQuery.sizeOf(context).width < 360
+                              ? 250
+                              : 290,
+                          height: 210,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10263D),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .1),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'stk_scan_controls'.tr,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .8),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFFFC629),
+                              foregroundColor: const Color(0xFF17212B),
+                              minimumSize: const Size.fromHeight(46),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_camera_rounded),
+                            label: Text('stk_scan_take_photo'.tr),
+                            onPressed: () => _fromImage(ImageSource.camera),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(46),
+                              side: BorderSide(
+                                color: Colors.white.withValues(alpha: .24),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_library_outlined),
+                            label: Text('stk_scan_upload'.tr),
+                            onPressed: () => _fromImage(ImageSource.gallery),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _compactScannerAction(
+                          icon: Icons.flashlight_on_outlined,
+                          label: 'stk_torch'.tr,
+                          onPressed: () => _controller.toggleTorch(),
+                        ),
+                        _compactScannerAction(
+                          icon: Icons.cameraswitch_outlined,
+                          label: 'stk_camera_switch'.tr,
+                          onPressed: () => _controller.switchCamera(),
+                        ),
+                        _compactScannerAction(
+                          icon: Icons.keyboard_alt_outlined,
+                          label: 'stk_scan_type'.tr,
+                          onPressed: () async {
+                            final code = await _typeCodeDialog(context);
+                            if (code != null && mounted) _finish(code);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _compactScannerAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) => Expanded(
+    child: TextButton.icon(
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white.withValues(alpha: .78),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      ),
+      icon: Icon(icon, size: 19),
+      label: Flexible(
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 11),
+        ),
+      ),
+      onPressed: onPressed,
+    ),
+  );
 }
 
 /// Finds the product whose SKU or barcode equals [code] (case-insensitive).
