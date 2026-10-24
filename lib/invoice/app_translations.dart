@@ -35,6 +35,52 @@ class AppTranslations extends Translations {
       'close': 'Close',
       'Add': 'Add',
       'quotation': 'Quotation',
+      'support_fab': 'Help',
+      'support_title': 'Help & support',
+      'support_welcome_title': 'How can we help?',
+      'support_welcome_message':
+          'Browse common questions or message our support team on WhatsApp.',
+      'support_chat_button': 'Chat with support',
+      'support_faq_heading': 'Frequently asked questions',
+      'support_ask_question': 'Ask about this',
+      'support_question_message': 'I have a question about: @question',
+      'support_general_message': 'Hello, I need help with MJASI POS.',
+      'support_whatsapp_open_error':
+          'Could not open WhatsApp. Please try again.',
+      'support_no_faq': 'There are no help articles yet.',
+      'support_load_error':
+          'Could not load help articles. Check your connection.',
+      'support_load_permission_error':
+          'The help content is not available yet. Ask the administrator to publish Firestore rules and support settings.',
+      'support_load_generic_error':
+          'Help content could not be loaded. Please try again.',
+      'support_admin_title': 'Manage help & support',
+      'support_admin_intro_title': 'Support center settings',
+      'support_admin_intro_message':
+          'Set the WhatsApp contact and manage the questions and answers shown to users.',
+      'support_whatsapp_heading': 'WhatsApp support contact',
+      'support_whatsapp_help':
+          'Use the full international number without spaces or a plus sign.',
+      'support_whatsapp_number': 'WhatsApp phone number',
+      'support_whatsapp_format': 'Example: 255712345678',
+      'support_whatsapp_required': 'Enter the WhatsApp support number.',
+      'support_whatsapp_invalid': 'Enter a valid international phone number.',
+      'support_faq_admin_help':
+          'Create and update the help questions and answers.',
+      'support_add_faq': 'Add question',
+      'support_no_admin_faq': 'No FAQ entries added yet.',
+      'support_question_index': 'Question @number',
+      'support_question_label': 'Question',
+      'support_answer_label': 'Answer',
+      'support_question_required': 'Enter a question.',
+      'support_answer_required': 'Enter an answer.',
+      'support_faq_limit': 'You can add up to 50 questions.',
+      'support_settings_saved': 'Support settings saved.',
+      'support_settings_save_error': 'Could not save support settings: @error',
+      'support_admin_load_error': 'Could not load support settings.',
+      'support_admin_hub_desc':
+          'Manage help articles and WhatsApp support contact',
+      'support_saving': 'Saving...',
 
       // Home Page
       'home_title': 'Mjasi POS ',
@@ -468,8 +514,15 @@ class AppTranslations extends Translations {
           'Category saved on this device and will sync when online.',
       'category_add_failed': 'Could not save the category. Please try again.',
       'home_finance_summary': 'Income & expenses',
-      'home_greeting': 'Welcome, @name',
+      'home_greeting': '@name',
       'home_dashboard_label': 'Business dashboard',
+      'connection_online': 'Online',
+      'connection_offline': 'Offline',
+      'nav_home': 'Home',
+      'nav_pos': 'POS',
+      'nav_transactions': 'Sales',
+      'nav_reports': 'Reports',
+      'nav_add': 'Add',
       'home_month_to_date': 'This month',
       'home_finance_period': 'Choose date range',
       'home_quick_access': 'Quick access',
@@ -481,6 +534,11 @@ class AppTranslations extends Translations {
       'home_transactions': 'Transactions',
       'home_view_all_transactions': 'View all transactions',
       'home_more': 'More',
+      'home_sidebar_collapse': 'Collapse sidebar',
+      'home_sidebar_expand': 'Expand sidebar',
+      'transaction_saved_offline': 'Saved on this device; waiting to sync.',
+      'transaction_sync_pending': 'Waiting to sync',
+      'saved_offline': 'Saved offline',
       'home_subscription': 'Subscription',
       'home_manage_subscription': 'Manage subscription',
       'home_finance_load_error':
@@ -488,6 +546,8 @@ class AppTranslations extends Translations {
       'subscription_required_title': 'Subscription required',
       'subscription_required_message':
           'Subscribe or start a free trial to use this feature.',
+      'offline_subscription_grace_expired':
+          'Offline access lasts up to 24 hours after subscription verification. Connect to the internet to verify or renew your subscription.',
 
       // Login Page
       'login_title': 'Mjasi POS',
@@ -633,6 +693,10 @@ class AppTranslations extends Translations {
       'profile_branding': 'Branding & Theming',
       'analytics_all': 'All',
       'analytics_filters': 'Analytics Filters',
+      'analytics_filters_subtitle': 'Choose the period and details to include.',
+      'analytics_filter_period': 'Report period',
+      'analytics_filter_type': 'Transaction type',
+      'analytics_clear_filters': 'Clear filters',
       'analytics_period_comparison': 'Period Comparison',
       'analytics_previous_period': 'Compared with the previous period',
       'analytics_previous_short': 'Previous',
@@ -641,6 +705,18 @@ class AppTranslations extends Translations {
           'Could not load previous period comparison.',
       'analytics_shop_comparison': 'Shop Performance',
       'analytics_financial_overview': 'Financial Overview',
+      'analytics_ai_summary': 'AI summary',
+      'analytics_share_summary': 'Share report',
+      'analytics_summary_top_category': 'Top category',
+      'analytics_summary_positive':
+          'Income is higher than expenses for this report period.',
+      'analytics_summary_negative':
+          'Expenses are higher than income for this report period. Review the largest costs.',
+      'analytics_summary_balanced':
+          'Income and expenses are balanced for this report period.',
+      'analytics_summary_disclaimer':
+          'Generated locally from the selected report data; this summary does not call an external AI service.',
+      'analytics_summary_share_error': 'Could not share the report summary.',
       'analytics_total_income': 'Total Income',
       'analytics_total_expense': 'Total Expense',
       'analytics_transactions': 'Transactions',
@@ -829,6 +905,113 @@ class AppTranslations extends Translations {
       'analytics_not_enough_data': 'Not Enough Data',
       'analytics_not_enough_data_desc':
           'Add more transactions to unlock powerful AI-driven insights and suggestions for your financial health.',
+      'analytics_staff_activity': 'Staff income activity',
+      'analytics_staff_activity_desc':
+          '@name recorded @count income transactions totaling TSH @amount in this report period.',
+      'analytics_staff_pos_activity': 'Staff POS sales activity',
+      'analytics_staff_pos_activity_desc':
+          '@name completed @count POS sales totaling TSH @amount in this report period.',
+      'analytics_overdue_tasks': 'Overdue tasks',
+      'analytics_overdue_tasks_desc':
+          'In the task list visible to this account, @count active tasks are past their due date. Review assignees and agree on next steps.',
+      'analytics_tasks_for_review': 'Tasks awaiting review',
+      'analytics_tasks_for_review_desc':
+          '@count submitted tasks in the visible task list are waiting for approval or feedback.',
+      'analytics_no_open_tasks': 'No active tasks',
+      'analytics_no_open_tasks_desc':
+          'There are no assigned, in-progress or returned tasks in the task list available to this account.',
+      'analytics_open_tasks': 'Active task workload',
+      'analytics_open_tasks_desc':
+          '@count tasks in the visible task list are assigned, in progress or returned. Check owners and due dates.',
+      'analytics_pos_sales': 'POS stock sales',
+      'analytics_pos_sales_desc':
+          '@count POS sales were recorded, totaling TSH @total.',
+      'analytics_pos_top_product_desc':
+          'Most frequently included item: @product (@count sales).',
+      'analytics_pos_no_sales_desc':
+          'No POS stock sales were recorded in this report period.',
+      'analytics_operational_insights_error':
+          'Some staff, task or POS insights could not be loaded. Other report data is still available.',
+      'analytics_advice_catalog_load_error':
+          'Extra business advice could not be loaded. The standard advice is still available.',
+      'analytics_advice_admin_title': 'Manage analytics advice',
+      'analytics_advice_admin_hub_desc':
+          'Add and manage business advice shown in reports.',
+      'analytics_advice_admin_description':
+          'Manage built-in and custom advice in English and Kiswahili. Download the JSON, update its language text, then import it to publish your changes.',
+      'analytics_advice_add': 'Add advice',
+      'analytics_advice_edit': 'Edit advice',
+      'analytics_advice_empty': 'No custom advice yet. Add the first item.',
+      'analytics_advice_load_error': 'Could not load advice: @error',
+      'analytics_advice_saved': 'Advice saved.',
+      'analytics_advice_save_error': 'Could not save advice: @error',
+      'analytics_advice_deleted': 'Advice deleted.',
+      'analytics_advice_delete_error': 'Could not delete advice: @error',
+      'analytics_advice_delete_title': 'Delete advice?',
+      'analytics_advice_delete_confirm': 'Delete "@title"?',
+      'analytics_advice_title_en': 'Advice title (English)',
+      'analytics_advice_title_sw': 'Advice title (Kiswahili)',
+      'analytics_advice_description_en': 'Advice (English)',
+      'analytics_advice_description_sw': 'Advice (Kiswahili)',
+      'analytics_advice_category': 'Advice category',
+      'analytics_advice_category_costs': 'Costs',
+      'analytics_advice_category_growth': 'Growth',
+      'analytics_advice_category_tasks': 'Tasks',
+      'analytics_advice_category_sales': 'Sales',
+      'analytics_advice_category_staff': 'Staff',
+      'analytics_advice_category_records': 'Records',
+      'analytics_advice_metric': 'Business metric',
+      'analytics_advice_metric_income': 'Total income',
+      'analytics_advice_metric_expenses': 'Total expenses',
+      'analytics_advice_metric_net': 'Net balance',
+      'analytics_advice_metric_transactionCount': 'Transaction count',
+      'analytics_advice_metric_incomeTransactionCount':
+          'Income transaction count',
+      'analytics_advice_metric_expenseTransactionCount':
+          'Expense transaction count',
+      'analytics_advice_metric_averageIncome': 'Average income transaction',
+      'analytics_advice_metric_averageExpense': 'Average expense transaction',
+      'analytics_advice_metric_topExpenseSharePercent':
+          'Largest expense category (%)',
+      'analytics_advice_metric_incomeChangePercent':
+          'Income change vs previous period (%)',
+      'analytics_advice_metric_expenseChangePercent':
+          'Expense change vs previous period (%)',
+      'analytics_advice_metric_activeTasks': 'Active tasks',
+      'analytics_advice_metric_overdueTasks': 'Overdue tasks',
+      'analytics_advice_metric_tasksForReview': 'Tasks awaiting review',
+      'analytics_advice_metric_posSalesCount': 'POS sales count',
+      'analytics_advice_metric_posSalesTotal': 'POS sales total',
+      'analytics_advice_metric_staffCount': 'Staff account count',
+      'analytics_advice_operator': 'Condition',
+      'analytics_advice_operator_gt': 'Greater than (>)',
+      'analytics_advice_operator_gte': 'At least (≥)',
+      'analytics_advice_operator_lt': 'Less than (<)',
+      'analytics_advice_operator_lte': 'At most (≤)',
+      'analytics_advice_operator_eq': 'Equal to (=)',
+      'analytics_advice_threshold': 'Threshold',
+      'analytics_advice_threshold_invalid': 'Enter a valid number.',
+      'analytics_advice_required': 'This field is required.',
+      'analytics_advice_placeholder_help':
+          'You can insert values such as {income}, {expenses}, {net}, {transactionCount}, {activeTasks}, {overdueTasks}, {tasksForReview}, {posSalesCount} and {posSalesTotal} in the advice text.',
+      'analytics_advice_json_tools': 'Advice JSON tools',
+      'analytics_advice_import': 'Import / update JSON',
+      'analytics_advice_export': 'Download JSON',
+      'analytics_advice_exported': 'Advice JSON downloaded to @path',
+      'analytics_advice_export_error': 'Could not download JSON: @error',
+      'analytics_advice_import_title': 'Import advice JSON',
+      'analytics_advice_import_confirm':
+          'Import @count advice entries? Entries with matching IDs will be updated; other advice will remain unchanged.',
+      'analytics_advice_imported': 'Imported or updated @count advice entries.',
+      'analytics_advice_import_error': 'Could not import advice JSON: @error',
+      'analytics_advice_list_title': 'Advice catalogue',
+      'analytics_advice_search': 'Search advice by title or text',
+      'analytics_advice_all_categories': 'All categories',
+      'analytics_advice_no_results': 'No advice matches these filters.',
+      'analytics_advice_default': 'Built-in',
+      'analytics_advice_conditions_count': '@count conditions',
+      'analytics_advice_builtin_delete_hint':
+          'Built-in advice cannot be deleted. Turn it off or edit it instead.',
       'analytics_report_title': 'Analytics Report',
       'PDF saved': 'PDF saved',
       'Week': 'Week',
@@ -907,6 +1090,52 @@ class AppTranslations extends Translations {
       'close': 'Funga',
       'Add': 'Ongeza',
       'quotation': 'Bei ya makadirio',
+      'support_fab': 'Msaada',
+      'support_title': 'Msaada na huduma kwa wateja',
+      'support_welcome_title': 'Tunaweza kukusaidiaje?',
+      'support_welcome_message':
+          'Soma majibu ya maswali ya kawaida au wasiliana nasi kupitia WhatsApp.',
+      'support_chat_button': 'Ongea na huduma kwa wateja',
+      'support_faq_heading': 'Maswali yanayoulizwa mara kwa mara',
+      'support_ask_question': 'Uliza kuhusu hili',
+      'support_question_message': 'Nina swali kuhusu: @question',
+      'support_general_message': 'Habari, nahitaji msaada wa MJASI POS.',
+      'support_whatsapp_open_error':
+          'Imeshindwa kufungua WhatsApp. Jaribu tena.',
+      'support_no_faq': 'Bado hakuna makala za msaada.',
+      'support_load_error':
+          'Imeshindwa kupakia msaada. Angalia muunganisho wa intaneti.',
+      'support_load_permission_error':
+          'Taarifa za msaada hazipatikani bado. Mwombe msimamizi achapishe Firestore rules na mipangilio ya msaada.',
+      'support_load_generic_error':
+          'Imeshindwa kupakia taarifa za msaada. Tafadhali jaribu tena.',
+      'support_admin_title': 'Simamia msaada',
+      'support_admin_intro_title': 'Mipangilio ya kituo cha msaada',
+      'support_admin_intro_message':
+          'Weka namba ya WhatsApp na simamia maswali na majibu yanayoonekana kwa watumiaji.',
+      'support_whatsapp_heading': 'Namba ya msaada ya WhatsApp',
+      'support_whatsapp_help':
+          'Tumia namba kamili ya kimataifa bila nafasi au alama ya jumlisha.',
+      'support_whatsapp_number': 'Namba ya simu ya WhatsApp',
+      'support_whatsapp_format': 'Mfano: 255712345678',
+      'support_whatsapp_required': 'Weka namba ya msaada ya WhatsApp.',
+      'support_whatsapp_invalid': 'Weka namba sahihi ya kimataifa.',
+      'support_faq_admin_help':
+          'Tengeneza na sasisha maswali na majibu ya msaada.',
+      'support_add_faq': 'Ongeza swali',
+      'support_no_admin_faq': 'Bado hakuna maswali yaliyoongezwa.',
+      'support_question_index': 'Swali @number',
+      'support_question_label': 'Swali',
+      'support_answer_label': 'Jibu',
+      'support_question_required': 'Weka swali.',
+      'support_answer_required': 'Weka jibu.',
+      'support_faq_limit': 'Unaweza kuongeza hadi maswali 50.',
+      'support_settings_saved': 'Mipangilio ya msaada imehifadhiwa.',
+      'support_settings_save_error': 'Imeshindwa kuhifadhi mipangilio: @error',
+      'support_admin_load_error': 'Imeshindwa kupakia mipangilio ya msaada.',
+      'support_admin_hub_desc':
+          'Simamia maswali na namba ya msaada ya WhatsApp',
+      'support_saving': 'Inahifadhi...',
 
       // Home Page
       'home_title': 'Mjasi POS ',
@@ -1344,8 +1573,15 @@ class AppTranslations extends Translations {
       'category_add_failed':
           'Imeshindwa kuhifadhi aina. Tafadhali jaribu tena.',
       'home_finance_summary': 'Muhtasari wa fedha',
-      'home_greeting': 'Karibu, @name',
+      'home_greeting': '@name',
       'home_dashboard_label': 'Dashibodi ya biashara',
+      'connection_online': 'Mtandaoni',
+      'connection_offline': 'Bila mtandao',
+      'nav_home': 'Nyumbani',
+      'nav_pos': 'POS',
+      'nav_transactions': 'Mauzo',
+      'nav_reports': 'Ripoti',
+      'nav_add': 'Ongeza',
       'home_month_to_date': 'Mwezi huu',
       'home_finance_period': 'Chagua kipindi',
       'home_quick_access': 'Huduma za haraka',
@@ -1357,6 +1593,12 @@ class AppTranslations extends Translations {
       'home_transactions': 'Miamala',
       'home_view_all_transactions': 'Angalia miamala yote',
       'home_more': 'Zaidi',
+      'home_sidebar_collapse': 'Kunja menyu ya pembeni',
+      'home_sidebar_expand': 'Panua menyu ya pembeni',
+      'transaction_saved_offline':
+          'Imehifadhiwa kwenye kifaa; inasubiri kusawazishwa.',
+      'transaction_sync_pending': 'Inasubiri kusawazishwa',
+      'saved_offline': 'Imehifadhiwa bila intaneti',
       'home_subscription': 'Usajili',
       'home_manage_subscription': 'Dhibiti usajili',
       'home_finance_load_error':
@@ -1364,6 +1606,8 @@ class AppTranslations extends Translations {
       'subscription_required_title': 'Usajili unahitajika',
       'subscription_required_message':
           'Jisajili au anza kutumia huduma hii bila malipo kwa muda wa majaribio.',
+      'offline_subscription_grace_expired':
+          'Matumizi bila mtandao hudumu hadi saa 24 baada ya uthibitishaji wa usajili. Unganisha intaneti ili kuthibitisha au kufanya upya usajili.',
 
       // Login Page
       'login_title': 'Mfumo wa Risiti wa TRA',
@@ -1507,6 +1751,10 @@ class AppTranslations extends Translations {
       'profile_branding': 'Nembo na rangi',
       'analytics_all': 'Zote',
       'analytics_filters': 'Chuja ripoti',
+      'analytics_filters_subtitle': 'Chagua kipindi na taarifa za kuonyesha.',
+      'analytics_filter_period': 'Kipindi cha ripoti',
+      'analytics_filter_type': 'Aina ya muamala',
+      'analytics_clear_filters': 'Ondoa vichujio',
       'analytics_period_comparison': 'Linganisha vipindi',
       'analytics_previous_period': 'Ikilinganishwa na kipindi kilichopita',
       'analytics_previous_short': 'Kipindi kilichopita',
@@ -1514,6 +1762,19 @@ class AppTranslations extends Translations {
       'analytics_comparison_load_error': 'Imeshindwa kulinganisha vipindi.',
       'analytics_shop_comparison': 'Linganisha maduka',
       'analytics_financial_overview': 'Muhtasari wa fedha',
+      'analytics_ai_summary': 'Muhtasari wa AI',
+      'analytics_share_summary': 'Shiriki ripoti',
+      'analytics_summary_top_category': 'Aina kuu',
+      'analytics_summary_positive':
+          'Mapato yamezidi matumizi katika kipindi hiki cha ripoti.',
+      'analytics_summary_negative':
+          'Matumizi yamezidi mapato katika kipindi hiki. Kagua gharama kubwa zaidi.',
+      'analytics_summary_balanced':
+          'Mapato na matumizi yamesawazika katika kipindi hiki cha ripoti.',
+      'analytics_summary_disclaimer':
+          'Muhtasari umetengenezwa kwenye kifaa kutokana na ripoti iliyochaguliwa; hautumii huduma ya AI ya nje.',
+      'analytics_summary_share_error':
+          'Imeshindwa kushiriki muhtasari wa ripoti.',
       'analytics_total_income': 'Jumla ya Mapato',
       'analytics_total_expense': 'Jumla ya Matumizi',
       'analytics_transactions': 'Miamala',
@@ -1698,6 +1959,116 @@ class AppTranslations extends Translations {
       'analytics_not_enough_data': 'Taarifa hazitoshi',
       'analytics_not_enough_data_desc':
           'Ongeza miamala zaidi ili upate ushauri kuhusu mapato na matumizi yako.',
+      'analytics_staff_activity': 'Mapato yaliyorekodiwa na mfanyakazi',
+      'analytics_staff_activity_desc':
+          '@name amerekodi miamala @count ya mapato yenye jumla ya TSH @amount katika kipindi hiki.',
+      'analytics_staff_pos_activity': 'Mauzo ya POS ya wafanyakazi',
+      'analytics_staff_pos_activity_desc':
+          '@name amekamilisha mauzo @count ya POS yenye jumla ya TSH @amount katika kipindi hiki.',
+      'analytics_overdue_tasks': 'Kazi zilizochelewa',
+      'analytics_overdue_tasks_desc':
+          'Kati ya kazi zinazoonekana kwenye akaunti hii, kazi @count zilizo hai zimepita tarehe ya mwisho. Kagua waliopewa kazi na hatua zinazofuata.',
+      'analytics_tasks_for_review': 'Kazi zinazosubiri ukaguzi',
+      'analytics_tasks_for_review_desc':
+          'Kazi @count zilizowasilishwa kwenye orodha inayoonekana zinasubiri kuidhinishwa au kupewa mrejesho.',
+      'analytics_no_open_tasks': 'Hakuna kazi zinazoendelea',
+      'analytics_no_open_tasks_desc':
+          'Hakuna kazi zilizopewa, zinazoendelea au zilizorejeshwa kwenye orodha ya kazi inayopatikana kwa akaunti hii.',
+      'analytics_open_tasks': 'Mzigo wa kazi zinazoendelea',
+      'analytics_open_tasks_desc':
+          'Kazi @count kwenye orodha inayoonekana zimepewa, zinaendelea au zimerejeshwa. Kagua wahusika na tarehe za mwisho.',
+      'analytics_pos_sales': 'Mauzo ya stock kupitia POS',
+      'analytics_pos_sales_desc':
+          'Mauzo @count ya POS yamerekodiwa, yenye jumla ya TSH @total.',
+      'analytics_pos_top_product_desc':
+          'Bidhaa iliyoonekana mara nyingi zaidi: @product (mauzo @count).',
+      'analytics_pos_no_sales_desc':
+          'Hakuna mauzo ya stock kupitia POS yaliyorekodiwa katika kipindi hiki.',
+      'analytics_operational_insights_error':
+          'Baadhi ya taarifa za wafanyakazi, kazi au POS hazikupatikana. Taarifa nyingine za ripoti bado zinaonekana.',
+      'analytics_advice_catalog_load_error':
+          'Ushauri wa ziada wa biashara haukuweza kupakiwa. Ushauri wa kawaida bado unapatikana.',
+      'analytics_advice_admin_title': 'Simamia ushauri wa uchambuzi',
+      'analytics_advice_admin_hub_desc':
+          'Ongeza na simamia ushauri wa biashara kwenye ripoti.',
+      'analytics_advice_admin_description':
+          'Simamia ushauri wa ndani ya app na maalum kwa Kiingereza na Kiswahili. Pakua JSON, sasisha maandishi ya lugha, kisha iingize ili kuchapisha mabadiliko.',
+      'analytics_advice_add': 'Ongeza ushauri',
+      'analytics_advice_edit': 'Hariri ushauri',
+      'analytics_advice_empty': 'Bado hakuna ushauri maalum. Ongeza wa kwanza.',
+      'analytics_advice_load_error': 'Imeshindwa kupakia ushauri: @error',
+      'analytics_advice_saved': 'Ushauri umehifadhiwa.',
+      'analytics_advice_save_error': 'Imeshindwa kuhifadhi ushauri: @error',
+      'analytics_advice_deleted': 'Ushauri umefutwa.',
+      'analytics_advice_delete_error': 'Imeshindwa kufuta ushauri: @error',
+      'analytics_advice_delete_title': 'Ufute ushauri?',
+      'analytics_advice_delete_confirm': 'Ufute "@title"?',
+      'analytics_advice_title_en': 'Kichwa cha ushauri (Kiingereza)',
+      'analytics_advice_title_sw': 'Kichwa cha ushauri (Kiswahili)',
+      'analytics_advice_description_en': 'Ushauri (Kiingereza)',
+      'analytics_advice_description_sw': 'Ushauri (Kiswahili)',
+      'analytics_advice_category': 'Aina ya ushauri',
+      'analytics_advice_category_costs': 'Matumizi',
+      'analytics_advice_category_growth': 'Ukuaji',
+      'analytics_advice_category_tasks': 'Kazi',
+      'analytics_advice_category_sales': 'Mauzo',
+      'analytics_advice_category_staff': 'Wafanyakazi',
+      'analytics_advice_category_records': 'Kumbukumbu',
+      'analytics_advice_metric': 'Kipimo cha biashara',
+      'analytics_advice_metric_income': 'Jumla ya mapato',
+      'analytics_advice_metric_expenses': 'Jumla ya matumizi',
+      'analytics_advice_metric_net': 'Salio halisi',
+      'analytics_advice_metric_transactionCount': 'Idadi ya miamala',
+      'analytics_advice_metric_incomeTransactionCount':
+          'Idadi ya miamala ya mapato',
+      'analytics_advice_metric_expenseTransactionCount':
+          'Idadi ya miamala ya matumizi',
+      'analytics_advice_metric_averageIncome': 'Wastani wa muamala wa mapato',
+      'analytics_advice_metric_averageExpense':
+          'Wastani wa muamala wa matumizi',
+      'analytics_advice_metric_topExpenseSharePercent':
+          'Aina kubwa ya matumizi (%)',
+      'analytics_advice_metric_incomeChangePercent':
+          'Mabadiliko ya mapato dhidi ya kipindi kilichopita (%)',
+      'analytics_advice_metric_expenseChangePercent':
+          'Mabadiliko ya matumizi dhidi ya kipindi kilichopita (%)',
+      'analytics_advice_metric_activeTasks': 'Kazi zinazoendelea',
+      'analytics_advice_metric_overdueTasks': 'Kazi zilizochelewa',
+      'analytics_advice_metric_tasksForReview': 'Kazi zinazosubiri ukaguzi',
+      'analytics_advice_metric_posSalesCount': 'Idadi ya mauzo ya POS',
+      'analytics_advice_metric_posSalesTotal': 'Jumla ya mauzo ya POS',
+      'analytics_advice_metric_staffCount': 'Idadi ya akaunti za wafanyakazi',
+      'analytics_advice_operator': 'Sharti',
+      'analytics_advice_operator_gt': 'Kubwa kuliko (>)',
+      'analytics_advice_operator_gte': 'Angalau (≥)',
+      'analytics_advice_operator_lt': 'Chini ya (<)',
+      'analytics_advice_operator_lte': 'Isiyozidi (≤)',
+      'analytics_advice_operator_eq': 'Sawa na (=)',
+      'analytics_advice_threshold': 'Kiwango cha kulinganisha',
+      'analytics_advice_threshold_invalid': 'Weka namba sahihi.',
+      'analytics_advice_required': 'Sehemu hii inahitajika.',
+      'analytics_advice_placeholder_help':
+          'Unaweza kuweka thamani kama {income}, {expenses}, {net}, {transactionCount}, {activeTasks}, {overdueTasks}, {tasksForReview}, {posSalesCount} na {posSalesTotal} kwenye ushauri.',
+      'analytics_advice_json_tools': 'Zana za JSON ya ushauri',
+      'analytics_advice_import': 'Ingiza / sasisha JSON',
+      'analytics_advice_export': 'Pakua JSON',
+      'analytics_advice_exported': 'JSON ya ushauri imepakuliwa: @path',
+      'analytics_advice_export_error': 'Imeshindwa kupakua JSON: @error',
+      'analytics_advice_import_title': 'Ingiza JSON ya ushauri',
+      'analytics_advice_import_confirm':
+          'Uingize vipengee @count vya ushauri? Vipengee vyenye vitambulisho vinavyofanana vitasasishwa; vingine vitaachwa kama vilivyo.',
+      'analytics_advice_imported':
+          'Umeingiza au kusasisha vipengee @count vya ushauri.',
+      'analytics_advice_import_error':
+          'Imeshindwa kuingiza JSON ya ushauri: @error',
+      'analytics_advice_list_title': 'Orodha ya ushauri',
+      'analytics_advice_search': 'Tafuta ushauri kwa kichwa au maelezo',
+      'analytics_advice_all_categories': 'Aina zote',
+      'analytics_advice_no_results': 'Hakuna ushauri unaolingana na vichujio.',
+      'analytics_advice_default': 'Ushauri wa ndani ya app',
+      'analytics_advice_conditions_count': 'Masharti @count',
+      'analytics_advice_builtin_delete_hint':
+          'Ushauri wa ndani ya app hauwezi kufutwa. Zima au uhariri badala yake.',
       'analytics_report_title': 'Ripoti za biashara',
       'PDF saved': 'PDF imehifadhiwa',
       'Week': 'Wiki',

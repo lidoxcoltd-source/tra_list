@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 import 'stock_models.dart';
 import 'stock_media.dart';
 import 'stock_service.dart';
@@ -68,7 +69,8 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
     super.dispose();
   }
 
-  double get _total => _lines.fold(0, (s, l) => s + _num(l.qty.text) * _num(l.cost.text));
+  double get _total =>
+      _lines.fold(0, (s, l) => s + _num(l.qty.text) * _num(l.cost.text));
 
   Future<void> _addLine() async {
     final p = await pickProduct(context, _products, trackedOnly: true);
@@ -130,17 +132,24 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          StockSectionHeading(title: 'stk_purchase_details'.tr),
           StockCard(
             child: Column(
               children: [
                 TextField(
                   controller: _supplier,
-                  decoration: stockInput('stk_supplier'.tr, icon: Icons.local_shipping_outlined),
+                  decoration: stockInput(
+                    'stk_supplier'.tr,
+                    icon: Icons.local_shipping_outlined,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _reference,
-                  decoration: stockInput('stk_reference'.tr, icon: Icons.receipt_long_outlined),
+                  decoration: stockInput(
+                    'stk_reference'.tr,
+                    icon: Icons.receipt_long_outlined,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 InkWell(
@@ -162,6 +171,7 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
             ),
           ),
           const SizedBox(height: 12),
+          StockSectionHeading(title: 'stk_received_items'.tr),
           for (var i = 0; i < _lines.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -179,7 +189,8 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _lines.removeAt(i).dispose()),
+                          onPressed: () =>
+                              setState(() => _lines.removeAt(i).dispose()),
                         ),
                       ],
                     ),
@@ -188,7 +199,9 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
                         Expanded(
                           child: TextField(
                             controller: _lines[i].qty,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             inputFormatters: dec,
                             decoration: stockInput('stk_quantity'.tr),
                             onChanged: (_) => setState(() {}),
@@ -198,9 +211,14 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
                         Expanded(
                           child: TextField(
                             controller: _lines[i].cost,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             inputFormatters: dec,
-                            decoration: stockInput('stk_unit_cost'.tr, suffix: 'TZS'),
+                            decoration: stockInput(
+                              'stk_unit_cost'.tr,
+                              suffix: 'TZS',
+                            ),
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
@@ -228,33 +246,69 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
             ],
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _note,
-            decoration: stockInput('stk_note'.tr, icon: Icons.notes),
-          ),
-          if (BusinessAccessService.can('transactions', 'create'))
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('stk_record_expense'.tr),
-              value: _expense,
-              onChanged: (v) => setState(() => _expense = v),
-            ),
-          const SizedBox(height: 8),
-          Text(
-            '${'stk_total'.tr}: TZS ${formatMoney(_total)}',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: kStockNavy),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: kStockBlue),
-              onPressed: _saving || _lines.isEmpty ? null : _save,
-              icon: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check),
-              label: Text('stk_confirm_receipt'.tr),
+          StockCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _note,
+                  decoration: stockInput('stk_note'.tr, icon: Icons.notes),
+                ),
+                if (BusinessAccessService.can('transactions', 'create'))
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('stk_record_expense'.tr),
+                    value: _expense,
+                    onChanged: (v) => setState(() => _expense = v),
+                  ),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'stk_total'.tr,
+                        style: const TextStyle(
+                          color: MjasiColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'TZS ${formatMoney(_total)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: kStockNavy,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 48,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kStockBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _saving || _lines.isEmpty ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check),
+                    label: Text('stk_confirm_receipt'.tr),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -289,7 +343,8 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
       if (!mounted) return;
       _products = list;
       final id = widget.productId;
-      if (id != null) setState(() => _product = list.where((e) => e.id == id).firstOrNull);
+      if (id != null)
+        setState(() => _product = list.where((e) => e.id == id).firstOrNull);
     });
   }
 
@@ -333,34 +388,52 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          StockSectionHeading(title: 'stk_adjustment_details'.tr),
           StockCard(
             child: Column(
               children: [
                 InkWell(
                   onTap: () async {
-                    final sel = await pickProduct(context, _products, trackedOnly: true);
+                    final sel = await pickProduct(
+                      context,
+                      _products,
+                      trackedOnly: true,
+                    );
                     if (sel != null) setState(() => _product = sel);
                   },
                   child: InputDecorator(
-                    decoration: stockInput('stk_product'.tr, icon: Icons.inventory_2_outlined).copyWith(
-                      suffixIcon: IconButton(
-                        tooltip: 'stk_scan'.tr,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        onPressed: () async {
-                          final sel = await scanForProduct(context, _products, trackedOnly: true);
-                          if (sel != null) setState(() => _product = sel);
-                        },
-                      ),
-                    ),
+                    decoration:
+                        stockInput(
+                          'stk_product'.tr,
+                          icon: Icons.inventory_2_outlined,
+                        ).copyWith(
+                          suffixIcon: IconButton(
+                            tooltip: 'stk_scan'.tr,
+                            icon: const Icon(Icons.qr_code_scanner),
+                            onPressed: () async {
+                              final sel = await scanForProduct(
+                                context,
+                                _products,
+                                trackedOnly: true,
+                              );
+                              if (sel != null) setState(() => _product = sel);
+                            },
+                          ),
+                        ),
                     child: Text(
-                      p == null ? 'stk_select_product'.tr : '${p.name} — ${formatQty(p.quantity)} ${unitLabel(p.unit)}',
+                      p == null
+                          ? 'stk_select_product'.tr
+                          : '${p.name} — ${formatQty(p.quantity)} ${unitLabel(p.unit)}',
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<MovementType>(
                   initialValue: _type,
-                  decoration: stockInput('stk_adjust_type'.tr, icon: Icons.tune),
+                  decoration: stockInput(
+                    'stk_adjust_type'.tr,
+                    icon: Icons.tune,
+                  ),
                   items: [
                     for (final t in MovementType.manual)
                       DropdownMenuItem(value: t, child: Text(t.labelKey.tr)),
@@ -370,17 +443,26 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _qty,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
                   decoration: stockInput(
-                    _type == MovementType.correction ? 'stk_counted_qty'.tr : 'stk_quantity'.tr,
+                    _type == MovementType.correction
+                        ? 'stk_counted_qty'.tr
+                        : 'stk_quantity'.tr,
                     icon: Icons.numbers,
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _reason,
-                  decoration: stockInput('stk_reason'.tr, icon: Icons.help_outline),
+                  decoration: stockInput(
+                    'stk_reason'.tr,
+                    icon: Icons.help_outline,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -394,7 +476,13 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: kStockBlue),
+              style: FilledButton.styleFrom(
+                backgroundColor: kStockBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: _saving || p == null ? null : _save,
               icon: const Icon(Icons.check),
               label: Text('stk_save'.tr),

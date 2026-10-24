@@ -38,7 +38,12 @@ class CategoryService {
     if (!BusinessAccessService.can('categories', 'create')) {
       throw StateError('You do not have permission to add categories.');
     }
-    await _collectionRef().add(category);
+    final id = category.id;
+    if (id == null || id.isEmpty) {
+      await _collectionRef().add(category);
+    } else {
+      await _collectionRef().doc(id).set(category);
+    }
   }
 
   static Future<void> updateCategory(String id, String name) async {

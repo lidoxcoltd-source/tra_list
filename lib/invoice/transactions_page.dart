@@ -299,6 +299,27 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           fontSize: 12,
                         ),
                       ),
+                      if (controller.isPending(t)) ...[
+                        const SizedBox(height: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: .1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'transaction_sync_pending'.tr,
+                            style: TextStyle(
+                              color: Colors.orange.shade800,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

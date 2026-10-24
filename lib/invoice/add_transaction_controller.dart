@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -33,8 +33,10 @@ class AddTransactionController extends GetxController {
   final Rx<Color> accentColor = const Color(0xFF42A5F5).obs;
 
   // Connectivity
-  final RxBool isOnline = true.obs;
+  final RxBool isOnline = false.obs;
   final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  String _cachedShopNickname = '';
 
   // Original transaction for editing
   final TransactionModel? _originalTransaction;
@@ -64,20 +66,22 @@ class AddTransactionController extends GetxController {
     super.onInit();
     ProfileService.loadAndSetLanguage();
 
-    // **FIX**: Await connectivity check before loading data
     await _initConnectivity();
     await loadCategories();
     await loadBrandColors();
 
-    _connectivity.onConnectivityChanged.listen((results) {
-      if (results.isNotEmpty) {
-        _updateConnectionStatus(results.first);
-      }
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      results,
+    ) {
+      _updateConnectionStatus(
+        results.any((result) => result != ConnectivityResult.none),
+      );
     });
   }
 
   @override
   void onClose() {
+    unawaited(_connectivitySubscription?.cancel());
     descC.dispose();
     amountC.dispose();
     super.onClose();
@@ -86,55 +90,32 @@ class AddTransactionController extends GetxController {
   Future<void> _initConnectivity() async {
     try {
       final results = await _connectivity.checkConnectivity();
-      await _updateConnectionStatus(results.first);
-    } catch (e) {
-      await _updateConnectionStatus(ConnectivityResult.none);
+      await _updateConnectionStatus(
+        results.any((result) => result != ConnectivityResult.none),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not check network connectivity: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      await _updateConnectionStatus(false);
     }
   }
 
-  Future<void> _updateConnectionStatus(ConnectivityResult result) async {
+  Future<void> _updateConnectionStatus(bool connected) async {
     final wasOnline = isOnline.value;
-    bool newOnlineStatus = result != ConnectivityResult.none;
-
-    if (newOnlineStatus) {
-      newOnlineStatus = await _hasInternetConnection();
-    }
-
-    isOnline.value = newOnlineStatus;
-
-    if (!wasOnline && isOnline.value) {
-      _showConnectivityStatus();
-      _syncOfflineData();
+    isOnline.value = connected;
+    if (wasOnline != connected) _showConnectivityStatus();
+    if (!wasOnline && connected) {
+      await _syncOfflineData();
     }
   }
 
-  Future<bool> _hasInternetConnection() async {
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } on SocketException catch (_) {
-      return false;
-    }
-  }
-
-  void _showConnectivityStatus() {
-    final message = isOnline.isTrue
-        ? 'Back online - transactions will sync automatically'.tr
-        : 'No internet connection - transactions will be saved offline'.tr;
-    final backgroundColor = isOnline.isTrue ? Colors.green : Colors.orange;
-
-    Get.snackbar(
-      isOnline.isTrue ? 'Connected'.tr : 'Offline Mode'.tr,
-      message,
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: backgroundColor,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
-      icon: Icon(
-        isOnline.isTrue ? Icons.wifi : Icons.wifi_off,
-        color: Colors.white,
-      ),
-    );
+  bool _isRetryableNetworkError(Object error) {
+    if (error is! FirebaseException) return false;
+    return const {
+      'unavailable',
+      'deadline-exceeded',
+      'network-request-failed',
+    }.contains(error.code);
   }
 
   Future<void> _syncOfflineData() async {
@@ -158,16 +139,41 @@ class AddTransactionController extends GetxController {
     }
   }
 
+  void _showConnectivityStatus() {
+    final message = isOnline.isTrue
+        ? 'Back online - transactions will sync automatically'.tr
+        : 'No internet connection - transactions will be saved offline'.tr;
+    final backgroundColor = isOnline.isTrue ? Colors.green : Colors.orange;
+
+    Get.snackbar(
+      isOnline.isTrue ? 'Connected'.tr : 'Offline Mode'.tr,
+      message,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: backgroundColor,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      icon: Icon(
+        isOnline.isTrue ? Icons.wifi : Icons.wifi_off,
+        color: Colors.white,
+      ),
+    );
+  }
+
   Future<void> loadBrandColors() async {
     try {
       final profile = await ProfileService.loadOrCreate();
+      _cachedShopNickname = (profile['shopNickname']?.toString().trim() ?? '');
+      if (_cachedShopNickname.isEmpty) {
+        _cachedShopNickname = profile['name']?.toString().trim() ?? '';
+      }
       if (profile.containsKey('colors')) {
         final colors = profile['colors'] as Map<String, dynamic>;
         brandColor.value = Color(colors['brand'] as int? ?? 0xFF1976D2);
         accentColor.value = Color(colors['accent'] as int? ?? 0xFFFFA000);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Could not load profile colors: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
@@ -237,6 +243,7 @@ class AddTransactionController extends GetxController {
     }
 
     final newCategory = CategoryModel(
+      id: OfflineService.newLocalId(),
       name: name,
       type: isExpense.value ? TransactionType.expense : TransactionType.income,
     );
@@ -244,12 +251,18 @@ class AddTransactionController extends GetxController {
     selectedCategory.value = name;
 
     try {
-      if (isOnline.value) {
-        await CategoryService.addCategory(newCategory);
-        Get.snackbar('success'.tr, 'category_added_success'.tr);
-      } else {
+      if (!isOnline.value) {
         await OfflineService.saveCategoryOffline(newCategory);
-        Get.snackbar('Saved Offline'.tr, 'category_saved_offline'.tr);
+        Get.snackbar('saved_offline'.tr, 'category_saved_offline'.tr);
+      } else {
+        try {
+          await CategoryService.addCategory(newCategory);
+          Get.snackbar('success'.tr, 'category_added_success'.tr);
+        } catch (error) {
+          if (!_isRetryableNetworkError(error)) rethrow;
+          await OfflineService.saveCategoryOffline(newCategory);
+          Get.snackbar('saved_offline'.tr, 'category_saved_offline'.tr);
+        }
       }
       await loadCategories();
       selectedCategory.value = name;
@@ -263,6 +276,7 @@ class AddTransactionController extends GetxController {
   }
 
   Future<void> save() async {
+    TransactionModel? transactionToSave;
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not authenticated.');
@@ -271,15 +285,17 @@ class AddTransactionController extends GetxController {
       var shopNickname = _originalTransaction?.shopNickname ?? '';
       if (shopNickname.isEmpty && !BusinessAccessService.isOwner.value) {
         shopNickname = BusinessAccessService.shopNickname.value.trim();
-      } else if (shopNickname.isEmpty) {
+      } else if (shopNickname.isEmpty && isOnline.value) {
         final profile = await ProfileService.loadOrCreate();
         shopNickname = profile['shopNickname']?.toString().trim() ?? '';
         if (shopNickname.isEmpty) {
           shopNickname = profile['name']?.toString().trim() ?? '';
         }
+      } else if (shopNickname.isEmpty) {
+        shopNickname = _cachedShopNickname;
       }
       final transaction = TransactionModel(
-        id: _originalTransaction?.id,
+        id: _originalTransaction?.id ?? OfflineService.newLocalId(),
         uid: user.uid,
         description: descC.text.trim(),
         amount: amount,
@@ -290,8 +306,15 @@ class AddTransactionController extends GetxController {
         date: selectedDate.value,
         shopNickname: shopNickname,
       );
+      transactionToSave = transaction;
 
-      if (_originalTransaction != null &&
+      if (!isOnline.value) {
+        await OfflineService.saveTransactionOffline(
+          transaction,
+          isCreate: _originalTransaction == null,
+        );
+        Get.snackbar('saved_offline'.tr, 'transaction_saved_offline'.tr);
+      } else if (_originalTransaction != null &&
           (_originalTransaction.id ?? '').isNotEmpty) {
         // Use TransactionService to update
         await TransactionService.updateTransaction(
@@ -304,6 +327,16 @@ class AddTransactionController extends GetxController {
       }
     } on FirebaseException catch (e) {
       debugPrint('Firestore save failed: ${e.code} ${e.message}');
+      if (_isRetryableNetworkError(e)) {
+        final pendingTransaction = transactionToSave;
+        if (pendingTransaction == null) rethrow;
+        await OfflineService.saveTransactionOffline(
+          pendingTransaction,
+          isCreate: _originalTransaction == null,
+        );
+        Get.snackbar('saved_offline'.tr, 'transaction_saved_offline'.tr);
+        return;
+      }
       rethrow;
     } catch (e, st) {
       debugPrint('Save error: $e\n$st');

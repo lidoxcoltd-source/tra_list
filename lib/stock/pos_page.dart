@@ -10,6 +10,7 @@ import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 import 'stock_media.dart';
 import 'stock_models.dart';
 import 'stock_service.dart';
@@ -388,113 +389,145 @@ class _PosPageState extends State<PosPage> {
   Widget _scanPane() {
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!kIsWeb && _cameraOn && _scanner != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 200,
-                width: double.infinity,
-                child: MobileScanner(
-                  controller: _scanner!,
-                  placeholderBuilder: (context) => ScannerLoadingFallback(
-                    compact: true,
-                    onPhoto: () => _scanPhoto(ImageSource.camera),
-                    onUpload: () => _scanPhoto(ImageSource.gallery),
-                    onRetry: _retryPosCamera,
-                  ),
-                  onDetect: (capture) {
-                    for (final b in capture.barcodes) {
-                      final v = b.rawValue;
-                      if (v != null && v.isNotEmpty) {
-                        _onCode(v);
-                        return;
+      child: StockCard(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!kIsWeb && _cameraOn && _scanner != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  height: 200,
+                  width: double.infinity,
+                  child: MobileScanner(
+                    controller: _scanner!,
+                    placeholderBuilder: (context) => ScannerLoadingFallback(
+                      compact: true,
+                      onPhoto: () => _scanPhoto(ImageSource.camera),
+                      onUpload: () => _scanPhoto(ImageSource.gallery),
+                      onRetry: _retryPosCamera,
+                    ),
+                    onDetect: (capture) {
+                      for (final b in capture.barcodes) {
+                        final v = b.rawValue;
+                        if (v != null && v.isNotEmpty) {
+                          _onCode(v);
+                          return;
+                        }
                       }
-                    }
-                  },
-                  errorBuilder: (context, error) => Container(
-                    color: Colors.black87,
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'stk_camera_error'.tr,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        const SizedBox(height: 10),
-                        FilledButton.icon(
-                          icon: const Icon(Icons.photo_camera_outlined),
-                          label: Text('stk_scan_take_photo'.tr),
-                          onPressed: () => _scanPhoto(ImageSource.camera),
-                        ),
-                      ],
+                    },
+                    errorBuilder: (context, error) => Container(
+                      color: Colors.black87,
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'stk_camera_error'.tr,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: Text('stk_scan_take_photo'.tr),
+                            onPressed: () => _scanPhoto(ImageSource.camera),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
+            if (!kIsWeb && _cameraOn && _scanner != null)
+              const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeCtl,
+                    focusNode: _codeFocus,
+                    autofocus: !cameraScanSupported,
+                    textInputAction: TextInputAction.done,
+                    decoration: stockInput(
+                      'pos_code_hint'.tr,
+                      icon: Icons.qr_code_2,
+                    ),
+                    // USB / Bluetooth scanners type the code then press Enter.
+                    onSubmitted: (v) {
+                      _onCode(v);
+                      _codeCtl.clear();
+                      _codeFocus.requestFocus();
+                    },
+                  ),
+                ),
+                if (cameraScanSupported) ...[
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: _cameraOn ? kStockBad : kStockNavy,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(48, 48),
+                    ),
+                    tooltip: _cameraOn ? 'pos_camera_off'.tr : 'stk_scan'.tr,
+                    onPressed: _toggleCamera,
+                    icon: Icon(
+                      _cameraOn ? Icons.videocam_off : Icons.qr_code_scanner,
+                    ),
+                  ),
+                ],
+              ],
             ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _codeCtl,
-                  focusNode: _codeFocus,
-                  autofocus: !cameraScanSupported,
-                  textInputAction: TextInputAction.done,
-                  decoration: stockInput(
-                    'pos_code_hint'.tr,
-                    icon: Icons.qr_code_2,
-                  ),
-                  // USB / Bluetooth scanners type the code then press Enter.
-                  onSubmitted: (v) {
-                    _onCode(v);
-                    _codeCtl.clear();
-                    _codeFocus.requestFocus();
-                  },
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _scanAction(
+                  tooltip: 'stk_scan_take_photo'.tr,
+                  icon: Icons.photo_camera_outlined,
+                  onPressed: () => _scanPhoto(ImageSource.camera),
                 ),
-              ),
-              const SizedBox(width: 8),
-              if (cameraScanSupported)
-                IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: _cameraOn ? kStockBad : kStockNavy,
-                  ),
-                  tooltip: _cameraOn ? 'pos_camera_off'.tr : 'stk_scan'.tr,
-                  onPressed: _toggleCamera,
-                  icon: Icon(
-                    _cameraOn ? Icons.videocam_off : Icons.qr_code_scanner,
-                  ),
+                _scanAction(
+                  tooltip: 'stk_scan_upload'.tr,
+                  icon: Icons.image_outlined,
+                  onPressed: () => _scanPhoto(ImageSource.gallery),
                 ),
-              IconButton.outlined(
-                tooltip: 'stk_scan_take_photo'.tr,
-                onPressed: () => _scanPhoto(ImageSource.camera),
-                icon: const Icon(Icons.photo_camera_outlined),
-              ),
-              IconButton.outlined(
-                tooltip: 'stk_scan_upload'.tr,
-                onPressed: () => _scanPhoto(ImageSource.gallery),
-                icon: const Icon(Icons.image_outlined),
-              ),
-              if (!kIsWeb && _cameraOn && _scanner != null)
-                IconButton.outlined(
-                  tooltip: 'stk_camera_switch'.tr,
-                  onPressed: () => _scanner!.switchCamera(),
-                  icon: const Icon(Icons.cameraswitch_outlined),
+                if (!kIsWeb && _cameraOn && _scanner != null)
+                  _scanAction(
+                    tooltip: 'stk_camera_switch'.tr,
+                    icon: Icons.cameraswitch_outlined,
+                    onPressed: () => _scanner!.switchCamera(),
+                  ),
+                _scanAction(
+                  tooltip: 'stk_products'.tr,
+                  icon: Icons.search_rounded,
+                  onPressed: _browse,
                 ),
-              IconButton.outlined(
-                tooltip: 'stk_products'.tr,
-                onPressed: _browse,
-                icon: const Icon(Icons.search_rounded),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _scanAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton.outlined(
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        foregroundColor: kStockNavy,
+        side: const BorderSide(color: MjasiColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onPressed,
+      icon: Icon(icon),
     );
   }
 

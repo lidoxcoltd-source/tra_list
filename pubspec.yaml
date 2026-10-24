@@ -86,6 +86,7 @@ flutter:
     - assets/tra-logo.png # Old TRA logo
     - assets/frame.png # Fallback QR frame
     - assets/social_icons.png
+    - assets/analytics_advice.json
     # Fallback QR frame
     - assets/fonts/
 

@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "supportedOperators": ["gt", "gte", "lt", "lte", "eq"],
+  "metrics": [
+    "income",
+    "expenses",
+    "net",
+    "transactionCount",
+    "incomeTransactionCount",
+    "expenseTransactionCount",
+    "averageIncome",
+    "averageExpense",
+    "topExpenseSharePercent",
+    "incomeChangePercent",
+    "expenseChangePercent",
+    "activeTasks",
+    "overdueTasks",
+    "tasksForReview",
+    "posSalesCount",
+    "posSalesTotal",
+    "staffCount"
+  ],
+  "advice": [
+    {
+      "id": "expenses_without_income",
+      "category": "costs",
+      "when": [
+        {"metric": "expenses", "operator": "gt", "value": 0},
+        {"metric": "income", "operator": "eq", "value": 0}
+      ],
+      "title": {"en": "Expenses recorded without income", "sw": "Matumizi bila mapato"},
+      "description": {
+        "en": "TSH {expenses} in expenses and no income are recorded for this period. Check that all sales and receipts have been entered.",
+        "sw": "Matumizi ya TSH {expenses} yameandikwa bila mapato katika kipindi hiki. Hakikisha mauzo na stakabadhi zote zimeingizwa."
+      }
+    },
+    {
+      "id": "income_growth",
+      "category": "growth",
+      "when": [{"metric": "incomeChangePercent", "operator": "gte", "value": 10}],
+      "title": {"en": "Income is growing", "sw": "Mapato yanaongezeka"},
+      "description": {
+        "en": "Recorded income changed by {incomeChangePercent}% from the previous period. Identify what worked and whether it can be repeated.",
+        "sw": "Mapato yaliyorekodiwa yamebadilika kwa {incomeChangePercent}% kutoka kipindi kilichopita. Chunguza kilichosaidia na kama kinaweza kurudiwa."
+      }
+    },
+    {
+      "id": "income_decline",
+      "category": "growth",
+      "when": [{"metric": "incomeChangePercent", "operator": "lte", "value": -10}],
+      "title": {"en": "Income has fallen", "sw": "Mapato yamepungua"},
+      "description": {
+        "en": "Recorded income changed by {incomeChangePercent}% from the previous period. Review sales activity, opening hours and missing entries before deciding what to change.",
+        "sw": "Mapato yaliyorekodiwa yamebadilika kwa {incomeChangePercent}% kutoka kipindi kilichopita. Kagua mauzo, muda wa kazi na miamala inayoweza kuwa haijaingizwa kabla ya kufanya mabadiliko."
+      }
+    },
+    {
+      "id": "expense_increase",
+      "category": "costs",
+      "when": [{"metric": "expenseChangePercent", "operator": "gte", "value": 10}],
+      "title": {"en": "Expenses are rising", "sw": "Matumizi yanaongezeka"},
+      "description": {
+        "en": "Recorded expenses changed by {expenseChangePercent}% from the previous period. Check the largest cost items and confirm each one is necessary.",
+        "sw": "Matumizi yaliyorekodiwa yamebadilika kwa {expenseChangePercent}% kutoka kipindi kilichopita. Kagua gharama kubwa na uthibitishe kila moja ni muhimu."
+      }
+    },
+    {
+      "id": "expense_reduction",
+      "category": "costs",
+      "when": [{"metric": "expenseChangePercent", "operator": "lte", "value": -10}],
+      "title": {"en": "Expenses have decreased", "sw": "Matumizi yamepungua"},
+      "description": {
+        "en": "Recorded expenses changed by {expenseChangePercent}% from the previous period. Check that the change reflects actual savings and not missing records.",
+        "sw": "Matumizi yaliyorekodiwa yamebadilika kwa {expenseChangePercent}% kutoka kipindi kilichopita. Hakikisha ni akiba halisi na si taarifa zilizokosekana."
+      }
+    },
+    {
+      "id": "concentrated_spending",
+      "category": "costs",
+      "when": [{"metric": "topExpenseSharePercent", "operator": "gte", "value": 60}],
+      "title": {"en": "One category dominates spending", "sw": "Aina moja inaongoza matumizi"},
+      "description": {
+        "en": "The largest expense category accounts for {topExpenseSharePercent}% of recorded expenses. Review its transactions and consider setting a budget.",
+        "sw": "Aina ya matumizi iliyo juu zaidi ni {topExpenseSharePercent}% ya matumizi yaliyorekodiwa. Kagua miamala yake na fikiria kuweka bajeti."
+      }
+    },
+    {
+      "id": "expense_transactions_more_frequent",
+      "category": "costs",
+      "when": [
+        {"metric": "expenseTransactionCount", "operator": "gte", "value": 4},
+        {"metric": "incomeTransactionCount", "operator": "lte", "value": 3}
+      ],
+      "title": {"en": "Review frequent expense entries", "sw": "Kagua miamala mingi ya matumizi"},
+      "description": {
+        "en": "There are {expenseTransactionCount} expense entries and {incomeTransactionCount} income entries in this report. Check whether all transactions are categorized and recorded consistently.",
+        "sw": "Kuna miamala {expenseTransactionCount} ya matumizi na {incomeTransactionCount} ya mapato kwenye ripoti hii. Hakikisha yote yameainishwa na kurekodiwa kwa utaratibu mmoja."
+      }
+    },
+    {
+      "id": "small_report_sample",
+      "category": "records",
+      "when": [
+        {"metric": "transactionCount", "operator": "gt", "value": 0},
+        {"metric": "transactionCount", "operator": "lt", "value": 4}
+      ],
+      "title": {"en": "Use this result as an early signal", "sw": "Tumia matokeo haya kama ishara ya awali"},
+      "description": {
+        "en": "Only {transactionCount} transactions are included. Record consistently for a fuller picture before making major business decisions.",
+        "sw": "Miamala {transactionCount} pekee ndiyo imejumuishwa. Rekodi miamala kwa utaratibu ili kupata picha kamili kabla ya maamuzi makubwa."
+      }
+    },
+    {
+      "id": "positive_cash_buffer",
+      "category": "growth",
+      "when": [
+        {"metric": "income", "operator": "gt", "value": 0},
+        {"metric": "net", "operator": "gt", "value": 0}
+      ],
+      "title": {"en": "Plan how to use the positive balance", "sw": "Panga matumizi ya salio chanya"},
+      "description": {
+        "en": "Recorded income exceeds expenses by TSH {net}. Consider planned restocking, savings or other priorities before spending the remainder.",
+        "sw": "Mapato yaliyorekodiwa yamezidi matumizi kwa TSH {net}. Panga ununuzi wa bidhaa, akiba au vipaumbele vingine kabla ya kutumia salio."
+      }
+    },
+    {
+      "id": "negative_cash_balance",
+      "category": "costs",
+      "when": [{"metric": "net", "operator": "lt", "value": 0}],
+      "title": {"en": "Review the negative balance", "sw": "Kagua salio hasi"},
+      "description": {
+        "en": "Expenses exceed recorded income by TSH {net}. Verify the entries, then identify costs to manage or income opportunities to follow up.",
+        "sw": "Matumizi yamezidi mapato yaliyorekodiwa kwa TSH {net}. Hakiki miamala kisha tambua gharama za kudhibiti au fursa za mapato za kufuatilia."
+      }
+    },
+    {
+      "id": "expense_average_higher",
+      "category": "costs",
+      "when": [
+        {"metric": "averageExpense", "operator": "gt", "value": 0},
+        {"metric": "averageIncome", "operator": "gt", "value": 0}
+      ],
+      "title": {"en": "Compare typical transaction sizes", "sw": "Linganisha wastani wa miamala"},
+      "description": {
+        "en": "Average income entry: TSH {averageIncome}; average expense entry: TSH {averageExpense}. Review larger expense entries and confirm they are expected.",
+        "sw": "Wastani wa muamala wa mapato: TSH {averageIncome}; wastani wa matumizi: TSH {averageExpense}. Kagua miamala mikubwa ya matumizi na uthibitishe kuwa ilitarajiwa."
+      }
+    },
+    {
+      "id": "overdue_work_followup",
+      "category": "tasks",
+      "when": [{"metric": "overdueTasks", "operator": "gt", "value": 0}],
+      "title": {"en": "Follow up on overdue work", "sw": "Fuatilia kazi zilizochelewa"},
+      "description": {
+        "en": "{overdueTasks} visible tasks are overdue. Contact the assignees, update deadlines where needed and record the next action.",
+        "sw": "Kazi {overdueTasks} zinazoonekana zimechelewa. Wasiliana na waliopewa kazi, sasisha muda inapohitajika na rekodi hatua inayofuata."
+      }
+    },
+    {
+      "id": "task_review_backlog",
+      "category": "tasks",
+      "when": [{"metric": "tasksForReview", "operator": "gte", "value": 2}],
+      "title": {"en": "Clear the task review queue", "sw": "Punguza kazi zinazosubiri ukaguzi"},
+      "description": {
+        "en": "{tasksForReview} submitted tasks are waiting for review. Schedule a short review so staff can get approval or feedback.",
+        "sw": "Kazi {tasksForReview} zilizowasilishwa zinasubiri ukaguzi. Panga muda mfupi wa kuzikagua ili wafanyakazi wapate idhini au mrejesho."
+      }
+    },
+    {
+      "id": "active_task_workload",
+      "category": "tasks",
+      "when": [{"metric": "activeTasks", "operator": "gte", "value": 5}],
+      "title": {"en": "Check active task workload", "sw": "Kagua mzigo wa kazi zinazoendelea"},
+      "description": {
+        "en": "{activeTasks} visible tasks are active. Confirm priorities, assignees and due dates are manageable.",
+        "sw": "Kazi {activeTasks} zinazoonekana zinaendelea. Hakikisha vipaumbele, wahusika na tarehe za mwisho zinawezekana."
+      }
+    },
+    {
+      "id": "pos_sales_recorded",
+      "category": "sales",
+      "when": [
+        {"metric": "posSalesCount", "operator": "gte", "value": 5},
+        {"metric": "posSalesTotal", "operator": "gt", "value": 0}
+      ],
+      "title": {"en": "Review POS sales mix", "sw": "Kagua mchanganyiko wa mauzo ya POS"},
+      "description": {
+        "en": "{posSalesCount} POS sales totaling TSH {posSalesTotal} were recorded. Review frequently sold items and check that stock levels are kept current.",
+        "sw": "Mauzo {posSalesCount} ya POS yenye jumla ya TSH {posSalesTotal} yamerekodiwa. Kagua bidhaa zinazouzwa mara nyingi na hakikisha viwango vya stock vinasasishwa."
+      }
+    },
+    {
+      "id": "staff_performance_review",
+      "category": "staff",
+      "when": [{"metric": "staffCount", "operator": "gt", "value": 1}],
+      "title": {"en": "Review staff activity fairly", "sw": "Kagua shughuli za wafanyakazi kwa usawa"},
+      "description": {
+        "en": "{staffCount} staff accounts are registered. Compare recorded activity using the same dates, shop filters and responsibilities before drawing conclusions.",
+        "sw": "Akaunti {staffCount} za wafanyakazi zimesajiliwa. Linganisha shughuli zilizorekodiwa kwa tarehe, vichujio vya duka na majukumu yanayofanana kabla ya kufanya hitimisho."
+      }
+    },
+    {
+      "id": "check_transaction_categories",
+      "category": "records",
+      "when": [
+        {"metric": "transactionCount", "operator": "gte", "value": 5},
+        {"metric": "expenseTransactionCount", "operator": "gt", "value": 0}
+      ],
+      "title": {"en": "Keep expense categories consistent", "sw": "Tumia aina za matumizi kwa utaratibu"},
+      "description": {
+        "en": "Categorized entries make reports easier to compare. Use the same category for similar purchases and check uncategorized transactions.",
+        "sw": "Aina za miamala hurahisisha kulinganisha ripoti. Tumia aina ileile kwa manunuzi yanayofanana na kagua miamala isiyoainishwa."
+      }
+    },
+    {
+      "id": "income_transactions_recorded",
+      "category": "records",
+      "when": [{"metric": "incomeTransactionCount", "operator": "gte", "value": 5}],
+      "title": {"en": "Reconcile recorded income", "sw": "Linganisha mapato yaliyorekodiwa"},
+      "description": {
+        "en": "{incomeTransactionCount} income entries are included. Compare totals with receipts, invoices or payment records to catch omissions or duplicates.",
+        "sw": "Miamala {incomeTransactionCount} ya mapato imejumuishwa. Linganisha jumla na stakabadhi, ankara au taarifa za malipo ili kubaini zilizokosekana au kurudiwa."
+      }
+    },
+    {
+      "id": "expense_transactions_recorded",
+      "category": "records",
+      "when": [{"metric": "expenseTransactionCount", "operator": "gte", "value": 5}],
+      "title": {"en": "Reconcile recorded expenses", "sw": "Linganisha matumizi yaliyorekodiwa"},
+      "description": {
+        "en": "{expenseTransactionCount} expense entries are included. Keep supplier receipts and compare them with the entries in this report.",
+        "sw": "Miamala {expenseTransactionCount} ya matumizi imejumuishwa. Hifadhi stakabadhi za wauzaji na zilinganishe na miamala kwenye ripoti hii."
+      }
+    }
+  ]
+}

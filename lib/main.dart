@@ -11,6 +11,8 @@ import 'package:tra_list/invoice/app_translations.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/app_version_gate.dart';
+import 'package:tra_list/services/offline_sync_coordinator.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 import 'firebase_options.dart';
 
@@ -26,6 +28,7 @@ void main() async {
       BusinessAccessService.clear();
     }
   }
+  await OfflineSyncCoordinator.start();
   debugPrint('Storage bucket (runtime) = ${FirebaseStorage.instance.bucket}');
   runApp(MyApp());
 }
@@ -71,46 +74,7 @@ class MyApp extends StatelessWidget {
       locale: langController.locale, // Set initial locale from storage
       fallbackLocale: const Locale('en', 'US'), // Fallback language
 
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          scrolledUnderElevation: 1,
-          titleTextStyle: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.1,
-          ),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        scrollbarTheme: ScrollbarThemeData(
-          thickness: WidgetStateProperty.all(6),
-          radius: const Radius.circular(8),
-        ),
-      ),
+      theme: MjasiTheme.light,
       initialRoute: initialRoute,
       getPages: AppRoutes.pages, // <-- wire routes
       scrollBehavior: const _AppScrollBehavior(),

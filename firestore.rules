@@ -143,6 +143,25 @@ service cloud.firestore {
         && data.updatedBy == request.auth.uid;
     }
 
+    function validSupportCenter(data) {
+      return data.keys().hasOnly([
+          'whatsappNumber', 'faqs', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'whatsappNumber', 'faqs', 'updatedAt', 'updatedBy'
+        ])
+        && data.whatsappNumber is string
+        && (
+          data.whatsappNumber == ''
+          || data.whatsappNumber.matches('^[0-9]{8,15}$')
+        )
+        && data.faqs is list
+        && data.faqs.size() <= 50
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid;
+    }
+
     function hasPrivilegedRole(role) {
       return role in [
         'admin',
@@ -629,7 +648,8 @@ service cloud.firestore {
     match /app_config/{configId} {
       allow get: if configId == 'version_policy'
         || configId == 'download_center'
-        || configId == 'subscription_plan';
+        || configId == 'subscription_plan'
+        || configId == 'support_center';
       allow list: if false;
       allow create, update: if isSuperAdmin()
         && configId == 'download_center'
@@ -640,6 +660,8 @@ service cloud.firestore {
             && validSubscriptionPlan(request.resource.data))
           || (configId == 'version_policy'
             && validAppVersionPolicy(request.resource.data))
+          || (configId == 'support_center'
+            && validSupportCenter(request.resource.data))
         );
       allow update: if isSuperAdmin()
         && (
@@ -654,8 +676,78 @@ service cloud.firestore {
             && request.resource.data.get('cardLogos', []).size() <= 12)
           || (configId == 'version_policy'
             && validAppVersionPolicy(request.resource.data))
+          || (configId == 'support_center'
+            && validSupportCenter(request.resource.data))
         );
       allow delete: if false;
+    }
+
+    function validAnalyticsAdviceCondition(condition) {
+      return condition.keys().hasOnly(['metric', 'operator', 'value'])
+        && condition.keys().hasAll(['metric', 'operator', 'value'])
+        && condition.metric in [
+          'income', 'expenses', 'net', 'transactionCount',
+          'incomeTransactionCount', 'expenseTransactionCount',
+          'averageIncome', 'averageExpense', 'topExpenseSharePercent',
+          'incomeChangePercent', 'expenseChangePercent', 'activeTasks',
+          'overdueTasks', 'tasksForReview', 'posSalesCount',
+          'posSalesTotal', 'staffCount'
+        ]
+        && condition.operator in ['gt', 'gte', 'lt', 'lte', 'eq']
+        && condition.value is number;
+    }
+
+    function validAnalyticsAdvice(data, adviceId) {
+      return data.keys().hasOnly([
+          'id', 'category', 'title', 'description', 'when', 'enabled',
+          'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'id', 'category', 'title', 'description', 'when', 'enabled',
+          'updatedAt', 'updatedBy'
+        ])
+        && data.id == adviceId
+        && data.category in ['costs', 'growth', 'tasks', 'sales', 'staff', 'records']
+        && data.title is map
+        && data.title.keys().hasOnly(['en', 'sw'])
+        && data.title.keys().hasAll(['en', 'sw'])
+        && data.title.en is string
+        && data.title.en.size() > 0
+        && data.title.en.size() <= 120
+        && data.title.sw is string
+        && data.title.sw.size() > 0
+        && data.title.sw.size() <= 120
+        && data.description is map
+        && data.description.keys().hasOnly(['en', 'sw'])
+        && data.description.keys().hasAll(['en', 'sw'])
+        && data.description.en is string
+        && data.description.en.size() > 0
+        && data.description.en.size() <= 500
+        && data.description.sw is string
+        && data.description.sw.size() > 0
+        && data.description.sw.size() <= 500
+        && data.when is list
+        && data.when.size() >= 1
+        && data.when.size() <= 3
+        && validAnalyticsAdviceCondition(data.when[0])
+        && (
+          data.when.size() < 2
+          || validAnalyticsAdviceCondition(data.when[1])
+        )
+        && (
+          data.when.size() < 3
+          || validAnalyticsAdviceCondition(data.when[2])
+        )
+        && data.enabled is bool
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    match /analyticsAdvice/{adviceId} {
+      allow get, list: if signedIn();
+      allow create, update: if isSuperAdmin()
+        && validAnalyticsAdvice(request.resource.data, adviceId);
+      allow delete: if isSuperAdmin();
     }
 
     match /users/{businessUid}/notifications/{notificationId} {

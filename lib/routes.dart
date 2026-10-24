@@ -22,6 +22,9 @@ import 'package:tra_list/services/admin_announcements_page.dart';
 import 'package:tra_list/services/super_admin_hub_page.dart';
 import 'package:tra_list/services/notifications_page.dart';
 import 'package:tra_list/services/download_center_management_page.dart';
+import 'package:tra_list/services/support_center_admin_page.dart';
+import 'package:tra_list/services/support_faq_page.dart';
+import 'package:tra_list/services/analytics_advice_admin_page.dart';
 
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/FirebaseTestPage.dart';
@@ -113,6 +116,9 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String adminAnnouncements = '/admin-announcements';
   static const String adminHub = '/admin-hub';
+  static const String support = '/support';
+  static const String adminSupport = '/admin-support';
+  static const String adminAnalyticsAdvice = '/admin-analytics-advice';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
@@ -283,6 +289,23 @@ class AppRoutes {
     GetPage(
       name: adminHub,
       page: () => const SuperAdminHubPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: support,
+      page: () => const SupportFaqPage(),
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminSupport,
+      page: () => const SupportCenterAdminPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminAnalyticsAdvice,
+      page: () => const AnalyticsAdviceAdminPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

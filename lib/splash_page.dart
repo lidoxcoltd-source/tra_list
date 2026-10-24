@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/invoice/language_switcher.dart';
 import 'package:tra_list/routes.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -13,9 +14,10 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
-  static const _navy = Color(0xFF071B35);
-  static const _blue = Color(0xFF0866E8);
-  static const _cyan = Color(0xFF32B9E8);
+  static const _duration = Duration(milliseconds: 4200);
+  static const _navy = MjasiColors.primaryNavy;
+  static const _blue = MjasiColors.primaryBlue;
+  static const _accent = MjasiColors.secondaryBlue;
 
   late final AnimationController _controller;
   late final Animation<double> _logoScale;
@@ -26,10 +28,7 @@ class _SplashPageState extends State<SplashPage>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3200),
-    );
+    _controller = AnimationController(vsync: this, duration: _duration);
     _logoScale = Tween<double>(begin: 0.82, end: 1).animate(
       CurvedAnimation(
         parent: _controller,
@@ -56,7 +55,7 @@ class _SplashPageState extends State<SplashPage>
   }
 
   Future<void> _continueToApp() async {
-    await Future<void>.delayed(const Duration(milliseconds: 3200));
+    await Future<void>.delayed(_duration);
     if (!mounted) return;
     final signedIn = FirebaseAuth.instance.currentUser != null;
     Get.offAllNamed(signedIn ? AppRoutes.home : AppRoutes.login);
@@ -85,41 +84,6 @@ class _SplashPageState extends State<SplashPage>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [_navy, Color(0xFF0A2A51), Color(0xFF071B35)],
-                stops: [0, .55, 1],
-              ),
-            ),
-          ),
-          Positioned(
-            top: -130,
-            right: -100,
-            child: _glow(size: 320, color: _blue),
-          ),
-          Positioned(
-            bottom: -160,
-            left: -110,
-            child: _glow(size: 360, color: _cyan),
-          ),
-          Positioned(
-            right: -90,
-            bottom: 45,
-            child: Transform.rotate(
-              angle: -.42,
-              child: Container(
-                width: 420,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .025),
-                  borderRadius: BorderRadius.circular(60),
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) => Stack(
@@ -209,7 +173,7 @@ class _SplashPageState extends State<SplashPage>
                                       width: 42,
                                       height: 3,
                                       decoration: BoxDecoration(
-                                        color: _cyan,
+                                        color: _accent,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                     ),
@@ -270,7 +234,9 @@ class _SplashPageState extends State<SplashPage>
                                 backgroundColor: Colors.white.withValues(
                                   alpha: .14,
                                 ),
-                                valueColor: const AlwaysStoppedAnimation(_cyan),
+                                valueColor: const AlwaysStoppedAnimation(
+                                  _accent,
+                                ),
                               ),
                             ),
                           ),
@@ -296,15 +262,4 @@ class _SplashPageState extends State<SplashPage>
       ),
     );
   }
-
-  Widget _glow({required double size, required Color color}) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: RadialGradient(
-        colors: [color.withValues(alpha: .2), color.withValues(alpha: 0)],
-      ),
-    ),
-  );
 }

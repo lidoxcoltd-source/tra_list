@@ -36,6 +36,13 @@ const _groups = <_AdminGroup>[
       Color(0xFF1565C0),
     ),
     _AdminItem(
+      'analytics_advice_admin_title',
+      'analytics_advice_admin_hub_desc',
+      Icons.tips_and_updates_rounded,
+      AppRoutes.adminAnalyticsAdvice,
+      Color(0xFF7C3AED),
+    ),
+    _AdminItem(
       'admin_manage_subscriptions',
       'hub_desc_subscriptions',
       Icons.manage_accounts_rounded,
@@ -67,6 +74,13 @@ const _groups = <_AdminGroup>[
     ),
   ]),
   _AdminGroup('hub_group_communication', [
+    _AdminItem(
+      'support_admin_title',
+      'support_admin_hub_desc',
+      Icons.support_agent_rounded,
+      AppRoutes.adminSupport,
+      Color(0xFF0F766E),
+    ),
     _AdminItem(
       'admin_manage_announcements',
       'hub_desc_announcements',

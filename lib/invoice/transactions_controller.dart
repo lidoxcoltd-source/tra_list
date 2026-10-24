@@ -10,6 +10,7 @@ import 'transaction_model.dart';
 import 'transaction_report_pdf.dart';
 import 'transaction_service.dart';
 import 'category_service.dart';
+import 'package:tra_list/services/offline_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 
@@ -29,6 +30,7 @@ class TransactionsController extends GetxController {
   // Pagination State
   final RxList<TransactionModel> allFetchedTransactions =
       <TransactionModel>[].obs;
+  final RxSet<String> pendingTransactionIds = <String>{}.obs;
   final RxList<TransactionModel> transactions = <TransactionModel>[].obs;
   DocumentSnapshot? lastDoc;
   final RxBool loadingMore = false.obs;
@@ -222,6 +224,12 @@ class TransactionsController extends GetxController {
     hasMore.value = true;
 
     try {
+      final pendingTransactions = await OfflineService.getPendingTransactions();
+      pendingTransactionIds.assignAll(
+        pendingTransactions
+            .map((transaction) => transaction.id)
+            .whereType<String>(),
+      );
       final snap = await TransactionService.getTransactions(
         limit: _limit,
         startDate: startDate.value,
@@ -229,12 +237,30 @@ class TransactionsController extends GetxController {
         shopNickname: selectedShopNickname.value,
         category: selectedCategory.value,
       );
-      _updateStateFromSnapshot(snap, isFirstPage: true);
-    } catch (e) {
+      _updateStateFromSnapshot(
+        snap,
+        isFirstPage: true,
+        pendingTransactions: pendingTransactions,
+      );
+    } catch (error, stackTrace) {
       // In case of error, ensure hasMore is false to prevent infinite loops
       // if the view is not scrollable.
       hasMore.value = false;
-      Get.snackbar('error'.tr, 'Failed to fetch transactions: $e');
+      debugPrint('Failed to fetch transactions: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      final pendingTransactions = await OfflineService.getPendingTransactions();
+      pendingTransactionIds.assignAll(
+        pendingTransactions
+            .map((transaction) => transaction.id)
+            .whereType<String>(),
+      );
+      if (pendingTransactions.isNotEmpty) {
+        allFetchedTransactions.assignAll(pendingTransactions);
+        applyAllFilters();
+        _recalculateTotals();
+      } else {
+        Get.snackbar('error'.tr, 'Failed to fetch transactions: $error');
+      }
     } finally {
       isFetching.value = false;
       // After the first fetch, check if the content is scrollable.
@@ -245,6 +271,9 @@ class TransactionsController extends GetxController {
       });
     }
   }
+
+  bool isPending(TransactionModel transaction) =>
+      transaction.id != null && pendingTransactionIds.contains(transaction.id);
 
   Future<void> fetchNextPage() async {
     if (loadingMore.value || !hasMore.value || lastDoc == null) return;
@@ -272,6 +301,7 @@ class TransactionsController extends GetxController {
   void _updateStateFromSnapshot(
     QuerySnapshot<TransactionModel> snap, {
     required bool isFirstPage,
+    List<TransactionModel> pendingTransactions = const [],
   }) {
     if (snap.docs.isNotEmpty) {
       lastDoc = snap.docs.last;
@@ -285,7 +315,25 @@ class TransactionsController extends GetxController {
     if (isFirstPage) {
       allFetchedTransactions.clear();
     }
-    allFetchedTransactions.addAll(newTransactions);
+    final existingIds = allFetchedTransactions
+        .map((transaction) => transaction.id)
+        .whereType<String>()
+        .toSet();
+    allFetchedTransactions.addAll(
+      newTransactions.where(
+        (transaction) =>
+            transaction.id == null || existingIds.add(transaction.id!),
+      ),
+    );
+    if (isFirstPage) {
+      allFetchedTransactions.addAll(
+        pendingTransactions.where(
+          (transaction) =>
+              transaction.id == null || existingIds.add(transaction.id!),
+        ),
+      );
+      allFetchedTransactions.sort((a, b) => b.date.compareTo(a.date));
+    }
     final fetchedShopNames = newTransactions
         .map((transaction) => transaction.shopNickname.trim())
         .where((shopNickname) => shopNickname.isNotEmpty)
@@ -621,7 +669,14 @@ class TransactionsController extends GetxController {
     Future.delayed(const Duration(seconds: 5), () async {
       if (!_undoPressed) {
         try {
-          await TransactionService.deleteTransaction(t.id!);
+          final removedOffline = await OfflineService.deletePendingTransaction(
+            t.id!,
+          );
+          if (removedOffline) {
+            pendingTransactionIds.remove(t.id);
+          } else {
+            await TransactionService.deleteTransaction(t.id!);
+          }
         } catch (e) {
           Get.snackbar('error'.tr, 'Failed to delete transaction: $e');
           // If deletion fails, refresh to get the item back

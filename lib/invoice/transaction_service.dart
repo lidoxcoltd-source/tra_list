@@ -52,7 +52,12 @@ class TransactionService {
       throw StateError('You do not have permission to add transactions.');
     }
     _requireAssignedShop(transaction);
-    await getCollectionRef().add(transaction);
+    final id = transaction.id;
+    if (id == null || id.isEmpty) {
+      await getCollectionRef().add(transaction);
+    } else {
+      await getCollectionRef().doc(id).set(transaction);
+    }
     await NotificationService.notifyOwner(
       action: 'transaction',
       summary:

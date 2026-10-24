@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tra_list/payment/payment_controller.dart'; // You must implement or adapt this controller for your payment logic
 import 'business_access_service.dart';
 
@@ -10,10 +13,12 @@ class BusinessSubscriptionStatus {
   const BusinessSubscriptionStatus({
     required this.isSubscribed,
     required this.isTrial,
+    this.validUntil,
   });
 
   final bool isSubscribed;
   final bool isTrial;
+  final DateTime? validUntil;
 
   String get badge => isSubscribed
       ? 'SUBSCRIBED'
@@ -23,10 +28,25 @@ class BusinessSubscriptionStatus {
 }
 
 class SubscriptionController extends GetxController {
+  static const offlineGracePeriod = Duration(hours: 24);
+
   DocumentReference<Map<String, dynamic>> get _businessSubscription =>
       FirebaseFirestore.instance
           .collection('subscriptions')
           .doc(BusinessAccessService.businessId);
+
+  static bool isWithinOfflineGrace(DateTime verifiedAt, DateTime now) {
+    final elapsed = now.toUtc().difference(verifiedAt.toUtc());
+    return !elapsed.isNegative && elapsed < offlineGracePeriod;
+  }
+
+  static bool isCachedSubscriptionValid({
+    required DateTime verifiedAt,
+    required DateTime validUntil,
+    required DateTime now,
+  }) =>
+      isWithinOfflineGrace(verifiedAt, now) &&
+      now.toUtc().isBefore(validUntil.toUtc());
 
   Future<BusinessSubscriptionStatus> getBusinessSubscriptionStatus() async {
     if (FirebaseAuth.instance.currentUser == null ||
@@ -38,7 +58,22 @@ class SubscriptionController extends GetxController {
       );
     }
 
-    final doc = await _businessSubscription.get();
+    try {
+      final doc = await _businessSubscription.get(
+        const GetOptions(source: Source.server),
+      );
+      final status = await _statusFromDocument(doc);
+      await _cacheStatus(status);
+      return status;
+    } on FirebaseException catch (error) {
+      if (!_isNetworkError(error)) rethrow;
+      return _readCachedStatus();
+    }
+  }
+
+  Future<BusinessSubscriptionStatus> _statusFromDocument(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     if (!doc.exists) {
       return const BusinessSubscriptionStatus(
         isSubscribed: false,
@@ -67,6 +102,16 @@ class SubscriptionController extends GetxController {
         trialStart != null &&
         !trialStart.isAfter(now) &&
         now.difference(trialStart) < const Duration(days: 7);
+    final validUntilCandidates = <DateTime>[
+      if (subscribed) expiry,
+      if (trial) trialStart.add(const Duration(days: 7)),
+    ];
+    final validUntil = validUntilCandidates.isEmpty
+        ? null
+        : validUntilCandidates.reduce(
+            (latest, candidate) =>
+                candidate.isAfter(latest) ? candidate : latest,
+          );
     debugPrint(
       'Business subscription check: business=${BusinessAccessService.businessId}, '
       'owner=${BusinessAccessService.isOwner.value}, '
@@ -74,8 +119,90 @@ class SubscriptionController extends GetxController {
       'expiry=${data['expiry'] ?? data['expiryDate']}, '
       'subscribed=$subscribed, trial=$trial',
     );
-    return BusinessSubscriptionStatus(isSubscribed: subscribed, isTrial: trial);
+    return BusinessSubscriptionStatus(
+      isSubscribed: subscribed,
+      isTrial: trial,
+      validUntil: validUntil,
+    );
   }
+
+  Future<void> _cacheStatus(BusinessSubscriptionStatus status) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _cacheKey,
+      jsonEncode({
+        'verifiedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
+        'isSubscribed': status.isSubscribed,
+        'isTrial': status.isTrial,
+        'validUntil': status.validUntil?.toUtc().millisecondsSinceEpoch,
+      }),
+    );
+  }
+
+  Future<BusinessSubscriptionStatus> _readCachedStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_cacheKey);
+    if (cached == null) return _inactiveStatus;
+
+    try {
+      final data = jsonDecode(cached);
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid subscription cache.');
+      }
+      final verifiedAtMillis = data['verifiedAt'];
+      final isSubscribed = data['isSubscribed'] == true;
+      final isTrial = data['isTrial'] == true;
+      final validUntilMillis = data['validUntil'];
+      if (verifiedAtMillis is! int ||
+          validUntilMillis is! int ||
+          (!isSubscribed && !isTrial) ||
+          !isCachedSubscriptionValid(
+            verifiedAt: DateTime.fromMillisecondsSinceEpoch(
+              verifiedAtMillis,
+              isUtc: true,
+            ),
+            validUntil: DateTime.fromMillisecondsSinceEpoch(
+              validUntilMillis,
+              isUtc: true,
+            ),
+            now: DateTime.now().toUtc(),
+          )) {
+        return _inactiveStatus;
+      }
+      final status = BusinessSubscriptionStatus(
+        isSubscribed: isSubscribed,
+        isTrial: isTrial,
+        validUntil: DateTime.fromMillisecondsSinceEpoch(
+          validUntilMillis,
+          isUtc: true,
+        ),
+      );
+      debugPrint(
+        'Using cached subscription status for '
+        '${BusinessAccessService.businessId}; verifiedAt=$verifiedAtMillis',
+      );
+      return status;
+    } on FormatException catch (error, stackTrace) {
+      debugPrint('Could not read cached subscription status: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      await prefs.remove(_cacheKey);
+      return _inactiveStatus;
+    }
+  }
+
+  String get _cacheKey =>
+      'subscription_status.${BusinessAccessService.businessId}';
+
+  static const _inactiveStatus = BusinessSubscriptionStatus(
+    isSubscribed: false,
+    isTrial: false,
+  );
+
+  bool _isNetworkError(FirebaseException error) => const {
+    'unavailable',
+    'deadline-exceeded',
+    'network-request-failed',
+  }.contains(error.code);
 
   Future<String> getUserSubscriptionBadge() async {
     return (await getBusinessSubscriptionStatus()).badge;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 import 'products_pages.dart';
 import 'pos_page.dart';
 import 'stock_models.dart';
@@ -29,23 +30,29 @@ class StockDashboardPage extends StatelessWidget {
         stream: service.watchProducts(),
         builder: (context, snap) {
           if (snap.hasError) {
-            return StockMessage(icon: Icons.error_outline, color: kStockBad, text: stockErrorText(snap.error!));
+            return StockMessage(
+              icon: Icons.error_outline,
+              color: kStockBad,
+              text: stockErrorText(snap.error!),
+            );
           }
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData)
+            return const Center(child: CircularProgressIndicator());
           final all = snap.data!.where((p) => p.active).toList();
           final tracked = all.where((p) => p.tracked).toList();
-          final low = tracked.where((p) => p.stockState == StockState.low).toList();
-          final out = tracked.where((p) => p.stockState == StockState.out).toList();
-          final value = tracked.fold<double>(0, (s, p) => s + (p.quantity > 0 ? p.quantity * p.costPrice : 0));
+          final low = tracked
+              .where((p) => p.stockState == StockState.low)
+              .toList();
+          final out = tracked
+              .where((p) => p.stockState == StockState.out)
+              .toList();
+          final value = tracked.fold<double>(
+            0,
+            (s, p) => s + (p.quantity > 0 ? p.quantity * p.costPrice : 0),
+          );
           final attention = [...out, ...low];
 
           final stats = [
-            StatTile(
-              icon: Icons.inventory_2_outlined,
-              label: 'stk_total_products'.tr,
-              value: '${all.length}',
-              onTap: () => Get.to(() => const ProductsPage()),
-            ),
             if (canEdit)
               StatTile(
                 icon: Icons.account_balance_wallet_outlined,
@@ -58,105 +65,215 @@ class StockDashboardPage extends StatelessWidget {
               label: 'stk_low_stock'.tr,
               value: '${low.length}',
               color: kStockWarn,
-              onTap: () => Get.to(() => const ProductsPage(initialFilter: 'low')),
+              onTap: () =>
+                  Get.to(() => const ProductsPage(initialFilter: 'low')),
             ),
             StatTile(
               icon: Icons.remove_shopping_cart_outlined,
               label: 'stk_out_of_stock'.tr,
               value: '${out.length}',
               color: kStockBad,
-              onTap: () => Get.to(() => const ProductsPage(initialFilter: 'out')),
+              onTap: () =>
+                  Get.to(() => const ProductsPage(initialFilter: 'out')),
             ),
           ];
 
           return LayoutBuilder(
             builder: (context, c) {
-              final cols = c.maxWidth >= 900 ? stats.length : 2;
-              final w = (c.maxWidth - 32 - (cols - 1) * 12) / cols;
+              final cols = c.maxWidth >= 1000 ? stats.length : 2;
+              final w = (c.maxWidth - (cols - 1) * 12) / cols;
+              final quickActions =
+                  <
+                    ({
+                      String label,
+                      IconData icon,
+                      VoidCallback onTap,
+                      bool primary,
+                    })
+                  >[
+                    if (BusinessAccessService.can('invoices', 'create'))
+                      (
+                        label: 'pos_title'.tr,
+                        icon: Icons.qr_code_scanner,
+                        onTap: () => Get.to(() => const PosPage()),
+                        primary: true,
+                      ),
+                    (
+                      label: 'stk_products'.tr,
+                      icon: Icons.inventory_2_outlined,
+                      onTap: () => Get.to(() => const ProductsPage()),
+                      primary: false,
+                    ),
+                    if (canCreate)
+                      (
+                        label: 'stk_add_product'.tr,
+                        icon: Icons.add_box_outlined,
+                        onTap: () => Get.to(() => const ProductFormPage()),
+                        primary: false,
+                      ),
+                    if (canCreate)
+                      (
+                        label: 'stk_receive'.tr,
+                        icon: Icons.move_to_inbox_outlined,
+                        onTap: () => Get.to(() => const ReceiveStockPage()),
+                        primary: false,
+                      ),
+                    if (canEdit)
+                      (
+                        label: 'stk_adjust'.tr,
+                        icon: Icons.tune_rounded,
+                        onTap: () => Get.to(() => const AdjustStockPage()),
+                        primary: false,
+                      ),
+                  ];
+
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [for (final s in stats) SizedBox(width: w, child: s)],
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: kStockNavy,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1A071B3A),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.white,
+                            size: 23,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'stk_total_products'.tr,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .72),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${all.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 25,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'stk_products'.tr,
+                          style: IconButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.white.withValues(
+                              alpha: .12,
+                            ),
+                          ),
+                          onPressed: () => Get.to(() => const ProductsPage()),
+                          icon: const Icon(Icons.arrow_forward_rounded),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
-                      if (BusinessAccessService.can('invoices', 'create'))
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(backgroundColor: kStockOk),
-                          onPressed: () => Get.to(() => const PosPage()),
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: Text('pos_title'.tr),
-                        ),
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: kStockBlue),
-                        onPressed: () => Get.to(() => const ProductsPage()),
-                        icon: const Icon(Icons.list_alt),
-                        label: Text('stk_products'.tr),
-                      ),
-                      if (canCreate)
-                        OutlinedButton.icon(
-                          onPressed: () => Get.to(() => const ProductFormPage()),
-                          icon: const Icon(Icons.add),
-                          label: Text('stk_add_product'.tr),
-                        ),
-                      if (canCreate)
-                        OutlinedButton.icon(
-                          onPressed: () => Get.to(() => const ReceiveStockPage()),
-                          icon: const Icon(Icons.add_box_outlined),
-                          label: Text('stk_receive'.tr),
-                        ),
-                      if (canEdit)
-                        OutlinedButton.icon(
-                          onPressed: () => Get.to(() => const AdjustStockPage()),
-                          icon: const Icon(Icons.tune),
-                          label: Text('stk_adjust'.tr),
+                      for (final s in stats) SizedBox(width: w, child: s),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  StockSectionHeading(title: 'home_quick_access'.tr),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final action in quickActions)
+                        SizedBox(
+                          width: w,
+                          child: _StockQuickAction(
+                            label: action.label,
+                            icon: action.icon,
+                            primary: action.primary,
+                            onTap: action.onTap,
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'stk_needs_attention'.tr,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: kStockNavy),
-                  ),
-                  const SizedBox(height: 8),
+                  StockSectionHeading(title: 'stk_needs_attention'.tr),
                   if (attention.isEmpty)
-                    StockMessage(icon: Icons.check_circle_outline, color: kStockOk, text: 'stk_all_good'.tr)
+                    StockMessage(
+                      icon: Icons.check_circle_outline,
+                      color: kStockOk,
+                      text: 'stk_all_good'.tr,
+                    )
                   else
                     for (final p in attention.take(10))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: StockCard(
-                          onTap: () => Get.to(() => ProductDetailsPage(productId: p.id!)),
+                          onTap: () => Get.to(
+                            () => ProductDetailsPage(productId: p.id!),
+                          ),
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                child: Text(
+                                  p.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
-                              Text('${formatQty(p.quantity)} ${unitLabel(p.unit)}  '),
+                              Text(
+                                '${formatQty(p.quantity)} ${unitLabel(p.unit)}  ',
+                              ),
                               StockStateChip(product: p),
                             ],
                           ),
                         ),
                       ),
                   const SizedBox(height: 20),
-                  Text(
-                    'stk_recent'.tr,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: kStockNavy),
-                  ),
-                  const SizedBox(height: 8),
+                  StockSectionHeading(title: 'stk_recent'.tr),
                   StreamBuilder<List<StockMovement>>(
                     stream: service.watchMovements(limit: 8),
                     builder: (context, ms) {
                       if (!ms.hasData || ms.data!.isEmpty) {
-                        return StockMessage(icon: Icons.history, text: 'stk_no_movements'.tr);
+                        return StockMessage(
+                          icon: Icons.history,
+                          text: 'stk_no_movements'.tr,
+                        );
                       }
-                      return Column(children: [for (final m in ms.data!) MovementTile(movement: m)]);
+                      return Column(
+                        children: [
+                          for (final m in ms.data!) MovementTile(movement: m),
+                        ],
+                      );
                     },
                   ),
                 ],
@@ -176,6 +293,62 @@ class StockHistoryPage extends StatefulWidget {
   State<StockHistoryPage> createState() => _StockHistoryPageState();
 }
 
+class _StockQuickAction extends StatelessWidget {
+  const _StockQuickAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    required this.primary,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = primary ? Colors.white : kStockNavy;
+    return Material(
+      color: primary ? kStockBlue : Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: primary ? kStockBlue : MjasiColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: foreground, size: 19),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    height: 1.15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StockHistoryPageState extends State<StockHistoryPage> {
   final _service = StockService.current();
   MovementType? _type;
@@ -193,7 +366,10 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          tabs: [Tab(text: 'stk_movements'.tr), Tab(text: 'stk_purchases'.tr)],
+          tabs: [
+            Tab(text: 'stk_movements'.tr),
+            Tab(text: 'stk_purchases'.tr),
+          ],
         ),
         body: TabBarView(children: [_movements(), _purchases()]),
       ),
@@ -205,19 +381,27 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
       stream: _service.watchMovements(limit: 500),
       builder: (context, snap) {
         if (snap.hasError) {
-          return StockMessage(icon: Icons.error_outline, color: kStockBad, text: stockErrorText(snap.error!));
+          return StockMessage(
+            icon: Icons.error_outline,
+            color: kStockBad,
+            text: stockErrorText(snap.error!),
+          );
         }
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
         final q = _query.trim().toLowerCase();
         final list = snap.data!.where((m) {
           if (_type != null && m.type != _type) return false;
           final d = m.createdAt;
           if (_range != null && d != null) {
-            if (d.isBefore(_range!.start) || d.isAfter(_range!.end.add(const Duration(days: 1)))) {
+            if (d.isBefore(_range!.start) ||
+                d.isAfter(_range!.end.add(const Duration(days: 1)))) {
               return false;
             }
           }
-          return q.isEmpty || m.productName.toLowerCase().contains(q) || m.reason.toLowerCase().contains(q);
+          return q.isEmpty ||
+              m.productName.toLowerCase().contains(q) ||
+              m.reason.toLowerCase().contains(q);
         }).toList();
         return Column(
           children: [
@@ -227,24 +411,36 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
                 children: [
                   Expanded(
                     child: TextField(
-                      decoration: stockInput('stk_search'.tr, icon: Icons.search_rounded),
+                      decoration: stockInput(
+                        'stk_search'.tr,
+                        icon: Icons.search_rounded,
+                      ),
                       onChanged: (v) => setState(() => _query = v),
                     ),
                   ),
                   const SizedBox(width: 8),
                   PopupMenuButton<MovementType?>(
                     tooltip: 'stk_adjust_type'.tr,
-                    icon: Icon(Icons.filter_list, color: _type == null ? null : kStockBlue),
+                    icon: Icon(
+                      Icons.filter_list,
+                      color: _type == null ? null : kStockBlue,
+                    ),
                     onSelected: (v) => setState(() => _type = v),
                     itemBuilder: (_) => [
-                      PopupMenuItem(value: null, child: Text('stk_filter_all'.tr)),
+                      PopupMenuItem(
+                        value: null,
+                        child: Text('stk_filter_all'.tr),
+                      ),
                       for (final t in MovementType.values)
                         PopupMenuItem(value: t, child: Text(t.labelKey.tr)),
                     ],
                   ),
                   IconButton(
                     tooltip: 'stk_date'.tr,
-                    icon: Icon(Icons.date_range, color: _range == null ? null : kStockBlue),
+                    icon: Icon(
+                      Icons.date_range,
+                      color: _range == null ? null : kStockBlue,
+                    ),
                     onPressed: () async {
                       if (_range != null) {
                         setState(() => _range = null);
@@ -263,10 +459,15 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
             ),
             Expanded(
               child: list.isEmpty
-                  ? StockMessage(icon: Icons.history, text: 'stk_no_movements'.tr)
+                  ? StockMessage(
+                      icon: Icons.history,
+                      text: 'stk_no_movements'.tr,
+                    )
                   : ListView(
                       padding: const EdgeInsets.all(16),
-                      children: [for (final m in list) MovementTile(movement: m)],
+                      children: [
+                        for (final m in list) MovementTile(movement: m),
+                      ],
                     ),
             ),
           ],
@@ -281,11 +482,19 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
       stream: _service.watchPurchases(),
       builder: (context, snap) {
         if (snap.hasError) {
-          return StockMessage(icon: Icons.error_outline, color: kStockBad, text: stockErrorText(snap.error!));
+          return StockMessage(
+            icon: Icons.error_outline,
+            color: kStockBad,
+            text: stockErrorText(snap.error!),
+          );
         }
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
         if (snap.data!.isEmpty) {
-          return StockMessage(icon: Icons.local_shipping_outlined, text: 'stk_no_purchases'.tr);
+          return StockMessage(
+            icon: Icons.local_shipping_outlined,
+            text: 'stk_no_purchases'.tr,
+          );
         }
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -301,17 +510,32 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              p.supplier.isEmpty ? 'stk_purchases'.tr : p.supplier,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              p.supplier.isEmpty
+                                  ? 'stk_purchases'.tr
+                                  : p.supplier,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           if (canSeeCost)
-                            Text('TZS ${formatMoney(p.total)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                            Text(
+                              'TZS ${formatMoney(p.total)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                         ],
                       ),
                       Text(
-                        [formatDate(p.date), if (p.reference.isNotEmpty) p.reference].join(' · '),
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        [
+                          formatDate(p.date),
+                          if (p.reference.isNotEmpty) p.reference,
+                        ].join(' · '),
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       for (final l in p.lines)

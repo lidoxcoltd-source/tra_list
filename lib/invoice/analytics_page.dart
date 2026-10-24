@@ -3,7 +3,10 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'transaction_model.dart';
 import 'transaction_service.dart';
 import 'category_service.dart';
@@ -11,6 +14,11 @@ import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:tra_list/invoice/transaction_report_pdf.dart';
+import 'package:tra_list/theme/app_theme.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:tra_list/tasks/task_model.dart';
+import 'package:tra_list/tasks/task_service.dart';
+import 'package:tra_list/services/analytics_advice_service.dart';
 
 enum ChartGranularity { day, week, month, year }
 
@@ -39,7 +47,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   DateTime _endDate = DateTime.now();
 
   // Dynamic colors
-  Color _brandColor = const Color(0xFF1976D2);
+  Color _brandColor = MjasiColors.primaryBlue;
   Color _accentColor = const Color(0xFFFFA000);
 
   // Animation controllers
@@ -61,6 +69,18 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   double _previousAllIncome = 0;
   double _previousAllExpense = 0;
   final Map<String, _ShopAnalyticsTotals> _shopTotals = {};
+  Map<String, String> _staffNames = {};
+  final Map<String, double> _posSalesByStaff = {};
+  final Map<String, int> _posSaleCountsByStaff = {};
+  int? _openTaskCount;
+  int? _visibleTaskCount;
+  int? _overdueTaskCount;
+  int? _taskReviewCount;
+  int? _posSaleCount;
+  double? _posSalesTotal;
+  String? _topSellingProduct;
+  int? _topSellingProductOccurrences;
+  final List<_AdviceRule> _adviceCatalog = [];
   int _analyticsRequest = 0;
 
   bool _isPdfBusy = false;
@@ -86,6 +106,56 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     _loadProfileColors();
     _loadAnalyticsFilters();
     _loadAnalyticsData();
+    _loadAdviceCatalog();
+  }
+
+  Future<void> _loadAdviceCatalog() async {
+    try {
+      final json = await rootBundle.loadString('assets/analytics_advice.json');
+      final decoded = jsonDecode(json);
+      if (decoded is! Map<String, dynamic> || decoded['advice'] is! List) {
+        throw const FormatException(
+          'Advice catalog must contain an advice list.',
+        );
+      }
+      final rules = (decoded['advice'] as List).map((item) {
+        if (item is! Map) {
+          throw const FormatException('Advice entries must be objects.');
+        }
+        return _AdviceRule.fromJson(Map<String, dynamic>.from(item));
+      }).toList();
+      if (rules.map((rule) => rule.id).toSet().length != rules.length) {
+        throw const FormatException('Advice ids must be unique.');
+      }
+      try {
+        final customAdvice = await AnalyticsAdviceService.loadCustom();
+        final rulesById = {for (final rule in rules) rule.id: rule};
+        for (final advice in customAdvice) {
+          rulesById[advice.id] = _AdviceRule.fromJson(advice.toMap());
+        }
+        rules
+          ..clear()
+          ..addAll(rulesById.values);
+      } catch (error, stackTrace) {
+        debugPrint('Could not load admin-managed advice: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        if (mounted) {
+          Get.snackbar('error'.tr, 'analytics_advice_catalog_load_error'.tr);
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _adviceCatalog
+          ..clear()
+          ..addAll(rules);
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Could not load analytics advice catalog: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar('error'.tr, 'analytics_advice_catalog_load_error'.tr);
+      }
+    }
   }
 
   void _initializeDates() {
@@ -145,6 +215,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
       _addTransactionShopsToOptions();
       _addTransactionCategoriesToOptions();
       _processAnalyticsData();
+      await _loadOperationalInsights(request);
       await _loadPreviousPeriodTotals(request);
 
       _cardAnimController.forward();
@@ -181,14 +252,18 @@ class _AnalyticsPageState extends State<AnalyticsPage>
             .collection('employeeMemberships')
             .where('businessUid', isEqualTo: BusinessAccessService.businessId)
             .get();
+        final staffNames = <String, String>{};
         for (final membership in memberships.docs) {
           final data = membership.data();
           final nickname = data['shopNickname']?.toString().trim() ?? '';
+          final name = data['name']?.toString().trim() ?? '';
           if (nickname.isNotEmpty) shopNames.add(nickname);
+          staffNames[membership.id] = name.isEmpty ? '—' : name;
         }
         if (mounted) {
           setState(() {
             _availableShopNames = shopNames.toList()..sort();
+            _staffNames = staffNames;
           });
         }
       } catch (error, stackTrace) {
@@ -418,6 +493,157 @@ class _AnalyticsPageState extends State<AnalyticsPage>
       ..sort((a, b) => b.value.compareTo(a.value));
   }
 
+  Future<void> _loadOperationalInsights(int request) async {
+    _openTaskCount = null;
+    _visibleTaskCount = null;
+    _overdueTaskCount = null;
+    _taskReviewCount = null;
+    _posSaleCount = null;
+    _posSalesTotal = null;
+    _topSellingProduct = null;
+    _topSellingProductOccurrences = null;
+    _posSalesByStaff.clear();
+    _posSaleCountsByStaff.clear();
+
+    final errors = <String>[];
+    if (BusinessAccessService.can('tasks', 'view') ||
+        BusinessAccessService.isActive.value) {
+      try {
+        final tasks = await TaskService.watchTasks().first.timeout(
+          const Duration(seconds: 12),
+        );
+        if (!mounted || request != _analyticsRequest) return;
+        final visibleTasks = _selectedShopNickname.isEmpty
+            ? tasks
+            : tasks
+                  .where((task) => task.assigneeShop == _selectedShopNickname)
+                  .toList();
+        _visibleTaskCount = visibleTasks.length;
+        _openTaskCount = visibleTasks
+            .where(
+              (task) =>
+                  task.status == TaskStatus.assigned ||
+                  task.status == TaskStatus.inProgress ||
+                  task.status == TaskStatus.returned,
+            )
+            .length;
+        _overdueTaskCount = visibleTasks.where((task) => task.isOverdue).length;
+        _taskReviewCount = visibleTasks
+            .where((task) => task.status == TaskStatus.submitted)
+            .length;
+      } catch (error, stackTrace) {
+        debugPrint('Could not load task insights: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        errors.add('tasks');
+      }
+    }
+
+    final canReadPosSales =
+        BusinessAccessService.isOwner.value &&
+        BusinessAccessService.can('invoices', 'view') &&
+        _selectedShopNickname.isEmpty &&
+        _selectedCategory.isEmpty &&
+        _typeFilter != TransactionType.expense;
+    if (canReadPosSales) {
+      try {
+        final invoices = FirebaseFirestore.instance
+            .collection('users')
+            .doc(BusinessAccessService.businessId)
+            .collection('invoices');
+        Query<Map<String, dynamic>> query = invoices
+            .where(
+              'createdAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate),
+            )
+            .where('createdAt', isLessThan: Timestamp.fromDate(_endDate))
+            .where('source', isEqualTo: 'pos')
+            .limit(_analyticsPageSize);
+        DocumentSnapshot<Map<String, dynamic>>? cursor;
+        var count = 0;
+        var total = 0.0;
+        final productOccurrences = <String, int>{};
+        final salesByStaff = <String, double>{};
+        final saleCountsByStaff = <String, int>{};
+        while (true) {
+          if (cursor != null) query = query.startAfterDocument(cursor);
+          final snapshot = await query.get().timeout(
+            const Duration(seconds: 20),
+          );
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            if (data['kind'] != 'invoice') continue;
+            final saleTotal = (data['total'] as num?)?.toDouble() ?? 0;
+            count++;
+            total += saleTotal;
+            final staffUid = data['uid']?.toString().trim() ?? '';
+            if (staffUid.isNotEmpty) {
+              salesByStaff.update(
+                staffUid,
+                (amount) => amount + saleTotal,
+                ifAbsent: () => saleTotal,
+              );
+              saleCountsByStaff.update(
+                staffUid,
+                (saleCount) => saleCount + 1,
+                ifAbsent: () => 1,
+              );
+            }
+            final items = data['items'];
+            if (items is List) {
+              for (final item in items.whereType<Map>()) {
+                final name = (item['description'] ?? item['productId'] ?? '')
+                    .toString()
+                    .trim();
+                if (name.isNotEmpty) {
+                  productOccurrences.update(
+                    name,
+                    (occurrences) => occurrences + 1,
+                    ifAbsent: () => 1,
+                  );
+                }
+              }
+            }
+          }
+          if (snapshot.docs.length < _analyticsPageSize) break;
+          cursor = snapshot.docs.last;
+        }
+        if (!mounted || request != _analyticsRequest) return;
+        _posSaleCount = count;
+        _posSalesTotal = total;
+        _posSalesByStaff
+          ..clear()
+          ..addAll(salesByStaff);
+        _posSaleCountsByStaff
+          ..clear()
+          ..addAll(saleCountsByStaff);
+        if (productOccurrences.isNotEmpty) {
+          final topProduct = productOccurrences.entries.reduce(
+            (first, second) => first.value >= second.value ? first : second,
+          );
+          _topSellingProduct = topProduct.key;
+          _topSellingProductOccurrences = topProduct.value;
+        }
+      } catch (error, stackTrace) {
+        if (request == _analyticsRequest) {
+          _posSalesByStaff.clear();
+          _posSaleCountsByStaff.clear();
+        }
+        debugPrint('Could not load POS sales insights: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        errors.add('sales');
+      }
+    }
+
+    if (!mounted || request != _analyticsRequest) return;
+    if (errors.isNotEmpty) {
+      Get.snackbar(
+        'error'.tr,
+        'analytics_operational_insights_error'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _chartAnimController.dispose();
@@ -428,22 +654,13 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: MjasiColors.background,
       appBar: AppBar(
         title: Text('home_analytics'.tr),
-        backgroundColor: _brandColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50.0),
-          child: _buildTypeFilter(),
-        ),
         actions: [
           if (!_isPdfBusy)
             IconButton(
-              icon: const Icon(
-                Icons.picture_as_pdf_outlined,
-              ), // No tr needed for widgets
+              icon: const Icon(Icons.picture_as_pdf_outlined),
               onPressed: _transactions.isEmpty ? null : _exportPdf,
               tooltip: 'Export PDF'.tr,
             ),
@@ -454,130 +671,173 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(color: Colors.white),
+                  child: CircularProgressIndicator(
+                    color: MjasiColors.primaryBlue,
+                    strokeWidth: 2,
+                  ),
                 ),
               ),
             ),
-          PopupMenuButton<String>(
-            onSelected: _changePeriod,
-            itemBuilder: (context) => [
-              // NEW: Added "Yesterday" option
-              PopupMenuItem(value: 'Yesterday', child: Text('Yesterday'.tr)),
-              // No tr needed for logic
-              PopupMenuItem(
-                value: 'transactions_this_week',
-                child: Text('transactions_this_week'.tr),
-              ),
-              PopupMenuItem(
-                value: 'transactions_this_month',
-                child: Text('transactions_this_month'.tr),
-              ),
-              PopupMenuItem(
-                value: 'analytics_last_3_months',
-                child: Text('analytics_last_3_months'.tr),
-              ),
-              PopupMenuItem(
-                value: 'analytics_this_year',
-                child: Text('analytics_this_year'.tr),
-              ),
-              PopupMenuItem(
-                value: 'transactions_custom_range',
-                child: Text('transactions_custom_range'.tr),
-              ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _selectedPeriod,
-                    style: const TextStyle(fontSize: 14),
-                  ), // No tr needed for variables
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
       body: _isLoading && _transactions.isEmpty
           ? _buildSkeletonLoader()
           : RefreshIndicator(
               onRefresh: _loadAnalyticsData,
-              child: SingleChildScrollView(
-                physics:
-                    const AlwaysScrollableScrollPhysics(), // No tr needed for widgets
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildAnalyticsFilters(),
-                    const SizedBox(height: 20),
-                    _buildOverviewCards(),
-                    const SizedBox(height: 24),
-                    if (_comparisonAvailable) ...[
-                      _buildPeriodComparison(),
-                      const SizedBox(height: 24),
-                    ],
-                    if (BusinessAccessService.isOwner.value &&
-                        _selectedShopNickname.isEmpty) ...[
-                      _buildShopComparison(),
-                      const SizedBox(height: 24),
-                    ],
-                    _buildCashFlowChart(),
-                    const SizedBox(height: 24),
-                    _buildCategoryPieChart(),
-                    const SizedBox(height: 24),
-                    _buildCategoryAnalysis(),
-                    const SizedBox(height: 24),
-                    _buildTransactionFrequency(),
-                    const SizedBox(height: 24),
-                    _buildInsightsCards(),
-                    const SizedBox(height: 100),
-                  ],
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(constraints.maxWidth < 600 ? 12 : 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1280),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildAnalyticsFilters(),
+                          const SizedBox(height: 20),
+                          _buildOverviewCards(),
+                          const SizedBox(height: 24),
+                          if (_comparisonAvailable) ...[
+                            _buildPeriodComparison(),
+                            const SizedBox(height: 24),
+                          ],
+                          if (BusinessAccessService.isOwner.value &&
+                              _selectedShopNickname.isEmpty) ...[
+                            _buildShopComparison(),
+                            const SizedBox(height: 24),
+                          ],
+                          _buildCashFlowChart(),
+                          const SizedBox(height: 24),
+                          _buildCategoryPieChart(),
+                          const SizedBox(height: 24),
+                          _buildCategoryAnalysis(),
+                          const SizedBox(height: 24),
+                          _buildTransactionFrequency(),
+                          const SizedBox(height: 24),
+                          _buildInsightsCards(),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
     );
   }
 
-  Widget _buildTypeFilter() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: _brandColor, // No tr needed for variables
-      child: SegmentedButton<TransactionType?>(
-        segments: [
-          ButtonSegment(
-            value: null, // No tr needed for logic
-            label: Text('analytics_all'.tr),
-            icon: const Icon(Icons.all_inclusive),
-          ),
-          ButtonSegment(
-            value: TransactionType.income,
-            label: Text('income'.tr),
-            icon: const Icon(Icons.arrow_upward),
-          ),
-          ButtonSegment(
-            value: TransactionType.expense,
-            label: Text('expense'.tr),
-            icon: const Icon(Icons.arrow_downward),
-          ),
-        ],
-        selected: {_typeFilter},
-        onSelectionChanged: (newSelection) {
-          setState(() {
-            _typeFilter = newSelection.first;
-            _applyTypeFilterToPreviousTotals();
-            _processAnalyticsData();
-          });
-        },
-        style: SegmentedButton.styleFrom(
-          backgroundColor: _brandColor.withOpacity(0.5),
-          foregroundColor: Colors.white.withOpacity(0.7),
-          selectedForegroundColor: _brandColor,
-          selectedBackgroundColor: Colors.white,
+  bool get _hasActiveFilters =>
+      _typeFilter != null ||
+      _selectedCategory.isNotEmpty ||
+      (BusinessAccessService.isOwner.value &&
+          _selectedShopNickname.isNotEmpty) ||
+      _selectedPeriodKey != 'today';
+
+  Widget _buildPeriodSelector() {
+    return PopupMenuButton<String>(
+      onSelected: _changePeriod,
+      tooltip: 'analytics_filter_period'.tr,
+      itemBuilder: (context) => [
+        PopupMenuItem(value: 'today', child: Text('transactions_today'.tr)),
+        PopupMenuItem(value: 'Yesterday', child: Text('Yesterday'.tr)),
+        PopupMenuItem(
+          value: 'transactions_this_week',
+          child: Text('transactions_this_week'.tr),
         ),
+        PopupMenuItem(
+          value: 'transactions_this_month',
+          child: Text('transactions_this_month'.tr),
+        ),
+        PopupMenuItem(
+          value: 'analytics_last_3_months',
+          child: Text('analytics_last_3_months'.tr),
+        ),
+        PopupMenuItem(
+          value: 'analytics_this_year',
+          child: Text('analytics_this_year'.tr),
+        ),
+        PopupMenuItem(
+          value: 'transactions_custom_range',
+          child: Text('transactions_custom_range'.tr),
+        ),
+      ],
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: MjasiColors.lightBlue,
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          border: Border.all(
+            color: MjasiColors.primaryBlue.withValues(alpha: .16),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.calendar_month_outlined,
+              color: MjasiColors.primaryBlue,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                _selectedPeriod,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MjasiColors.primaryNavy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: MjasiColors.primaryBlue,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeFilter() {
+    return SegmentedButton<TransactionType?>(
+      segments: [
+        ButtonSegment(
+          value: null,
+          label: Text('analytics_all'.tr),
+          icon: const Icon(Icons.tune_rounded),
+        ),
+        ButtonSegment(
+          value: TransactionType.income,
+          label: Text('income'.tr),
+          icon: const Icon(Icons.arrow_upward),
+        ),
+        ButtonSegment(
+          value: TransactionType.expense,
+          label: Text('expense'.tr),
+          icon: const Icon(Icons.arrow_downward),
+        ),
+      ],
+      selected: {_typeFilter},
+      onSelectionChanged: (newSelection) {
+        setState(() {
+          _typeFilter = newSelection.first;
+          _applyTypeFilterToPreviousTotals();
+          _processAnalyticsData();
+        });
+      },
+      style: SegmentedButton.styleFrom(
+        backgroundColor: MjasiColors.surface,
+        foregroundColor: MjasiColors.textSecondary,
+        selectedForegroundColor: MjasiColors.primaryBlue,
+        selectedBackgroundColor: MjasiColors.lightBlue,
+        side: const BorderSide(color: MjasiColors.border),
       ),
     );
   }
@@ -594,23 +854,87 @@ class _AnalyticsPageState extends State<AnalyticsPage>
         ? _selectedCategory
         : '';
     return Card(
+      margin: EdgeInsets.zero,
       elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: MjasiColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        side: const BorderSide(color: MjasiColors.border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(MjasiSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'analytics_filters'.tr,
-              style: TextStyle(
-                color: Colors.grey[800],
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: MjasiColors.lightBlue,
+                    borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                  ),
+                  child: const Icon(
+                    Icons.filter_alt_rounded,
+                    color: MjasiColors.primaryBlue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: MjasiSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'analytics_filters'.tr,
+                        style: const TextStyle(
+                          color: MjasiColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'analytics_filters_subtitle'.tr,
+                        style: const TextStyle(
+                          color: MjasiColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_hasActiveFilters)
+                  TextButton.icon(
+                    onPressed: _resetAnalyticsFilters,
+                    icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                    label: Text('analytics_clear_filters'.tr),
+                    style: TextButton.styleFrom(
+                      foregroundColor: MjasiColors.primaryBlue,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: MjasiSpacing.lg),
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: MjasiSpacing.md,
+              runSpacing: MjasiSpacing.sm,
+              children: [
+                Text(
+                  'analytics_filter_period'.tr,
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                _buildPeriodSelector(),
+              ],
+            ),
+            const SizedBox(height: MjasiSpacing.md),
             LayoutBuilder(
               builder: (context, constraints) {
                 final categoryFilter = DropdownButtonFormField<String>(
@@ -619,12 +943,26 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                   decoration: InputDecoration(
                     labelText: 'transactions_filter_category'.tr,
                     prefixIcon: const Icon(Icons.category_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    filled: true,
+                    fillColor: MjasiColors.background,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 12,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(color: MjasiColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(color: MjasiColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(
+                        color: MjasiColors.primaryBlue,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                   items: [
@@ -656,12 +994,26 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                   decoration: InputDecoration(
                     labelText: 'transactions_filter_shop'.tr,
                     prefixIcon: const Icon(Icons.storefront_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    filled: true,
+                    fillColor: MjasiColors.background,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 12,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(color: MjasiColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(color: MjasiColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      borderSide: const BorderSide(
+                        color: MjasiColors.primaryBlue,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                   items: [
@@ -681,11 +1033,11 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                     _loadAnalyticsData();
                   },
                 );
-                if (constraints.maxWidth < 520) {
+                if (constraints.maxWidth < 560) {
                   return Column(
                     children: [
                       shopFilter,
-                      const SizedBox(height: 12),
+                      const SizedBox(height: MjasiSpacing.md),
                       categoryFilter,
                     ],
                   );
@@ -693,16 +1045,41 @@ class _AnalyticsPageState extends State<AnalyticsPage>
                 return Row(
                   children: [
                     Expanded(child: shopFilter),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: MjasiSpacing.md),
                     Expanded(child: categoryFilter),
                   ],
                 );
               },
             ),
+            const SizedBox(height: MjasiSpacing.lg),
+            Text(
+              'analytics_filter_type'.tr,
+              style: const TextStyle(
+                color: MjasiColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: MjasiSpacing.sm),
+            _buildTypeFilter(),
           ],
         ),
       ),
     );
+  }
+
+  void _resetAnalyticsFilters() {
+    setState(() {
+      _selectedShopNickname = BusinessAccessService.isOwner.value
+          ? ''
+          : BusinessAccessService.shopNickname.value.trim();
+      _selectedCategory = '';
+      _typeFilter = null;
+      _previousIncome = _previousAllIncome;
+      _previousExpense = _previousAllExpense;
+      _previousNetFlow = _previousAllIncome - _previousAllExpense;
+    });
+    _changePeriod('today');
   }
 
   Widget _buildPeriodComparison() {
@@ -939,61 +1316,105 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'analytics_financial_overview'.tr,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'analytics_financial_overview'.tr,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: MjasiColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _selectedPeriod,
+                          style: const TextStyle(
+                            color: MjasiColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _showBusinessSummary,
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text('analytics_ai_summary'.tr),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MjasiColors.primaryNavy,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricCard(
-                      'analytics_total_income'.tr,
-                      'TSH ${_formatMoney(_totalIncome)}',
-                      Icons.trending_up,
-                      Colors.green,
-                      _totalIncome,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      'analytics_total_expense'.tr,
-                      'TSH ${_formatMoney(_totalExpense)}',
-                      Icons.trending_down,
-                      Colors.red,
-                      _totalExpense,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricCard(
-                      'net'.tr,
-                      '${_netFlow >= 0 ? '+' : '-'}TSH ${_formatMoney(_netFlow.abs())}',
-                      _netFlow >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                      _netFlow >= 0 ? Colors.green : Colors.orange,
-                      _netFlow.abs(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      'analytics_transactions'.tr,
-                      '$_transactionCount',
-                      Icons.receipt_long,
-                      _brandColor,
-                      _transactionCount.toDouble(),
-                    ),
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = 12.0;
+                  final columns = constraints.maxWidth < 520 ? 1 : 2;
+                  final cardWidth =
+                      (constraints.maxWidth - spacing * (columns - 1)) /
+                      columns;
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: [
+                      SizedBox(
+                        width: cardWidth,
+                        child: _buildMetricCard(
+                          'analytics_total_income'.tr,
+                          'TSH ${_formatMoney(_totalIncome)}',
+                          Icons.south_west_rounded,
+                          MjasiColors.success,
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _buildMetricCard(
+                          'analytics_total_expense'.tr,
+                          'TSH ${_formatMoney(_totalExpense)}',
+                          Icons.north_east_rounded,
+                          MjasiColors.error,
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _buildMetricCard(
+                          'net'.tr,
+                          '${_netFlow >= 0 ? '+' : '-'}TSH ${_formatMoney(_netFlow.abs())}',
+                          _netFlow >= 0
+                              ? Icons.account_balance_wallet_rounded
+                              : Icons.warning_amber_rounded,
+                          _netFlow >= 0
+                              ? MjasiColors.primaryBlue
+                              : MjasiColors.warning,
+                        ),
+                      ),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _buildMetricCard(
+                          'analytics_transactions'.tr,
+                          '$_transactionCount',
+                          Icons.receipt_long_rounded,
+                          const Color(0xFF7C3AED),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -1005,22 +1426,22 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   Widget _buildMetricCard(
     String title,
     String value,
-    IconData icon, // No tr needed for widgets
+    IconData icon,
     Color color,
-    double amount,
   ) {
     return Semantics(
       label: '$title: $value',
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: MjasiColors.surface,
+          borderRadius: BorderRadius.circular(MjasiRadius.md),
+          border: Border.all(color: MjasiColors.border),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: color.withValues(alpha: .07),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -1029,27 +1450,37 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           children: [
             Row(
               children: [
-                // No tr needed for widgets
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        color.withValues(alpha: .16),
+                        color.withValues(alpha: .07),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(MjasiRadius.sm),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Icon(icon, color: color, size: 21),
                 ),
                 const Spacer(),
-                Icon(Icons.more_horiz, color: Colors.grey[400], size: 20),
+                Icon(
+                  Icons.arrow_outward_rounded,
+                  color: color.withValues(alpha: .65),
+                  size: 18,
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
               title,
-              style: TextStyle(
-                // No tr needed for variables
-                color: Colors.grey[600],
+              style: const TextStyle(
+                color: MjasiColors.textSecondary,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
@@ -1058,16 +1489,315 @@ class _AnalyticsPageState extends State<AnalyticsPage>
               alignment: Alignment.centerLeft,
               child: Text(
                 value,
-                style: TextStyle(
-                  // No tr needed for variables
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: MjasiColors.textPrimary,
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _buildBusinessSummaryText() {
+    final insights = _generateInsights();
+    final summaryLines = <String>[
+      '${'analytics_ai_summary'.tr} — $_selectedPeriod',
+      '${'analytics_total_income'.tr}: TSH ${_formatMoney(_totalIncome)}',
+      '${'analytics_total_expense'.tr}: TSH ${_formatMoney(_totalExpense)}',
+      '${'net'.tr}: ${_netFlow >= 0 ? '+' : '-'}TSH ${_formatMoney(_netFlow.abs())}',
+      '${'analytics_transactions'.tr}: $_transactionCount',
+    ];
+    if (_categoryChartData.isNotEmpty) {
+      final topCategory = _categoryChartData.first;
+      summaryLines.add(
+        '${'analytics_summary_top_category'.tr}: ${topCategory.key} '
+        '(TSH ${_formatMoney(topCategory.value)})',
+      );
+    }
+    summaryLines.add('');
+    summaryLines.add('analytics_ai_insights'.tr);
+    for (final insight in insights) {
+      summaryLines.add('${insight.title}: ${insight.description}');
+    }
+    return summaryLines.join('\n');
+  }
+
+  Future<void> _shareBusinessSummary() async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          title: 'analytics_ai_summary'.tr,
+          subject: 'analytics_financial_overview'.tr,
+          text: _buildBusinessSummaryText(),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not share analytics summary: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      Get.snackbar('error'.tr, 'analytics_summary_share_error'.tr);
+    }
+  }
+
+  Future<void> _showBusinessSummary() async {
+    final insights = _generateInsights();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(MjasiRadius.lg),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 12, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        title: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [MjasiColors.primaryNavy, MjasiColors.primaryBlue],
+                ),
+                borderRadius: BorderRadius.circular(MjasiRadius.sm),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: MjasiSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'analytics_ai_summary'.tr,
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    _selectedPeriod,
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'close'.tr,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 520,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * .68,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _summaryMetric(
+                  'analytics_total_income'.tr,
+                  'TSH ${_formatMoney(_totalIncome)}',
+                  Icons.south_west_rounded,
+                  MjasiColors.success,
+                ),
+                _summaryMetric(
+                  'analytics_total_expense'.tr,
+                  'TSH ${_formatMoney(_totalExpense)}',
+                  Icons.north_east_rounded,
+                  MjasiColors.error,
+                ),
+                _summaryMetric(
+                  'net'.tr,
+                  '${_netFlow >= 0 ? '+' : '-'}TSH ${_formatMoney(_netFlow.abs())}',
+                  Icons.account_balance_wallet_rounded,
+                  _netFlow >= 0 ? MjasiColors.primaryBlue : MjasiColors.warning,
+                ),
+                _summaryMetric(
+                  'analytics_transactions'.tr,
+                  '$_transactionCount',
+                  Icons.receipt_long_rounded,
+                  const Color(0xFF7C3AED),
+                ),
+                if (_categoryChartData.isNotEmpty) ...[
+                  const SizedBox(height: MjasiSpacing.sm),
+                  Text(
+                    'analytics_summary_top_category'.tr,
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: MjasiSpacing.xs),
+                  Text(
+                    '${_categoryChartData.first.key} · '
+                    'TSH ${_formatMoney(_categoryChartData.first.value)}',
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: MjasiSpacing.md),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      color: MjasiColors.warning,
+                      size: 20,
+                    ),
+                    const SizedBox(width: MjasiSpacing.sm),
+                    Text(
+                      'analytics_ai_insights'.tr,
+                      style: const TextStyle(
+                        color: MjasiColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: MjasiSpacing.sm),
+                for (final insight in insights)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: MjasiSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: MjasiSpacing.md,
+                      vertical: MjasiSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: insight.color.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                      border: Border(
+                        left: BorderSide(color: insight.color, width: 3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          insight.title,
+                          style: TextStyle(
+                            color: insight.color,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          insight.description,
+                          style: const TextStyle(
+                            color: MjasiColors.textPrimary,
+                            height: 1.3,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: MjasiSpacing.sm),
+                Text(
+                  'analytics_summary_disclaimer'.tr,
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('close'.tr),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _shareBusinessSummary();
+            },
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: Text('analytics_share_summary'.tr),
+            style: FilledButton.styleFrom(
+              backgroundColor: MjasiColors.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryMetric(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: MjasiSpacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: MjasiSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1759,12 +2489,12 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   List<InsightData> _generateInsights() {
-    final insights = <InsightData>[];
+    final businessInsights = <InsightData>[];
     // No tr needed for logic
     // 1. Cash Flow Analysis
     if (_totalIncome > 0 || _totalExpense > 0) {
       if (_netFlow > 0) {
-        insights.add(
+        businessInsights.add(
           InsightData(
             title: 'analytics_positive_cash_flow'.tr,
             description:
@@ -1774,7 +2504,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           ),
         );
       } else if (_netFlow < 0) {
-        insights.add(
+        businessInsights.add(
           InsightData(
             title: 'analytics_negative_cash_flow'.tr,
             description:
@@ -1784,7 +2514,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           ),
         );
       } else {
-        insights.add(
+        businessInsights.add(
           InsightData(
             title: 'analytics_balanced_budget'.tr,
             description: 'analytics_balanced_budget_desc'.tr,
@@ -1819,7 +2549,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
           ? (topExpenseCategory.value / _totalExpense) * 100
           : 0;
 
-      insights.add(
+      businessInsights.add(
         InsightData(
           title: 'analytics_top_spending_area'.tr,
           description:
@@ -1831,7 +2561,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
 
       // Suggestion if one category is dominant // No tr needed for logic
       if (percentage > 40) {
-        insights.add(
+        businessInsights.add(
           InsightData(
             title: 'analytics_suggestion_diversify_spending'.tr,
             description:
@@ -1848,7 +2578,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
       final busiestDay = _transactionFrequency.entries.reduce(
         (a, b) => a.value > b.value ? a : b,
       );
-      insights.add(
+      businessInsights.add(
         InsightData(
           title: 'analytics_busiest_day'.tr,
           description:
@@ -1875,13 +2605,181 @@ class _AnalyticsPageState extends State<AnalyticsPage>
               .reduce((first, second) => first + second) /
           expenseTransactions.length;
 
-      insights.add(
+      businessInsights.add(
         InsightData(
           title: 'analytics_avg_expense_value'.tr,
           description:
               '${'analytics_avg_expense_value_desc'.tr} TSH ${_formatMoney(avgExpense)}. ${'analytics_avg_expense_value_suggestion'.tr}',
           icon: Icons.calculate_outlined,
           color: Colors.purple,
+        ),
+      );
+    }
+
+    final seed = _insightRotationSeed();
+    final insights = <InsightData>[...businessInsights];
+
+    if (BusinessAccessService.isOwner.value && _staffNames.isNotEmpty) {
+      final staffInsights = <InsightData>[];
+      final staffIncome = <String, double>{};
+      final staffTransactions = <String, int>{};
+      for (final transaction in _transactions) {
+        if (transaction.type != TransactionType.income ||
+            transaction.amount < 0 ||
+            !_staffNames.containsKey(transaction.uid)) {
+          continue;
+        }
+        staffIncome.update(
+          transaction.uid,
+          (amount) => amount + transaction.amount,
+          ifAbsent: () => transaction.amount,
+        );
+        staffTransactions.update(
+          transaction.uid,
+          (previousCount) => previousCount + 1,
+          ifAbsent: () => 1,
+        );
+      }
+      if (staffIncome.isNotEmpty) {
+        final topStaff = staffIncome.entries.reduce(
+          (first, second) => first.value >= second.value ? first : second,
+        );
+        staffInsights.add(
+          InsightData(
+            title: 'analytics_staff_activity'.tr,
+            description: 'analytics_staff_activity_desc'.trParams({
+              'name': _staffNames[topStaff.key] ?? '—',
+              'amount': _formatMoney(topStaff.value),
+              'count': '${staffTransactions[topStaff.key] ?? 0}',
+            }),
+            icon: Icons.badge_outlined,
+            color: const Color(0xFF0F766E),
+          ),
+        );
+      }
+      final staffPosSales = _posSalesByStaff.entries
+          .where((entry) => _staffNames.containsKey(entry.key))
+          .toList();
+      if (staffPosSales.isNotEmpty) {
+        final topPosStaff = staffPosSales.reduce(
+          (first, second) => first.value >= second.value ? first : second,
+        );
+        staffInsights.add(
+          InsightData(
+            title: 'analytics_staff_pos_activity'.tr,
+            description: 'analytics_staff_pos_activity_desc'.trParams({
+              'name': _staffNames[topPosStaff.key] ?? '—',
+              'amount': _formatMoney(topPosStaff.value),
+              'count': '${_posSaleCountsByStaff[topPosStaff.key] ?? 0}',
+            }),
+            icon: Icons.storefront_outlined,
+            color: const Color(0xFF0F766E),
+          ),
+        );
+      }
+      insights.addAll(staffInsights);
+    }
+
+    if (_visibleTaskCount != null && _visibleTaskCount! > 0) {
+      final taskInsights = <InsightData>[];
+      if ((_overdueTaskCount ?? 0) > 0) {
+        taskInsights.add(
+          InsightData(
+            title: 'analytics_overdue_tasks'.tr,
+            description: 'analytics_overdue_tasks_desc'.trParams({
+              'count': '$_overdueTaskCount',
+            }),
+            icon: Icons.warning_amber_rounded,
+            color: MjasiColors.error,
+          ),
+        );
+      }
+      if ((_taskReviewCount ?? 0) > 0) {
+        taskInsights.add(
+          InsightData(
+            title: 'analytics_tasks_for_review'.tr,
+            description: 'analytics_tasks_for_review_desc'.trParams({
+              'count': '$_taskReviewCount',
+            }),
+            icon: Icons.fact_check_outlined,
+            color: const Color(0xFF7C3AED),
+          ),
+        );
+      }
+      if ((_openTaskCount ?? 0) == 0) {
+        taskInsights.add(
+          InsightData(
+            title: 'analytics_no_open_tasks'.tr,
+            description: 'analytics_no_open_tasks_desc'.tr,
+            icon: Icons.task_alt_rounded,
+            color: MjasiColors.success,
+          ),
+        );
+      } else {
+        taskInsights.add(
+          InsightData(
+            title: 'analytics_open_tasks'.tr,
+            description: 'analytics_open_tasks_desc'.trParams({
+              'count': '$_openTaskCount',
+            }),
+            icon: Icons.pending_actions_rounded,
+            color: MjasiColors.primaryBlue,
+          ),
+        );
+      }
+      insights.addAll(taskInsights);
+    }
+
+    if ((_posSaleCount ?? 0) > 0) {
+      final salesDescription = StringBuffer(
+        'analytics_pos_sales_desc'.trParams({
+          'count': '$_posSaleCount',
+          'total': _formatMoney(_posSalesTotal ?? 0),
+        }),
+      );
+      if (_topSellingProduct != null) {
+        salesDescription
+          ..write(' ')
+          ..write(
+            'analytics_pos_top_product_desc'.trParams({
+              'product': _topSellingProduct!,
+              'count': '$_topSellingProductOccurrences',
+            }),
+          );
+      }
+      insights.add(
+        InsightData(
+          title: 'analytics_pos_sales'.tr,
+          description: salesDescription.toString(),
+          icon: Icons.point_of_sale_rounded,
+          color: const Color(0xFF2563EB),
+        ),
+      );
+    } else if (_posSaleCount == 0) {
+      insights.add(
+        InsightData(
+          title: 'analytics_pos_sales'.tr,
+          description: 'analytics_pos_no_sales_desc'.tr,
+          icon: Icons.point_of_sale_rounded,
+          color: Colors.blueGrey,
+        ),
+      );
+    }
+
+    final adviceMetrics = _buildAdviceMetrics();
+    final adviceValues = _buildAdviceValues(adviceMetrics);
+    final language = Get.locale?.languageCode == 'sw' ? 'sw' : 'en';
+    for (final rule in _adviceCatalog) {
+      if (!rule.enabled || !rule.matches(adviceMetrics)) continue;
+      final title = rule.title[language] ?? rule.title['en'];
+      final description = rule.description[language] ?? rule.description['en'];
+      if (title == null || description == null) continue;
+      insights.add(
+        InsightData(
+          title: _fillAdviceValues(title, adviceValues),
+          description: _fillAdviceValues(description, adviceValues),
+          icon: _adviceIcon(rule.category),
+          color: _adviceColor(rule.category),
         ),
       );
     }
@@ -1897,7 +2795,154 @@ class _AnalyticsPageState extends State<AnalyticsPage>
       );
     }
 
+    insights.shuffle(math.Random(seed));
     return insights;
+  }
+
+  Map<String, double> _buildAdviceMetrics() {
+    final filteredTransactions = _transactions.where((transaction) {
+      if (_typeFilter != null && transaction.type != _typeFilter) return false;
+      return transaction.amount >= 0 && transaction.category.trim().isNotEmpty;
+    });
+    var incomeCount = 0;
+    var expenseCount = 0;
+    for (final transaction in filteredTransactions) {
+      if (transaction.type == TransactionType.income) {
+        incomeCount++;
+      } else {
+        expenseCount++;
+      }
+    }
+
+    final expenseTotalsByCategory = <String, double>{};
+    if (_typeFilter != TransactionType.income) {
+      for (final transaction in _transactions) {
+        if (transaction.type != TransactionType.expense ||
+            transaction.amount < 0 ||
+            transaction.category.trim().isEmpty) {
+          continue;
+        }
+        expenseTotalsByCategory.update(
+          transaction.category,
+          (amount) => amount + transaction.amount,
+          ifAbsent: () => transaction.amount,
+        );
+      }
+    }
+    final largestExpenseCategory = expenseTotalsByCategory.values.fold<double>(
+      0,
+      (largest, amount) => math.max(largest, amount).toDouble(),
+    );
+    final topExpenseShare = _totalExpense > 0
+        ? largestExpenseCategory / _totalExpense * 100
+        : 0.0;
+
+    final metrics = <String, double>{
+      'income': _totalIncome,
+      'expenses': _totalExpense,
+      'net': _netFlow,
+      'transactionCount': _transactionCount.toDouble(),
+      'incomeTransactionCount': incomeCount.toDouble(),
+      'expenseTransactionCount': expenseCount.toDouble(),
+      'averageIncome': incomeCount == 0 ? 0 : _totalIncome / incomeCount,
+      'averageExpense': expenseCount == 0 ? 0 : _totalExpense / expenseCount,
+      'topExpenseSharePercent': topExpenseShare,
+    };
+    if (_visibleTaskCount != null) {
+      metrics.addAll({
+        'activeTasks': (_openTaskCount ?? 0).toDouble(),
+        'overdueTasks': (_overdueTaskCount ?? 0).toDouble(),
+        'tasksForReview': (_taskReviewCount ?? 0).toDouble(),
+      });
+    }
+    if (_posSaleCount != null) {
+      metrics.addAll({
+        'posSalesCount': _posSaleCount!.toDouble(),
+        'posSalesTotal': _posSalesTotal ?? 0,
+      });
+    }
+    if (BusinessAccessService.isOwner.value) {
+      metrics['staffCount'] = _staffNames.length.toDouble();
+    }
+    if (_comparisonAvailable && _previousIncome > 0) {
+      metrics['incomeChangePercent'] = _percentChange(
+        _previousIncome,
+        _totalIncome,
+      );
+    }
+    if (_comparisonAvailable && _previousExpense > 0) {
+      metrics['expenseChangePercent'] = _percentChange(
+        _previousExpense,
+        _totalExpense,
+      );
+    }
+    return metrics;
+  }
+
+  double _percentChange(double previous, double current) {
+    if (previous == 0) return current == 0 ? 0 : 100;
+    return ((current - previous) / previous) * 100;
+  }
+
+  Map<String, String> _buildAdviceValues(Map<String, double> metrics) => {
+    for (final entry in metrics.entries)
+      entry.key:
+          entry.key.toLowerCase().contains('count') ||
+              entry.key == 'activeTasks' ||
+              entry.key == 'overdueTasks' ||
+              entry.key == 'tasksForReview' ||
+              entry.key == 'posSalesCount' ||
+              entry.key == 'staffCount'
+          ? entry.value.round().toString()
+          : entry.key.toLowerCase().contains('percent')
+          ? entry.value.toStringAsFixed(1)
+          : _formatMoney(entry.value),
+  };
+
+  String _fillAdviceValues(String text, Map<String, String> values) {
+    return text.replaceAllMapped(RegExp(r'\{([a-zA-Z0-9_]+)\}'), (match) {
+      return values[match.group(1)] ?? match.group(0)!;
+    });
+  }
+
+  IconData _adviceIcon(String category) => switch (category) {
+    'tasks' => Icons.task_alt_rounded,
+    'sales' => Icons.point_of_sale_rounded,
+    'staff' => Icons.groups_rounded,
+    'records' => Icons.receipt_long_rounded,
+    'costs' => Icons.savings_outlined,
+    'growth' => Icons.trending_up_rounded,
+    _ => Icons.lightbulb_outline_rounded,
+  };
+
+  Color _adviceColor(String category) => switch (category) {
+    'tasks' => const Color(0xFF7C3AED),
+    'sales' => const Color(0xFF2563EB),
+    'staff' => const Color(0xFF0F766E),
+    'records' => const Color(0xFF64748B),
+    'costs' => MjasiColors.warning,
+    'growth' => MjasiColors.success,
+    _ => _brandColor,
+  };
+
+  int _insightRotationSeed() {
+    final now = DateTime.now();
+    var seed = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime(2000)).inDays;
+    seed += DateTime(
+      _startDate.year,
+      _startDate.month,
+      _startDate.day,
+    ).difference(DateTime(2000)).inDays;
+    final filterKey =
+        '$_selectedShopNickname|$_selectedCategory|${_typeFilter?.name ?? "all"}';
+    for (final codeUnit in filterKey.codeUnits) {
+      seed = (seed * 31 + codeUnit) & 0x7fffffff;
+    }
+    return seed;
   }
 
   String _formatMoney(double amount) {
@@ -1950,6 +2995,11 @@ class _AnalyticsPageState extends State<AnalyticsPage>
     final now = DateTime.now();
 
     switch (period) {
+      case 'today':
+        _selectedPeriod = 'transactions_today'.tr;
+        _startDate = DateTime(now.year, now.month, now.day);
+        _endDate = _startDate.add(const Duration(days: 1));
+        break;
       case 'Yesterday':
         _selectedPeriod = 'Yesterday'.tr;
         final yesterday = now.subtract(const Duration(days: 1));
@@ -2197,13 +3247,128 @@ class InsightData {
   final String description;
   final IconData icon;
   final Color color;
-
   InsightData({
     required this.title,
     required this.description,
     required this.icon,
     required this.color,
   });
+}
+
+class _AdviceRule {
+  const _AdviceRule({
+    required this.id,
+    required this.category,
+    required this.title,
+    required this.description,
+    required this.conditions,
+    this.enabled = true,
+  });
+
+  final String id;
+  final String category;
+  final Map<String, String> title;
+  final Map<String, String> description;
+  final List<_AdviceCondition> conditions;
+  final bool enabled;
+
+  factory _AdviceRule.fromJson(Map<String, dynamic> json) {
+    final conditions = json['when'];
+    if (conditions is! List || conditions.isEmpty) {
+      throw FormatException(
+        'Advice "${json['id']}" needs at least one condition.',
+      );
+    }
+    return _AdviceRule(
+      id: _requiredString(json, 'id'),
+      category: _requiredString(json, 'category'),
+      title: _localizedStrings(json, 'title'),
+      description: _localizedStrings(json, 'description'),
+      enabled: json['enabled'] != false,
+      conditions: conditions.map((condition) {
+        if (condition is! Map) {
+          throw FormatException(
+            'Advice "${json['id']}" has an invalid condition.',
+          );
+        }
+        return _AdviceCondition.fromJson(Map<String, dynamic>.from(condition));
+      }).toList(),
+    );
+  }
+
+  bool matches(Map<String, double> metrics) =>
+      conditions.every((condition) => condition.matches(metrics));
+}
+
+class _AdviceCondition {
+  const _AdviceCondition({
+    required this.metric,
+    required this.operator,
+    required this.value,
+  });
+
+  final String metric;
+  final String operator;
+  final double value;
+
+  factory _AdviceCondition.fromJson(Map<String, dynamic> json) {
+    final metric = json['metric'];
+    final operator = json['operator'];
+    final value = json['value'];
+    if (metric is! String ||
+        operator is! String ||
+        value is! num ||
+        !const {'gt', 'gte', 'lt', 'lte', 'eq'}.contains(operator)) {
+      throw const FormatException(
+        'Advice condition has invalid metric, operator or value.',
+      );
+    }
+    return _AdviceCondition(
+      metric: metric,
+      operator: operator,
+      value: value.toDouble(),
+    );
+  }
+
+  bool matches(Map<String, double> metrics) {
+    final metricValue = metrics[metric];
+    if (metricValue == null) return false;
+    return switch (operator) {
+      'gt' => metricValue > value,
+      'gte' => metricValue >= value,
+      'lt' => metricValue < value,
+      'lte' => metricValue <= value,
+      'eq' => metricValue == value,
+      _ => false,
+    };
+  }
+}
+
+String _requiredString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Advice entry is missing "$key".');
+  }
+  return value;
+}
+
+Map<String, String> _localizedStrings(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! Map) {
+    throw FormatException(
+      'Advice "${json['id']}" needs localized "$key" text.',
+    );
+  }
+  final localized = {
+    for (final entry in value.entries)
+      entry.key.toString(): entry.value.toString(),
+  };
+  if (!localized.containsKey('en') || !localized.containsKey('sw')) {
+    throw FormatException(
+      'Advice "${json['id']}" needs both English and Swahili "$key" text.',
+    );
+  }
+  return localized;
 }
 
 class ChartData {
