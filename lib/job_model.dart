@@ -1,4 +1,3 @@
-
 enum PaymentStatus { NotPaid, AdvancePaid, FullyPaid }
 
 enum JobStatus { Pending, InProgress, Completed }

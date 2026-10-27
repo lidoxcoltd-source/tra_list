@@ -221,8 +221,12 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(width >= 700 ? 24 : 14, 14,
-                  width >= 700 ? 24 : 14, 12),
+              padding: EdgeInsets.fromLTRB(
+                width >= 700 ? 24 : 14,
+                14,
+                width >= 700 ? 24 : 14,
+                12,
+              ),
               child: Column(
                 children: [
                   _instructionCard(),
@@ -239,7 +243,9 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF000000).withValues(alpha: .3),
+                            color: const Color(
+                              0xFF000000,
+                            ).withValues(alpha: .3),
                             blurRadius: 28,
                             offset: const Offset(0, 12),
                           ),
@@ -254,8 +260,9 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
                             _fallback(),
                           if (_starting && _error == null)
                             Container(
-                              color: const Color(0xFF101D2B)
-                                  .withValues(alpha: .72),
+                              color: const Color(
+                                0xFF101D2B,
+                              ).withValues(alpha: .72),
                               child: Center(
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -266,8 +273,9 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
                                     color: const Color(0xFF0D2239),
                                     borderRadius: BorderRadius.circular(18),
                                     border: Border.all(
-                                      color: Colors.white
-                                          .withValues(alpha: .12),
+                                      color: Colors.white.withValues(
+                                        alpha: .12,
+                                      ),
                                     ),
                                   ),
                                   child: Column(

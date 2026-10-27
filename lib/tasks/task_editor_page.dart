@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/services/staff_service.dart';
@@ -206,13 +205,14 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         elevation: 0,
         title: Text(editing ? 'tk_edit'.tr : 'tk_new'.tr),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      body: StreamBuilder<List<StaffMember>>(
         stream: StaffService.watchStaff(),
         builder: (context, snapshot) {
           final staff = <String, Map<String, dynamic>>{
-            for (final doc in snapshot.data?.docs ?? const [])
-              if (doc.data()['active'] == true && doc.data()['removed'] != true)
-                doc.id: doc.data(),
+            for (final member in snapshot.data ?? const <StaffMember>[])
+              if (member.data['active'] == true &&
+                  member.data['removed'] != true)
+                member.id: member.data,
           };
           return Center(
             child: ConstrainedBox(

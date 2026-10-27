@@ -8,6 +8,7 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'analytics_page.dart';
 import 'transactions_controller.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -63,7 +64,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
+      backgroundColor: MjasiColors.background,
       body: RefreshIndicator(
         onRefresh: controller.fetchFirstPage,
         child: CustomScrollView(
@@ -102,7 +103,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
     return [
       SpeedDialChild(
         child: const Icon(Icons.arrow_downward, color: Colors.white),
-        backgroundColor: Colors.red.shade500,
+        backgroundColor: MjasiColors.error,
         label: 'expense'.tr,
         onTap: () async {
           final result = await Get.to(
@@ -114,7 +115,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
       SpeedDialChild(
         child: const Icon(Icons.arrow_upward, color: Colors.white),
-        backgroundColor: Colors.green.shade600,
+        backgroundColor: MjasiColors.success,
         label: 'income'.tr,
         onTap: () async {
           final result = await Get.to(
@@ -137,7 +138,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
             title: 'income'.tr,
             value:
                 'TSH ${TransactionsController.money(controller.currentIncome.value)}',
-            accent: Colors.green,
+            accent: MjasiColors.success,
             isSelected: controller.summaryFilter.value == SummaryFilter.income,
             onTap: () => controller.setSummaryFilter(SummaryFilter.income),
           ),
@@ -148,7 +149,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
             title: 'expenses'.tr,
             value:
                 'TSH ${TransactionsController.money(controller.currentExpense.value)}',
-            accent: Colors.red,
+            accent: MjasiColors.error,
             isSelected: controller.summaryFilter.value == SummaryFilter.expense,
             onTap: () => controller.setSummaryFilter(SummaryFilter.expense),
           ),
@@ -161,7 +162,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           return _SummaryCard(
             title: 'net'.tr,
             value: (netValue >= 0 ? '' : '-') + netString,
-            accent: netValue >= 0 ? Colors.green : Colors.orange,
+            accent: netValue >= 0 ? MjasiColors.success : MjasiColors.warning,
             currentNet: netValue,
             isSelected: controller.summaryFilter.value == SummaryFilter.all,
             onTap: () => controller.setSummaryFilter(SummaryFilter.all),
@@ -199,7 +200,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   Widget _buildTransactionCard(TransactionModel t, int index) {
     final isExpense = t.type == TransactionType.expense;
-    final accent = isExpense ? Colors.red.shade400 : Colors.green.shade400;
+    final accent = isExpense ? MjasiColors.error : MjasiColors.success;
 
     // Dismissible for swipe-to-delete with undo
     return Dismissible(
@@ -223,7 +224,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ), // No tr needed for widgets
         alignment: Alignment.centerRight,
         decoration: BoxDecoration(
-          color: Colors.red.shade600,
+          color: MjasiColors.error,
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.delete, color: Colors.white),
@@ -260,7 +261,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   height: 48,
                   width: 48,
                   decoration: BoxDecoration(
-                    color: accent.withOpacity(0.12),
+                    color: accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -395,7 +396,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: '${'search'.tr}...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+                    hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
                     border: InputBorder.none,
                   ),
                 ),
@@ -411,7 +414,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     // No tr needed for variables
                     colors: [
                       controller.brandColor.value,
-                      controller.accentColor.value.withOpacity(0.8),
+                      controller.accentColor.value.withValues(alpha: 0.8),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -735,9 +738,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.14),
+          color: Colors.white.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.24)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
         ),
         child: Row(
           children: [
@@ -837,8 +840,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
       selected: selected,
       onSelected: (_) => controller.setFilter(p),
-      selectedColor: controller.accentColor.value.withOpacity(0.3),
-      backgroundColor: controller.brandColor.value.withOpacity(0.1),
+      selectedColor: controller.accentColor.value.withValues(alpha: 0.3),
+      backgroundColor: controller.brandColor.value.withValues(alpha: 0.1),
       elevation: 0,
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
       visualDensity: const VisualDensity(horizontal: -4, vertical: -2),
@@ -1030,7 +1033,7 @@ class _SummaryCard extends StatelessWidget {
         child: _buildCardContent(
           title: title,
           value: value,
-          iconBgColor: Colors.white.withOpacity(0.15),
+          iconBgColor: Colors.white.withValues(alpha: 0.15),
           iconFgColor: Colors.white,
           valueColor: Colors.white,
         ),
@@ -1053,7 +1056,7 @@ class _SummaryCard extends StatelessWidget {
         child: _buildCardContent(
           title: title,
           value: value,
-          iconBgColor: accent.withOpacity(0.12),
+          iconBgColor: accent.withValues(alpha: 0.12),
           iconFgColor: accent,
           valueColor: Colors.blueGrey.shade800,
         ),

@@ -37,7 +37,11 @@ class AppActivityService {
           'opens': FieldValue.increment(1),
         });
       } on FirebaseException catch (error) {
-        if (error.code != 'not-found') rethrow;
+        // On a missing document the update rule cannot read the old data and
+        // answers permission-denied, so fall back to create in that case too.
+        if (error.code != 'not-found' && error.code != 'permission-denied') {
+          rethrow;
+        }
         await ref.set({
           'firstSeenAt': FieldValue.serverTimestamp(),
           'lastActiveAt': FieldValue.serverTimestamp(),

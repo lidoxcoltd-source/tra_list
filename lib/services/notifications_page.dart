@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+import '../market/market_models.dart';
+import '../market/market_profile_page.dart';
+import '../market/market_service.dart';
 import 'notification_service.dart';
 import '../tasks/task_detail_page.dart';
 
-const _announceColor = Color(0xFF7C3AED);
-const _ink = Color(0xFF0F172A);
-const _line = Color(0xFFE5E9F2);
+const _announceColor = Color(0xFF5BA2FF);
+const _ink = Color(0xFFF2F6FC);
+const _line = Color(0xFF283543);
+const _canvas = Color(0xFF080D13);
+const _surface = Color(0xFF111A24);
+const _surfaceRaised = Color(0xFF1B2734);
+const _muted = Color(0xFFA8B6C8);
+const _accent = Color(0xFF5BA2FF);
 
 String _relativeTime(DateTime? time) {
   if (time == null) return '';
@@ -37,6 +45,14 @@ IconData _iconFor(String action) {
       return Icons.account_balance_wallet_rounded;
     case 'task':
       return Icons.task_alt_rounded;
+    case 'verification':
+      return Icons.verified_user_rounded;
+    case 'market_like':
+      return Icons.favorite_rounded;
+    case 'market_comment':
+      return Icons.mode_comment_rounded;
+    case 'market_follow':
+      return Icons.person_add_alt_1_rounded;
     default:
       return Icons.notifications_rounded;
   }
@@ -60,6 +76,14 @@ Color _colorFor(String action) {
       return const Color(0xFFDC2626);
     case 'task':
       return const Color(0xFF1E40AF);
+    case 'verification':
+      return const Color(0xFF0F766E);
+    case 'market_like':
+      return const Color(0xFFDC2626);
+    case 'market_comment':
+      return const Color(0xFF1565C0);
+    case 'market_follow':
+      return const Color(0xFF0F766E);
     default:
       return const Color(0xFF475569);
   }
@@ -129,7 +153,7 @@ class _NotificationBellState extends State<NotificationBell> {
   }
 }
 
-enum _Filter { all, unread, activity, announcements }
+enum _Filter { all, people, comments, professional, unread }
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -141,6 +165,9 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   final Set<String> _recorded = {};
   final Set<String> _hidden = {};
+  final Set<String> _followBackBusy = {};
+  final Map<String, Future<MarketProfile?>> _actorProfiles = {};
+  final Map<String, Future<MarketPost?>> _postPreviews = {};
   late final Stream<List<AppNotification>> _activity;
   late final Stream<List<AppNotification>> _announcements;
   _Filter _filter = _Filter.all;
@@ -168,10 +195,20 @@ class _NotificationsPageState extends State<NotificationsPage> {
         return all;
       case _Filter.unread:
         return all.where(_isUnread).toList();
-      case _Filter.activity:
-        return all.where((n) => !n.isAnnouncement).toList();
-      case _Filter.announcements:
-        return all.where((n) => n.isAnnouncement).toList();
+      case _Filter.people:
+        return all
+            .where(
+              (n) =>
+                  n.action == 'market_post' ||
+                  n.action == 'market_status_reply',
+            )
+            .toList();
+      case _Filter.comments:
+        return all.where((n) => n.action == 'market_comment').toList();
+      case _Filter.professional:
+        return all
+            .where((n) => n.isAnnouncement || !n.action.startsWith('market_'))
+            .toList();
     }
   }
 
@@ -210,25 +247,39 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   a.createdAt ?? DateTime.now(),
                 ),
               );
-            final unreadCount = all.where(_isUnread).length;
             final loading =
                 activitySnap.connectionState == ConnectionState.waiting &&
                 announcementSnap.connectionState == ConnectionState.waiting;
             final items = _apply(all);
 
             return Scaffold(
-              backgroundColor: const Color(0xFFF4F6FB),
+              backgroundColor: _canvas,
               appBar: AppBar(
-                title: Text('notif_title'.tr),
+                backgroundColor: _canvas,
+                foregroundColor: Colors.white,
+                iconTheme: const IconThemeData(color: Colors.white),
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                title: Text(
+                  'notif_title'.tr,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 actions: [
                   if (activity.any((n) => !n.read))
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                      ),
+                    IconButton(
+                      tooltip: 'notif_mark_all'.tr,
                       onPressed: () => NotificationService.markAllRead(all),
-                      icon: const Icon(Icons.done_all_rounded, size: 20),
-                      label: Text('notif_mark_all'.tr),
+                      icon: const Icon(Icons.done_all_rounded),
                     ),
                   if (activity.isNotEmpty)
                     IconButton(
@@ -251,35 +302,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       : items.isEmpty
                       ? _empty()
                       : _list(items);
-                  if (box.maxWidth >= 900) {
-                    return Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1200),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 340,
-                              child: Column(
-                                children: [
-                                  _summary(unreadCount, all.length),
-                                  _filters(all, wide: true),
-                                ],
-                              ),
-                            ),
-                            Expanded(child: listPane),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
                   return Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 760),
+                      constraints: const BoxConstraints(maxWidth: 900),
                       child: Column(
                         children: [
-                          _summary(unreadCount, all.length),
-                          _filters(all),
+                          _filters(all, wide: box.maxWidth >= 900),
                           Expanded(child: listPane),
                         ],
                       ),
@@ -294,85 +322,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
     );
   }
 
-  Widget _summary(int unread, int total) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 14, 14, 4),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0A3F46), Color(0xFF0E5962), Color(0xFF17808B)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.notifications_active_rounded,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  unread > 0
-                      ? 'notif_unread_count'.trParams({'n': '$unread'})
-                      : 'notif_all_caught_up'.tr,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'notif_total_count'.trParams({'n': '$total'}),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _filters(List<AppNotification> all, {bool wide = false}) {
-    int count(_Filter f) {
-      switch (f) {
-        case _Filter.all:
-          return all.length;
-        case _Filter.unread:
-          return all.where(_isUnread).length;
-        case _Filter.activity:
-          return all.where((n) => !n.isAnnouncement).length;
-        case _Filter.announcements:
-          return all.where((n) => n.isAnnouncement).length;
-      }
-    }
-
     String label(_Filter f) {
       switch (f) {
         case _Filter.all:
           return 'notif_filter_all'.tr;
+        case _Filter.people:
+          return 'notif_filter_people'.tr;
+        case _Filter.comments:
+          return 'notif_filter_comments'.tr;
+        case _Filter.professional:
+          return 'notif_filter_professional'.tr;
         case _Filter.unread:
           return 'notif_filter_unread'.tr;
-        case _Filter.activity:
-          return 'notif_filter_activity'.tr;
-        case _Filter.announcements:
-          return 'notif_filter_announcements'.tr;
       }
     }
 
@@ -380,15 +342,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
       showCheckmark: false,
       selected: _filter == f,
       onSelected: (_) => setState(() => _filter = f),
-      label: Text('${label(f)} · ${count(f)}'),
+      label: Text(label(f)),
       labelStyle: TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
-        color: _filter == f ? Colors.white : _ink,
+        color: _filter == f ? _canvas : _ink,
       ),
-      selectedColor: const Color(0xFF0E5962),
-      backgroundColor: Colors.white,
-      side: BorderSide(color: _filter == f ? const Color(0xFF0E5962) : _line),
+      selectedColor: _ink,
+      backgroundColor: _surfaceRaised,
+      side: BorderSide(color: _filter == f ? _ink : _line),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
 
     if (wide) {
@@ -426,13 +389,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
               width: 84,
               height: 84,
               decoration: BoxDecoration(
-                color: const Color(0xFF0E5962).withValues(alpha: 0.08),
+                color: _surfaceRaised,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.notifications_off_outlined,
                 size: 40,
-                color: Color(0xFF0E5962),
+                color: _muted,
               ),
             ),
             const SizedBox(height: 16),
@@ -448,7 +411,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             Text(
               'notif_empty_hint'.tr,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              style: const TextStyle(color: _muted, fontSize: 13),
             ),
           ],
         ),
@@ -467,12 +430,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
             child: Text(
-              group.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
-                color: Colors.grey.shade600,
+              group,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _ink,
               ),
             ),
           ),
@@ -539,6 +501,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: _surface,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: const TextStyle(
+          color: _ink,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: const TextStyle(color: _muted, fontSize: 14),
         content: Text(message),
         actions: [
           TextButton(
@@ -558,9 +528,108 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return ok ?? false;
   }
 
+  Future<MarketProfile?>? _actorProfileFor(AppNotification notification) {
+    final uid = notification.actorUid;
+    if (uid == null || uid.isEmpty) return null;
+    return _actorProfiles.putIfAbsent(
+      uid,
+      () => MarketService.getPublicProfile(uid),
+    );
+  }
+
+  Widget _actorAvatar(AppNotification notification, MarketProfile? profile) {
+    final photo = profile?.photoUrl ?? '';
+    final name = profile?.name.trim() ?? '';
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: _surfaceRaised,
+      foregroundImage: photo.startsWith('http') ? NetworkImage(photo) : null,
+      child: photo.startsWith('http')
+          ? null
+          : name.isNotEmpty
+          ? Text(
+              name[0].toUpperCase(),
+              style: const TextStyle(color: _ink, fontWeight: FontWeight.w700),
+            )
+          : Icon(_iconFor(notification.action), color: _muted, size: 20),
+    );
+  }
+
+  Widget _postThumbnail(String postId) {
+    final future = _postPreviews.putIfAbsent(
+      postId,
+      () => MarketService.getPost(postId),
+    );
+    return FutureBuilder<MarketPost?>(
+      future: future,
+      builder: (context, snapshot) {
+        final images = snapshot.data?.images ?? const <String>[];
+        if (images.isEmpty) return const SizedBox.shrink();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.network(
+            images.first,
+            width: 46,
+            height: 52,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const SizedBox(width: 46, height: 52),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _followBackButton(String uid) {
+    return StreamBuilder<bool>(
+      stream: MarketService.watchFollowing(uid),
+      builder: (context, snapshot) {
+        final following = snapshot.data == true;
+        final busy = _followBackBusy.contains(uid);
+        return SizedBox(
+          height: 34,
+          child: FilledButton(
+            onPressed: following || busy
+                ? null
+                : () async {
+                    setState(() => _followBackBusy.add(uid));
+                    try {
+                      await MarketService.toggleFollow(uid);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('market_follow_success'.tr)),
+                        );
+                      }
+                    } catch (error) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('$error')));
+                      }
+                    } finally {
+                      if (mounted) setState(() => _followBackBusy.remove(uid));
+                    }
+                  },
+            style: FilledButton.styleFrom(
+              backgroundColor: following ? _surfaceRaised : _accent,
+              foregroundColor: _ink,
+              disabledBackgroundColor: _surfaceRaised,
+              disabledForegroundColor: _muted,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(72, 34),
+            ),
+            child: Text(
+              following ? 'market_following'.tr : 'notif_follow_back'.tr,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _activityCard(AppNotification n) {
     final unread = !n.read;
-    final color = _colorFor(n.action);
+    final actorProfile = _actorProfileFor(n);
     return Dismissible(
       key: ValueKey('activity_${n.id}'),
       direction: DismissDirection.horizontal,
@@ -580,115 +649,110 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       ),
       onDismissed: (_) => NotificationService.delete(n.id, inbox: n.isInbox),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            if (unread) NotificationService.markRead(n.id, inbox: n.isInbox);
-            if (n.taskId != null) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => TaskDetailPage(taskId: n.taskId!),
-                ),
-              );
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: unread ? color.withValues(alpha: 0.35) : _line,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(13),
+      child: FutureBuilder<MarketProfile?>(
+        future: actorProfile,
+        builder: (context, profileSnapshot) {
+          final profile = profileSnapshot.data;
+          final actorName = profile?.name.trim().isNotEmpty == true
+              ? profile!.name
+              : n.title;
+          final body = n.action == 'market_follow' && actorName.isNotEmpty
+              ? 'notif_market_follow_body'.trParams({'name': actorName})
+              : n.body;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () {
+                if (unread)
+                  NotificationService.markRead(n.id, inbox: n.isInbox);
+                if (n.taskId != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TaskDetailPage(taskId: n.taskId!),
+                    ),
+                  );
+                } else if (n.postId != null) {
+                  Get.toNamed('/market/post/${n.postId}');
+                } else if (n.actorUid != null) {
+                  Get.to(() => MarketProfilePage(uid: n.actorUid!));
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: unread ? _accent.withValues(alpha: 0.35) : _line,
+                    ),
                   ),
-                  child: Icon(_iconFor(n.action), color: color, size: 22),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                child: Row(
+                  children: [
+                    _actorAvatar(n, profile),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              n.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: unread
-                                    ? FontWeight.w800
-                                    : FontWeight.w700,
-                                fontSize: 14,
-                                color: _ink,
-                              ),
+                          Text(
+                            actorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: unread
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
+                              fontSize: 14,
+                              color: _ink,
                             ),
                           ),
+                          const SizedBox(height: 3),
+                          Text(
+                            body,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.35,
+                              color: _muted,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
                           Text(
                             _relativeTime(n.createdAt),
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: Colors.grey.shade600,
-                            ),
+                            style: const TextStyle(fontSize: 11, color: _muted),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        n.body,
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: Colors.grey.shade800,
+                    ),
+                    const SizedBox(width: 8),
+                    if (n.action == 'market_follow' && n.actorUid != null)
+                      _followBackButton(n.actorUid!)
+                    else if (n.postId != null)
+                      _postThumbnail(n.postId!),
+                    InkResponse(
+                      radius: 18,
+                      onTap: () async {
+                        if (await _confirm('notif_delete_one'.tr)) {
+                          NotificationService.delete(n.id, inbox: n.isInbox);
+                        }
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 20,
+                          color: _muted,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                if (unread)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, top: 6),
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                      ),
                     ),
-                  ),
-                InkResponse(
-                  radius: 18,
-                  onTap: () async {
-                    if (await _confirm('notif_delete_one'.tr)) {
-                      NotificationService.delete(n.id, inbox: n.isInbox);
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 6, top: 2),
-                    child: Icon(
-                      Icons.delete_outline_rounded,
-                      size: 20,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -736,8 +800,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        color: _surface,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isNew ? _announceColor.withValues(alpha: 0.4) : _line,
         ),
@@ -756,7 +820,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             height: 4,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [_announceColor, Color(0xFFDB2777)],
+                colors: [_announceColor, Color(0xFF55D6BE)],
               ),
             ),
           ),
@@ -803,16 +867,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         child: Icon(
                           Icons.delete_outline_rounded,
                           size: 20,
-                          color: Colors.grey.shade500,
+                          color: _muted,
                         ),
                       ),
                     ),
                     Text(
                       _relativeTime(n.createdAt),
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: Colors.grey.shade600,
-                      ),
+                      style: TextStyle(fontSize: 11.5, color: _muted),
                     ),
                   ],
                 ),
@@ -833,7 +894,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     style: TextStyle(
                       fontSize: 13.5,
                       height: 1.5,
-                      color: Colors.grey.shade800,
+                      color: _muted,
                     ),
                   ),
                 ],

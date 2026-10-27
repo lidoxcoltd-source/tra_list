@@ -134,14 +134,18 @@ class _AppVersionGateState extends State<AppVersionGate>
   ) {
     if (!mounted || generation != _checkGeneration) return;
     final platformPolicy = policy.forPlatform(platform);
+    final blocked = AppVersionService.isUpdateRequired(
+      installedVersion: packageInfo.version,
+      installedBuild: int.tryParse(packageInfo.buildNumber) ?? 0,
+      policy: platformPolicy,
+    );
+    if (blocked && !_blocked) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() {
       _policy = policy;
       _platformPolicy = platformPolicy;
-      _blocked = AppVersionService.isUpdateRequired(
-        installedVersion: packageInfo.version,
-        installedBuild: int.tryParse(packageInfo.buildNumber) ?? 0,
-        policy: platformPolicy,
-      );
+      _blocked = blocked;
     });
   }
 
@@ -181,9 +185,11 @@ class _AppVersionGateState extends State<AppVersionGate>
     // Keep the app mounted so its navigation state survives the check.
     return Stack(
       children: [
-        Positioned.fill(
-          child: ExcludeFocus(excluding: _blocked, child: widget.child),
-        ),
+        Positioned.fill(child: widget.child),
+        if (_blocked)
+          const Positioned.fill(
+            child: ModalBarrier(color: Colors.transparent, dismissible: false),
+          ),
         if (_blocked) Positioned.fill(child: _buildUpdateRequired(context)),
       ],
     );

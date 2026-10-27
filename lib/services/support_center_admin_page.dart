@@ -91,10 +91,7 @@ class _SupportCenterAdminPageState extends State<SupportCenterAdminPage> {
         ..clear()
         ..addAll(
           config.faqs.map(
-            (faq) => _FaqDraft(
-              question: faq.question,
-              answer: faq.answer,
-            ),
+            (faq) => _FaqDraft(question: faq.question, answer: faq.answer),
           ),
         );
       setState(() {
@@ -131,10 +128,7 @@ class _SupportCenterAdminPageState extends State<SupportCenterAdminPage> {
     setState(() => _saving = true);
     try {
       final config = SupportCenterConfig(
-        whatsappNumber: _whatsappController.text.replaceAll(
-          RegExp(r'\D'),
-          '',
-        ),
+        whatsappNumber: _whatsappController.text.replaceAll(RegExp(r'\D'), ''),
         faqs: [
           for (final faq in _faqs)
             SupportFaq(
@@ -152,9 +146,7 @@ class _SupportCenterAdminPageState extends State<SupportCenterAdminPage> {
       if (!mounted) return;
       Get.snackbar(
         'error'.tr,
-        'support_settings_save_error'.trParams({
-          'error': error.toString(),
-        }),
+        'support_settings_save_error'.trParams({'error': error.toString()}),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -206,9 +198,7 @@ class _SupportCenterAdminPageState extends State<SupportCenterAdminPage> {
                                 ),
                               )
                             : const Icon(Icons.save_rounded),
-                        label: Text(
-                          _saving ? 'support_saving'.tr : 'save'.tr,
-                        ),
+                        label: Text(_saving ? 'support_saving'.tr : 'save'.tr),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
                           backgroundColor: MjasiColors.primaryBlue,
@@ -378,9 +368,7 @@ class _SupportCenterAdminPageState extends State<SupportCenterAdminPage> {
             children: [
               Expanded(
                 child: Text(
-                  'support_question_index'.trParams({
-                    'number': '${index + 1}',
-                  }),
+                  'support_question_index'.trParams({'number': '${index + 1}'}),
                   style: const TextStyle(
                     color: MjasiColors.primaryNavy,
                     fontWeight: FontWeight.w700,

@@ -26,13 +26,15 @@ class ProfileService {
     required String phone,
   }) async {
     final user = _auth.currentUser;
-    if (user == null ||
-        !BusinessAccessService.isReady.value ||
-        !BusinessAccessService.isOwner.value ||
-        BusinessAccessService.businessId != user.uid) {
-      throw StateError(
-        'Only a newly registered business owner can create this profile.',
-      );
+    if (user == null) {
+      throw StateError('Sign in before creating a business profile.');
+    }
+    final membership = await FirebaseFirestore.instance
+        .collection('employeeMemberships')
+        .doc(user.uid)
+        .get();
+    if (membership.exists) {
+      throw StateError('A staff account cannot create an owner profile.');
     }
 
     final now = FieldValue.serverTimestamp();

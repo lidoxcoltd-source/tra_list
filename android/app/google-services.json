@@ -12,7 +12,12 @@
           "package_name": "com.example.tra_list"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "903048450592-iom8f9acml9g5e3e40d3rjaaj8iqua4i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDN57Q5fHVCnd93XUS-nW8TjgwpLhf0fbQ"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "903048450592-iom8f9acml9g5e3e40d3rjaaj8iqua4i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "903048450592-kkit4hpa61k7fb89up2ravm5sl1hi4au.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.traList"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +48,20 @@
           "package_name": "com.lidox.mjasipos"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "903048450592-5bqv5628dj1bpl7pacv38iq1kjq3j6o4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lidox.mjasipos",
+            "certificate_hash": "cba6427338f86ef0c866baf25316c97f42f78295"
+          }
+        },
+        {
+          "client_id": "903048450592-iom8f9acml9g5e3e40d3rjaaj8iqua4i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDN57Q5fHVCnd93XUS-nW8TjgwpLhf0fbQ"
@@ -39,7 +69,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "903048450592-iom8f9acml9g5e3e40d3rjaaj8iqua4i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "903048450592-kkit4hpa61k7fb89up2ravm5sl1hi4au.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.traList"
+              }
+            }
+          ]
         }
       }
     }

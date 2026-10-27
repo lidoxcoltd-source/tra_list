@@ -9,9 +9,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:tra_list/invoice/language_controller.dart';
-import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/market/market_service.dart';
 import 'package:get/get.dart';
 
 /// Improved and professional re-design of the original ProfilePage.
@@ -58,15 +58,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Logo/image
   String? logoUrl;
-  String logoSource = 'firebase'; // firebase | local
   Uint8List? pickedBytes;
   String? pickedExt;
-  Uint8List? localLogoBytes;
 
   // Upload state
   double? uploadProgress;
   UploadTask? _currentUploadTask;
   bool busy = true;
+  bool _uploadingVerificationDocument = false;
 
   @override
   void initState() {
@@ -96,6 +95,12 @@ class _ProfilePageState extends State<ProfilePage> {
       swiftC.text = data['swift']?.toString() ?? '';
       paymentMethodC.text = data['paymentMethod']?.toString() ?? '';
 
+      final savedLogoUrl = data['logoUrl']?.toString().trim() ?? '';
+      final savedLogoUri = Uri.tryParse(savedLogoUrl);
+      final publicLogoUrl =
+          savedLogoUri?.scheme == 'https' && savedLogoUri!.host.isNotEmpty
+          ? savedLogoUrl
+          : '';
       final colors = (data['colors'] as Map?) ?? {};
       setState(() {
         brandColor = Color(0xFF000000 | (colors['brand'] as int? ?? 0xF15A24));
@@ -105,10 +110,7 @@ class _ProfilePageState extends State<ProfilePage> {
         footerColor = Color(
           0xFF000000 | (colors['footer'] as int? ?? 0x424242),
         );
-        logoUrl = (data['logoUrl']?.toString().trim() ?? '');
-        logoSource = (data['logoSource']?.toString().trim().isNotEmpty ?? false)
-            ? data['logoSource'].toString().trim().toLowerCase()
-            : 'firebase';
+        logoUrl = publicLogoUrl;
 
         // Load language from profile
         final langCode = data['language']?.toString();
@@ -122,16 +124,6 @@ class _ProfilePageState extends State<ProfilePage> {
           }
         }
       });
-
-      localLogoBytes = await CompanyLogoService.loadLocalLogoBytes();
-      final sourceFromApp = await CompanyLogoService.getLogoSource(
-        fallback: logoSource,
-      );
-      if (mounted) {
-        setState(() {
-          logoSource = sourceFromApp.toLowerCase();
-        });
-      }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -178,6 +170,39 @@ class _ProfilePageState extends State<ProfilePage> {
             'profile_title'.tr,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
           ),
+          actions: [
+            Obx(() {
+              final businesses = BusinessAccessService.availableBusinesses;
+              if (businesses.length < 2) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                tooltip: 'business_select'.tr,
+                icon: const Icon(Icons.swap_horiz_rounded),
+                onSelected: (id) async {
+                  try {
+                    await BusinessAccessService.selectBusiness(id);
+                    await _boot();
+                  } catch (error) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('business_select_error'.tr)),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  for (final business in businesses)
+                    PopupMenuItem(
+                      value: business.businessId,
+                      child: Text(
+                        business.businessName.isEmpty
+                            ? business.businessId
+                            : business.businessName,
+                      ),
+                    ),
+                ],
+              );
+            }),
+          ],
           bottom: TabBar(
             labelColor: brandColor,
             unselectedLabelColor: Colors.grey,
@@ -407,8 +432,95 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildTextField(handleC, 'Social Handle', Icons.alternate_email),
           ],
         ),
+        const SizedBox(height: 12),
+        _buildFormCard(
+          title: 'market_verification_documents_title'.tr,
+          icon: Icons.verified_user_outlined,
+          children: [
+            Text('market_verification_documents_help'.tr),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _uploadingVerificationDocument
+                    ? null
+                    : _uploadBusinessVerificationDocument,
+                icon: _uploadingVerificationDocument
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.upload_file_outlined),
+                label: Text('market_upload_documents_for_verification'.tr),
+              ),
+            ),
+          ],
+        ),
       ],
     );
+  }
+
+  Future<void> _uploadBusinessVerificationDocument() async {
+    final type = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('market_verification_documents_title'.tr),
+            ),
+            for (final documentType in const ['tin', 'tra', 'brela', 'other'])
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: Text('market_document_$documentType'.tr),
+                onTap: () => Navigator.pop(context, documentType),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (type == null || !mounted) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('market_document_unavailable'.tr)));
+      return;
+    }
+
+    setState(() => _uploadingVerificationDocument = true);
+    try {
+      await MarketService.uploadBusinessDocument(
+        uid: BusinessAccessService.businessId,
+        type: type,
+        fileName: file.name,
+        bytes: bytes,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('market_document_submitted'.tr)));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingVerificationDocument = false);
+    }
   }
 
   Widget _buildPaymentTab() {
@@ -539,52 +651,32 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Image.memory(pickedBytes!, fit: BoxFit.contain),
       );
     }
-    if (logoSource == 'local' && localLogoBytes != null) {
-      return InteractiveViewer(
-        child: Image.memory(localLogoBytes!, fit: BoxFit.contain),
-      );
-    }
     if ((logoUrl ?? '').isNotEmpty) {
       final url = logoUrl!.trim();
-      final inlineBytes = CompanyLogoService.tryDecodeInlineImageBytes(url);
-
-      if (inlineBytes != null) {
-        return InteractiveViewer(
-          child: Image.memory(inlineBytes, fit: BoxFit.contain),
+      final uri = Uri.tryParse(url);
+      if (uri != null && uri.scheme == 'https' && uri.host.isNotEmpty) {
+        return Image.network(
+          url,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: progress.expectedTotalBytes != null
+                    ? progress.cumulativeBytesLoaded /
+                          progress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+          errorBuilder: (_, err, __) {
+            debugPrint('Image load error for $url -> $err');
+            return const Center(child: Text('Unable to load image'));
+          },
         );
       }
-
-      if (CompanyLogoService.isLocalOnlyImageUrl(url)) {
-        if (localLogoBytes != null) {
-          return InteractiveViewer(
-            child: Image.memory(localLogoBytes!, fit: BoxFit.contain),
-          );
-        }
-
-        return const Center(
-          child: Text('Local image is not available in this browser session'),
-        );
-      }
-
-      return Image.network(
-        url,
-        headers: const {'Cache-Control': 'no-cache'},
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: progress.expectedTotalBytes != null
-                  ? progress.cumulativeBytesLoaded /
-                        progress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-        errorBuilder: (_, err, __) {
-          debugPrint('Image load error for $url -> $err');
-          return const Center(child: Text('Unable to load image'));
-        },
+      return const Center(
+        child: Icon(Icons.image_outlined, size: 40, color: Colors.grey),
       );
     }
     return const Center(
@@ -817,36 +909,11 @@ class _ProfilePageState extends State<ProfilePage> {
   );
 
   Widget _buildLogoUploadArea() {
-    final hasImage =
-        pickedBytes != null ||
-        (logoSource == 'local' && localLogoBytes != null) ||
-        (logoUrl ?? '').isNotEmpty;
+    final hasImage = pickedBytes != null || (logoUrl ?? '').isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildSourceChip(
-                'Cloud Storage',
-                Icons.cloud_outlined,
-                logoSource == 'firebase',
-                () => setState(() => logoSource = 'firebase'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildSourceChip(
-                'Local Device',
-                Icons.phone_android_outlined,
-                logoSource == 'local',
-                () => setState(() => logoSource = 'local'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
         GestureDetector(
           onTap: busy
               ? null
@@ -915,7 +982,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 color: Colors.red,
                 onTap: () => setState(() => pickedBytes = null),
               ),
-            if ((logoUrl ?? '').isNotEmpty && logoSource == 'firebase')
+            if ((logoUrl ?? '').isNotEmpty)
               _actionChip(
                 icon: Icons.copy,
                 label: 'Copy URL',
@@ -923,9 +990,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 onTap: () =>
                     Clipboard.setData(ClipboardData(text: logoUrl ?? '')),
               ),
-            if (!kIsWeb &&
-                (logoUrl ?? '').isNotEmpty &&
-                logoSource == 'firebase')
+            if (!kIsWeb && (logoUrl ?? '').isNotEmpty)
               _actionChip(
                 icon: Icons.build_circle_outlined,
                 label: 'Repair URL',
@@ -938,63 +1003,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   }
                 },
               ),
-            if (logoSource == 'local' && localLogoBytes != null)
-              _actionChip(
-                icon: Icons.delete_outline,
-                label: 'Remove Local',
-                color: Colors.red,
-                onTap: () async {
-                  await CompanyLogoService.clearLocalLogo();
-                  if (!mounted) return;
-                  setState(() => localLogoBytes = null);
-                },
-              ),
           ],
         ),
         const SizedBox(height: 6),
       ],
-    );
-  }
-
-  Widget _buildSourceChip(
-    String label,
-    IconData icon,
-    bool selected,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: busy ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        decoration: BoxDecoration(
-          color: selected ? brandColor.withOpacity(0.09) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? brandColor : Colors.grey.shade200,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 15,
-              color: selected ? brandColor : Colors.grey.shade500,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                color: selected ? brandColor : Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1035,7 +1047,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _chooseImage() async {
     if (kIsWeb) {
       final r = await FilePicker.platform.pickFiles(
-        type: FileType.image,
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
         withData: true,
       );
       if (r == null) return;
@@ -1142,16 +1155,8 @@ class _ProfilePageState extends State<ProfilePage> {
       String? newUrl = logoUrl;
 
       if (pickedBytes != null) {
-        if (logoSource == 'local') {
-          await CompanyLogoService.saveLocalLogo(pickedBytes!);
-          localLogoBytes = await CompanyLogoService.loadLocalLogoBytes();
-        } else {
-          newUrl = await _uploadBytes(pickedBytes!, pickedExt);
-        }
-        if (mounted) setState(() => pickedBytes = null);
+        newUrl = await _uploadBytes(pickedBytes!, pickedExt);
       }
-
-      await CompanyLogoService.setLogoSource(logoSource);
 
       await ProfileService.save({
         'name': nameC.text.trim(),
@@ -1172,12 +1177,20 @@ class _ProfilePageState extends State<ProfilePage> {
           'accent': accentColor.value & 0xFFFFFFFF,
           'footer': footerColor.value & 0xFFFFFFFF,
         },
-        'logoSource': logoSource,
+        'logoSource': 'firebase',
         if (newUrl != null) 'logoUrl': newUrl,
         'language': langController.locale.languageCode,
       });
+      await MarketService.syncBusinessLogoToPublicProfile(
+        uid: BusinessAccessService.businessId,
+        photoUrl: newUrl ?? '',
+      );
 
       if (!mounted) return;
+      setState(() {
+        logoUrl = newUrl;
+        pickedBytes = null;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Saved ✅')));
@@ -1207,12 +1220,22 @@ class _ProfilePageState extends State<ProfilePage> {
       if (user == null) throw Exception('Not signed in');
       final uid = BusinessAccessService.businessId;
 
-      final safeExt = (ext == 'jpg' || ext == 'jpeg') ? 'jpg' : 'png';
+      final safeExt = switch (ext?.toLowerCase()) {
+        'jpg' || 'jpeg' => 'jpg',
+        'png' => 'png',
+        'webp' => 'webp',
+        _ => throw ArgumentError('Choose a JPG, PNG, or WebP logo.'),
+      };
       final ts = DateTime.now().millisecondsSinceEpoch;
       final path = 'users/$uid/logo_$ts.$safeExt';
       final ref = storage.ref().child(path);
       final metadata = SettableMetadata(
-        contentType: 'image/$safeExt',
+        contentType: switch (safeExt) {
+          'jpg' => 'image/jpeg',
+          'png' => 'image/png',
+          'webp' => 'image/webp',
+          _ => throw StateError('Unsupported company logo format.'),
+        },
         cacheControl: 'public, max-age=604800',
       );
 

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/invoice/language_switcher.dart';
 import 'package:tra_list/routes.dart';
+import 'package:tra_list/services/account_mode_service.dart';
+import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 
 class SplashPage extends StatefulWidget {
@@ -58,7 +60,13 @@ class _SplashPageState extends State<SplashPage>
     await Future<void>.delayed(_duration);
     if (!mounted) return;
     final signedIn = FirebaseAuth.instance.currentUser != null;
-    Get.offAllNamed(signedIn ? AppRoutes.home : AppRoutes.login);
+    final route = !signedIn
+        ? AppRoutes.login
+        : AccountModeService.current == AccountMode.business &&
+              !BusinessAccessService.hasBusinessAccess
+        ? AppRoutes.businessSetup
+        : AppRoutes.home;
+    Get.offAllNamed(route);
   }
 
   @override

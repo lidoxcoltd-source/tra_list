@@ -21,6 +21,8 @@ class AppNotification {
     this.sentCount,
     this.failureCount,
     this.taskId,
+    this.postId,
+    this.actorUid,
     this.isInbox = false,
   });
 
@@ -28,6 +30,8 @@ class AppNotification {
   final int? sentCount;
   final int? failureCount;
   final String? taskId;
+  final String? postId;
+  final String? actorUid;
 
   /// True for items from the per-user task inbox (userNotifications/{uid}/items).
   final bool isInbox;
@@ -134,15 +138,22 @@ class NotificationService {
           (snap) => snap.docs.map((doc) {
             final data = doc.data();
             final taskId = (data['taskId'] ?? '').toString();
+            final postId = (data['postId'] ?? '').toString();
+            final actorUid = (data['actorUid'] ?? '').toString();
+            final kind = (data['kind'] ?? 'task').toString();
             return AppNotification(
               id: doc.id,
-              title: 'tk_all'.tr,
+              title: kind.startsWith('market_')
+                  ? 'market_notification_title'.tr
+                  : 'tk_all'.tr,
               body: (data['body'] ?? '').toString(),
-              action: 'task',
+              action: kind,
               createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
               read: data['read'] == true,
               isAnnouncement: false,
               taskId: taskId.isEmpty ? null : taskId,
+              postId: postId.isEmpty ? null : postId,
+              actorUid: actorUid.isEmpty ? null : actorUid,
               isInbox: true,
             );
           }).toList(),
@@ -269,9 +280,12 @@ class NotificationService {
     return DateTime.fromMillisecondsSinceEpoch(prefs.getInt(_seenKey) ?? 0);
   }
 
+  static final ValueNotifier<int> announcementsSeenTick = ValueNotifier(0);
+
   static Future<void> markAnnouncementsSeen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_seenKey, DateTime.now().millisecondsSinceEpoch);
+    announcementsSeenTick.value++;
   }
 
   static Future<void> sendAnnouncement({

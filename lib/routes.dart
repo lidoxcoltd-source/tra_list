@@ -25,6 +25,15 @@ import 'package:tra_list/services/download_center_management_page.dart';
 import 'package:tra_list/services/support_center_admin_page.dart';
 import 'package:tra_list/services/support_faq_page.dart';
 import 'package:tra_list/services/analytics_advice_admin_page.dart';
+import 'package:tra_list/services/account_mode_service.dart';
+import 'package:tra_list/services/business_setup_page.dart';
+import 'package:tra_list/services/personal_settings_page.dart';
+import 'package:tra_list/market/market_home_page.dart';
+import 'package:tra_list/market/market_post_page.dart';
+import 'package:tra_list/market/market_profile_page.dart';
+import 'package:tra_list/market/market_business_verification_page.dart';
+import 'package:tra_list/market/admin_market_sounds_page.dart';
+import 'package:tra_list/market/admin_market_reports_page.dart';
 
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/FirebaseTestPage.dart';
@@ -60,6 +69,10 @@ class AuthMiddleware extends GetMiddleware {
 class BusinessPermissionMiddleware extends GetMiddleware {
   @override
   RouteSettings? redirect(String? route) {
+    if (AccountModeService.current != AccountMode.business) {
+      Get.snackbar('error'.tr, 'mode_business_required'.tr);
+      return const RouteSettings(name: AppRoutes.home);
+    }
     if (!BusinessAccessService.isReady.value) {
       return const RouteSettings(name: AppRoutes.home);
     }
@@ -74,9 +87,30 @@ class BusinessPermissionMiddleware extends GetMiddleware {
 class BusinessOwnerMiddleware extends GetMiddleware {
   @override
   RouteSettings? redirect(String? route) {
-    if (!BusinessAccessService.isReady.value ||
+    if (AccountModeService.current != AccountMode.business ||
+        !BusinessAccessService.isReady.value ||
         !BusinessAccessService.isOwner.value) {
       Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    return null;
+  }
+}
+
+class PersonalModeMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (AccountModeService.current != AccountMode.personal) {
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    return null;
+  }
+}
+
+class BusinessSetupModeMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (AccountModeService.current != AccountMode.business) {
       return const RouteSettings(name: AppRoutes.home);
     }
     return null;
@@ -116,9 +150,17 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String adminAnnouncements = '/admin-announcements';
   static const String adminHub = '/admin-hub';
+  static const String adminMarketVerification = '/admin-market-verification';
+  static const String adminMarketSounds = '/admin-market-sounds';
+  static const String adminMarketReports = '/admin-market-reports';
   static const String support = '/support';
   static const String adminSupport = '/admin-support';
   static const String adminAnalyticsAdvice = '/admin-analytics-advice';
+  static const String businessSetup = '/business-setup';
+  static const String personalSettings = '/personal-settings';
+  static const String market = '/market';
+  static const String marketProfile = '/market/profile/:uid';
+  static const String marketPost = '/market/post/:id';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
@@ -136,6 +178,36 @@ class AppRoutes {
       page: () => const HomePage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: businessSetup,
+      page: () => const BusinessSetupPage(),
+      middlewares: [AuthMiddleware(), BusinessSetupModeMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: market,
+      page: () => const MarketHomePage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: marketPost,
+      page: () => MarketPostPage(postId: Get.parameters['id'] ?? ''),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: marketProfile,
+      page: () => MarketProfilePage(uid: Get.parameters['uid'] ?? ''),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: personalSettings,
+      page: () => const PersonalSettingsPage(),
+      middlewares: [AuthMiddleware(), PersonalModeMiddleware()],
+      transition: Transition.rightToLeft,
     ),
     GetPage(
       name: addReceipt,
@@ -289,6 +361,24 @@ class AppRoutes {
     GetPage(
       name: adminHub,
       page: () => const SuperAdminHubPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminMarketVerification,
+      page: () => const MarketBusinessVerificationPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminMarketReports,
+      page: () => const AdminMarketReportsPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminMarketSounds,
+      page: () => const AdminMarketSoundsPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

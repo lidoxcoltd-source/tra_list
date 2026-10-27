@@ -8,7 +8,10 @@ import 'package:zxing_lib/zxing.dart';
 List<int> render(String text, BarcodeFormat format, int w, int h) {
   final m = MultiFormatWriter().encode(text, format, w, h);
   const quiet = 20;
-  final image = img.Image(width: m.width + quiet * 2, height: m.height + quiet * 2);
+  final image = img.Image(
+    width: m.width + quiet * 2,
+    height: m.height + quiet * 2,
+  );
   img.fill(image, color: img.ColorRgb8(255, 255, 255));
   for (var y = 0; y < m.height; y++) {
     for (var x = 0; x < m.width; x++) {
@@ -34,6 +37,9 @@ void main() {
   test('returns null when the picture has no code', () async {
     final blank = img.Image(width: 200, height: 200);
     img.fill(blank, color: img.ColorRgb8(255, 255, 255));
-    expect(await decodeCodeFromImage(Uint8List.fromList(img.encodePng(blank))), isNull);
+    expect(
+      await decodeCodeFromImage(Uint8List.fromList(img.encodePng(blank))),
+      isNull,
+    );
   });
 }

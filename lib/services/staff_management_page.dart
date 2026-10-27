@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:tra_list/invoice/transaction_model.dart';
@@ -7,18 +7,19 @@ import 'package:tra_list/invoice/transaction_service.dart';
 import 'business_access_service.dart';
 import 'profile_service.dart';
 import 'staff_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 class StaffManagementPage extends StatelessWidget {
   const StaffManagementPage({super.key});
 
-  static const _ink = Color(0xFF19313A);
-  static const _muted = Color(0xFF75838A);
-  static const _brand = Color(0xFF0E5962);
+  static const _ink = MjasiColors.textPrimary;
+  static const _muted = MjasiColors.textSecondary;
+  static const _brand = MjasiColors.primaryBlue;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F8),
+      backgroundColor: MjasiColors.background,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -27,7 +28,14 @@ class StaffManagementPage extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_rounded),
         ),
         title: Text('staff_title'.tr),
-        backgroundColor: const Color(0xFFF5F7F8),
+        actions: [
+          IconButton(
+            onPressed: () => _showInvitationDialog(context),
+            tooltip: 'staff_invite'.tr,
+            icon: const Icon(Icons.mail_outline_rounded),
+          ),
+        ],
+        backgroundColor: MjasiColors.background,
         foregroundColor: _ink,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -35,7 +43,7 @@ class StaffManagementPage extends StatelessWidget {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 850),
-          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          child: StreamBuilder<List<StaffMember>>(
             stream: StaffService.watchStaff(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
@@ -50,18 +58,18 @@ class StaffManagementPage extends StatelessWidget {
                 );
               }
 
-              final staff = snapshot.data?.docs ?? [];
+              final staff = snapshot.data ?? const <StaffMember>[];
               final activeCount = staff
-                  .where((member) => member.data()['active'] == true)
+                  .where((member) => member.data['active'] == true)
                   .length;
               final removedCount = staff
-                  .where((member) => member.data()['removed'] == true)
+                  .where((member) => member.data['removed'] == true)
                   .length;
               final disabledCount = staff
                   .where(
                     (member) =>
-                        member.data()['active'] != true &&
-                        member.data()['removed'] != true,
+                        member.data['active'] != true &&
+                        member.data['removed'] != true,
                   )
                   .length;
               if (staff.isEmpty) {
@@ -82,13 +90,9 @@ class StaffManagementPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFEAF4F3), Colors.white],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFDCE9E8)),
+                      color: MjasiColors.surface,
+                      borderRadius: BorderRadius.circular(MjasiRadius.md),
+                      border: Border.all(color: MjasiColors.border),
                     ),
                     child: Row(
                       children: [
@@ -96,8 +100,8 @@ class StaffManagementPage extends StatelessWidget {
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE5F0F0),
-                            borderRadius: BorderRadius.circular(16),
+                            color: MjasiColors.lightBlue,
+                            borderRadius: BorderRadius.circular(MjasiRadius.sm),
                           ),
                           child: const Icon(
                             Icons.groups_2_rounded,
@@ -166,7 +170,7 @@ class StaffManagementPage extends StatelessWidget {
                     staff: staff,
                     cardBuilder: (member, perf, rank) => _staffCard(
                       context,
-                      member.data(),
+                      member.data,
                       member.id,
                       perf: perf,
                       rank: rank,
@@ -394,10 +398,11 @@ class StaffManagementPage extends StatelessWidget {
                   child: Text(active ? 'staff_disable'.tr : 'staff_enable'.tr),
                 ),
                 if (!removed)
-                  PopupMenuItem(
-                    value: 'password',
-                    child: Text('staff_change_password'.tr),
-                  ),
+                  if (data['invitationId'] == null)
+                    PopupMenuItem(
+                      value: 'password',
+                      child: Text('staff_change_password'.tr),
+                    ),
                 if (!removed)
                   PopupMenuItem(
                     value: 'remove',
@@ -608,6 +613,65 @@ class StaffManagementPage extends StatelessWidget {
       );
     }
   }
+
+  Future<void> _showInvitationDialog(BuildContext context) async {
+    final invitation = await Get.dialog<_StaffInvitation>(
+      const _StaffInvitationDialog(),
+      barrierDismissible: false,
+    );
+    if (invitation == null || !context.mounted) return;
+
+    try {
+      final code = await StaffService.createInvitation(
+        email: invitation.email,
+        name: invitation.name,
+        phone: invitation.phone,
+        shopNickname: invitation.shopNickname,
+        permissions: invitation.permissions,
+      );
+      if (!context.mounted) return;
+      await Get.dialog<void>(
+        AlertDialog(
+          icon: const Icon(Icons.mark_email_read_outlined, color: _brand),
+          title: Text('staff_invitation_created'.tr),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('staff_invitation_code_help'.tr),
+              const SizedBox(height: 12),
+              SelectableText(
+                code,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: code));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('copied'.tr)));
+                  }
+                },
+                icon: const Icon(Icons.copy_rounded),
+                label: Text('copy'.tr),
+              ),
+            ],
+          ),
+          actions: [TextButton(onPressed: Get.back, child: Text('close'.tr))],
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not create business invitation: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      Get.snackbar('error'.tr, '${'staff_invitation_create_error'.tr}: $error');
+    }
+  }
 }
 
 class _Perf {
@@ -621,13 +685,8 @@ enum _Range { today, yesterday, week, month }
 class _StaffInsights extends StatefulWidget {
   const _StaffInsights({required this.staff, required this.cardBuilder});
 
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> staff;
-  final Widget Function(
-    QueryDocumentSnapshot<Map<String, dynamic>> member,
-    _Perf perf,
-    int? rank,
-  )
-  cardBuilder;
+  final List<StaffMember> staff;
+  final Widget Function(StaffMember member, _Perf perf, int? rank) cardBuilder;
 
   @override
   State<_StaffInsights> createState() => _StaffInsightsState();
@@ -715,14 +774,14 @@ class _StaffInsightsState extends State<_StaffInsights> {
   Widget build(BuildContext context) {
     final members = [...widget.staff]
       ..sort((a, b) {
-        final ra = a.data()['removed'] == true ? 1 : 0;
-        final rb = b.data()['removed'] == true ? 1 : 0;
+        final ra = a.data['removed'] == true ? 1 : 0;
+        final rb = b.data['removed'] == true ? 1 : 0;
         if (ra != rb) return ra.compareTo(rb);
         final ia = _perf[a.id]?.income ?? 0;
         final ib = _perf[b.id]?.income ?? 0;
         return ib.compareTo(ia);
       });
-    final ranked = members.where((m) => m.data()['removed'] != true).toList();
+    final ranked = members.where((m) => m.data['removed'] != true).toList();
     final ownerPerf = _perf[BusinessAccessService.businessId];
     final teamIncome = _perf.values.fold<double>(0, (s, p) => s + p.income);
     final teamExpense = _perf.values.fold<double>(0, (s, p) => s + p.expense);
@@ -801,7 +860,7 @@ class _StaffInsightsState extends State<_StaffInsights> {
             widget.cardBuilder(
               m,
               _perf[m.id] ?? _Perf(),
-              m.data()['removed'] == true ? null : ranked.indexOf(m) + 1,
+              m.data['removed'] == true ? null : ranked.indexOf(m) + 1,
             ),
         ],
       ],
@@ -838,7 +897,7 @@ class _StaffInsightsState extends State<_StaffInsights> {
     );
   }
 
-  Widget _podium(List<QueryDocumentSnapshot<Map<String, dynamic>>> ranked) {
+  Widget _podium(List<StaffMember> ranked) {
     final top = ranked
         .where((m) => (_perf[m.id]?.income ?? 0) > 0)
         .take(3)
@@ -894,7 +953,7 @@ class _StaffInsightsState extends State<_StaffInsights> {
                         StaffManagementPage._rankBadge(i + 1),
                         const SizedBox(height: 6),
                         Text(
-                          top[i].data()['name']?.toString() ?? '',
+                          top[i].data['name']?.toString() ?? '',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -1591,5 +1650,178 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
       }
     }
     return result;
+  }
+}
+
+class _StaffInvitation {
+  const _StaffInvitation({
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.shopNickname,
+    required this.permissions,
+  });
+
+  final String name;
+  final String email;
+  final String phone;
+  final String shopNickname;
+  final Map<String, Map<String, bool>> permissions;
+}
+
+class _StaffInvitationDialog extends StatefulWidget {
+  const _StaffInvitationDialog();
+
+  @override
+  State<_StaffInvitationDialog> createState() => _StaffInvitationDialogState();
+}
+
+class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _phone = TextEditingController();
+  final _shopNickname = TextEditingController();
+  final _permissions = BusinessAccessService.emptyPermissions();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _shopNickname.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.65;
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      title: Text('staff_invite'.tr),
+      content: SizedBox(
+        width: 520,
+        height: maxHeight,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              Text(
+                'staff_invitation_account_hint'.tr,
+                style: const TextStyle(color: StaffManagementPage._muted),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'account_full_name'.tr,
+                  prefixIcon: const Icon(Icons.person_outline_rounded),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'account_full_name_required'.tr
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'email'.tr,
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+                validator: (value) {
+                  final email = value?.trim() ?? '';
+                  return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)
+                      ? null
+                      : 'Invalid email format'.tr;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'account_phone_optional'.tr,
+                  prefixIcon: const Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _shopNickname,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'staff_shop_nickname'.tr,
+                  prefixIcon: const Icon(Icons.store_outlined),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'required'.tr
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'staff_permissions'.tr,
+                style: const TextStyle(
+                  color: StaffManagementPage._ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                'staff_select_permission'.tr,
+                style: const TextStyle(
+                  color: StaffManagementPage._muted,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final entry in BusinessAccessService.modules.entries)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  color: const Color(0xFFF8FAFA),
+                  child: ExpansionTile(
+                    dense: true,
+                    title: Text(entry.value.tr),
+                    children: [
+                      for (final action
+                          in BusinessAccessService.actions.entries)
+                        SwitchListTile.adaptive(
+                          dense: true,
+                          title: Text(action.value.tr),
+                          value: _permissions[entry.key]![action.key]!,
+                          onChanged: (value) => setState(
+                            () => _permissions[entry.key]![action.key] = value,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Get.back(), child: Text('cancel'.tr)),
+        FilledButton(onPressed: _save, child: Text('staff_invite'.tr)),
+      ],
+    );
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_permissions.values.any(
+      (actions) => actions.values.any((allowed) => allowed),
+    )) {
+      Get.snackbar('staff_permissions'.tr, 'staff_select_permission'.tr);
+      return;
+    }
+    Get.back<_StaffInvitation>(
+      result: _StaffInvitation(
+        name: _name.text.trim(),
+        email: _email.text.trim(),
+        phone: _phone.text.trim(),
+        shopNickname: _shopNickname.text.trim(),
+        permissions: _permissions,
+      ),
+    );
   }
 }

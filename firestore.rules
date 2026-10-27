@@ -178,28 +178,63 @@ service cloud.firestore {
       return /databases/$(database)/documents/employeeMemberships/$(employeeUid);
     }
 
+    function businessMembershipPath(businessUid, employeeUid) {
+      return /databases/$(database)/documents/businessMemberships/$(businessUid)/members/$(employeeUid);
+    }
+
+    function hasMembershipFor(businessUid, employeeUid) {
+      return (
+          exists(membershipPath(employeeUid))
+          && get(membershipPath(employeeUid)).data.businessUid == businessUid
+        )
+        || (
+          exists(businessMembershipPath(businessUid, employeeUid))
+          && get(businessMembershipPath(businessUid, employeeUid)).data.businessUid == businessUid
+        );
+    }
+
+    function membershipData(businessUid, employeeUid) {
+      return exists(businessMembershipPath(businessUid, employeeUid))
+        ? get(businessMembershipPath(businessUid, employeeUid)).data
+        : get(membershipPath(employeeUid)).data;
+    }
+
+    function companyProfilePath(businessUid) {
+      return /databases/$(database)/documents/users/$(businessUid)/profile/company;
+    }
+
     function isBusinessOwner(businessUid) {
       return signedIn()
         && isAccountEnabled(request.auth.uid)
-        && request.auth.uid == businessUid
-        && !exists(membershipPath(request.auth.uid));
+        && isAccountEnabled(businessUid)
+        && (
+          (
+            request.auth.uid == businessUid
+            && !hasMembershipFor(businessUid, request.auth.uid)
+            && exists(companyProfilePath(businessUid))
+          )
+          || (
+            exists(businessMembershipPath(businessUid, request.auth.uid))
+            && membershipData(businessUid, request.auth.uid).get('role', '') == 'owner'
+            && membershipData(businessUid, request.auth.uid).get('active', false) == true
+          )
+        );
     }
 
     function hasActiveMembership(businessUid) {
       return signedIn()
         && isAccountEnabled(request.auth.uid)
         && isAccountEnabled(businessUid)
-        && exists(membershipPath(request.auth.uid))
-        && get(membershipPath(request.auth.uid)).data.businessUid == businessUid
-        && get(membershipPath(request.auth.uid)).data.active == true;
+        && hasMembershipFor(businessUid, request.auth.uid)
+        && membershipData(businessUid, request.auth.uid).get('active', false) == true;
     }
 
     function hasPermission(businessUid, module, action) {
       return isBusinessOwner(businessUid)
         || (
           hasActiveMembership(businessUid)
-          && get(membershipPath(request.auth.uid))
-            .data.get('permissions', {})
+          && membershipData(businessUid, request.auth.uid)
+            .get('permissions', {})
             .get(module, {})
             .get(action, false) == true
         );
@@ -209,13 +244,13 @@ service cloud.firestore {
       return isBusinessOwner(businessUid)
         || (
           hasActiveMembership(businessUid)
-          && get(membershipPath(request.auth.uid))
-            .data.get('shopNickname', '') is string
-          && get(membershipPath(request.auth.uid))
-            .data.get('shopNickname', '').size() > 0
+          && membershipData(businessUid, request.auth.uid)
+            .get('shopNickname', '') is string
+          && membershipData(businessUid, request.auth.uid)
+            .get('shopNickname', '').size() > 0
           && data.get('shopNickname', '')
-            == get(membershipPath(request.auth.uid))
-              .data.get('shopNickname', '')
+            == membershipData(businessUid, request.auth.uid)
+              .get('shopNickname', '')
         );
     }
 
@@ -223,13 +258,13 @@ service cloud.firestore {
       return isBusinessOwner(businessUid)
         || (
           hasActiveMembership(businessUid)
-          && get(membershipPath(request.auth.uid))
-            .data.get('shopNickname', '') is string
-          && get(membershipPath(request.auth.uid))
-            .data.get('shopNickname', '').size() > 0
+          && membershipData(businessUid, request.auth.uid)
+            .get('shopNickname', '') is string
+          && membershipData(businessUid, request.auth.uid)
+            .get('shopNickname', '').size() > 0
           && data.get('shopNickname', '')
-            == get(membershipPath(request.auth.uid))
-              .data.get('shopNickname', '')
+            == membershipData(businessUid, request.auth.uid)
+              .get('shopNickname', '')
         );
     }
 
@@ -248,6 +283,13 @@ service cloud.firestore {
         || hasPermission(businessUid, 'quotations', 'create')
         || hasPermission(businessUid, 'receipts', 'create')
         || hasPermission(businessUid, 'jobs', 'create');
+    }
+
+    function hasBusinessVerificationDocument(businessUid) {
+      return exists(/databases/$(database)/documents/publicProfiles/$(businessUid)/businessDocuments/tin)
+        || exists(/databases/$(database)/documents/publicProfiles/$(businessUid)/businessDocuments/tra)
+        || exists(/databases/$(database)/documents/publicProfiles/$(businessUid)/businessDocuments/brela)
+        || exists(/databases/$(database)/documents/publicProfiles/$(businessUid)/businessDocuments/other);
     }
 
     function invoiceModule(data) {
@@ -284,6 +326,145 @@ service cloud.firestore {
           'enabledBy'
         ]);
       allow delete: if false;
+    }
+
+    function isPersonalAccount(userUid) {
+      return signedIn()
+        && request.auth.uid == userUid
+        && isAccountEnabled(userUid);
+    }
+
+    function personalSessionPath(userUid) {
+      return /databases/$(database)/documents/personalUsers/$(userUid)/device/session;
+    }
+
+    // Personal data is only available to the sign-in session that last claimed
+    // the account, which limits a Personal account to one device at a time.
+    function isPersonalDevice(userUid) {
+      return isPersonalAccount(userUid)
+        && (
+          !exists(personalSessionPath(userUid))
+          || get(personalSessionPath(userUid)).data.get('authTime', -1)
+            == request.auth.token.auth_time
+        );
+    }
+
+    function validPersonalProfile(data) {
+      return data.keys().hasOnly([
+          'displayName',
+          'photoUrl',
+          'currency',
+          'dateFormat',
+          'notificationsEnabled',
+          'updatedAt'
+        ])
+        && data.displayName is string
+        && data.displayName.size() <= 100
+        && data.photoUrl is string
+        && data.photoUrl.size() <= 2048
+        && (
+          data.photoUrl == ''
+          || data.photoUrl.matches('https://[^ ]+')
+        )
+        && data.currency in ['TZS', 'KES', 'USD']
+        && data.dateFormat in ['dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy-MM-dd']
+        && data.notificationsEnabled is bool
+        && data.updatedAt == request.time;
+    }
+
+    function validPersonalTransaction(data) {
+      return data.keys().hasOnly([
+          'type',
+          'description',
+          'category',
+          'amount',
+          'date',
+          'createdAt'
+        ])
+        && data.type in ['income', 'expense']
+        && data.description is string
+        && data.description.size() > 0
+        && data.description.size() <= 160
+        && data.category is string
+        && data.category.size() > 0
+        && data.category.size() <= 80
+        && data.amount is number
+        && data.amount > 0
+        && data.date is timestamp
+        && data.createdAt == request.time;
+    }
+
+    function validPersonalBudget(data) {
+      return data.keys().hasOnly(['name', 'amount', 'updatedAt'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.amount is number
+        && data.amount > 0
+        && data.updatedAt == request.time;
+    }
+
+    function validPersonalGoal(data) {
+      return data.keys().hasOnly([
+          'name',
+          'targetAmount',
+          'savedAmount',
+          'updatedAt'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.targetAmount is number
+        && data.targetAmount > 0
+        && data.savedAmount is number
+        && data.savedAmount >= 0
+        && data.savedAmount <= data.targetAmount
+        && data.updatedAt == request.time;
+    }
+
+    match /personalUsers/{userUid} {
+      allow get: if isPersonalDevice(userUid);
+      allow list, delete: if false;
+      allow create, update: if isPersonalDevice(userUid)
+        && validPersonalProfile(request.resource.data);
+
+      match /device/{deviceDoc} {
+        allow read: if isPersonalAccount(userUid);
+        allow create, update: if isPersonalAccount(userUid)
+          && deviceDoc == 'session'
+          && request.resource.data.keys().hasOnly([
+            'deviceId',
+            'platform',
+            'authTime',
+            'updatedAt'
+          ])
+          && request.resource.data.deviceId is string
+          && request.resource.data.deviceId.size() > 0
+          && request.resource.data.deviceId.size() <= 64
+          && request.resource.data.platform is string
+          && request.resource.data.authTime == request.auth.token.auth_time
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /transactions/{transactionId} {
+        allow read, delete: if isPersonalDevice(userUid);
+        allow create: if isPersonalDevice(userUid)
+          && validPersonalTransaction(request.resource.data);
+        allow update: if false;
+      }
+
+      match /budgets/{budgetId} {
+        allow read, delete: if isPersonalDevice(userUid);
+        allow create, update: if isPersonalDevice(userUid)
+          && validPersonalBudget(request.resource.data);
+      }
+
+      match /savingsGoals/{goalId} {
+        allow read, delete: if isPersonalDevice(userUid);
+        allow create, update: if isPersonalDevice(userUid)
+          && validPersonalGoal(request.resource.data);
+      }
     }
 
     match /employeeMemberships/{employeeUid} {
@@ -360,6 +541,61 @@ service cloud.firestore {
         && resource.data.businessUid == request.auth.uid;
     }
 
+    match /businessMemberships/{businessUid}/members/{employeeUid} {
+      allow get: if signedIn()
+        && (
+          request.auth.uid == employeeUid
+          || isBusinessOwner(businessUid)
+        );
+      allow list: if signedIn()
+        && (
+          isBusinessOwner(businessUid)
+          || resource.data.employeeUid == request.auth.uid
+        );
+      allow create, delete: if false;
+      allow update: if signedIn()
+        && employeeUid != request.auth.uid
+        && isBusinessOwner(businessUid)
+        && resource.data.businessUid == businessUid
+        && resource.data.employeeUid == employeeUid
+        && resource.data.get('role', '') == 'staff'
+        && request.resource.data.businessUid == resource.data.businessUid
+        && request.resource.data.employeeUid == resource.data.employeeUid
+        && request.resource.data.get('role', '') == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'name',
+            'email',
+            'phone',
+            'permissions',
+            'active',
+            'removed',
+            'shopNickname',
+            'updatedAt'
+          ])
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.shopNickname is string
+        && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.get('active', false) is bool
+        && request.resource.data.get('removed', false) is bool
+        && (
+          request.resource.data.get('removed', false) != true
+          || request.resource.data.active == false
+        );
+    }
+
+    // Lets a signed-in user list only their own memberships across businesses.
+    match /{path=**}/members/{employeeUid} {
+      allow list: if signedIn()
+        && resource.data.employeeUid == request.auth.uid;
+    }
+
+    match /businessInvitations/{invitationCode} {
+      allow read, write: if false;
+    }
+
     match /users/{businessUid}/{document=**} {
       allow read: if isBusinessOwner(businessUid);
       allow create: if isBusinessOwner(businessUid)
@@ -393,11 +629,31 @@ service cloud.firestore {
     }
 
     match /users/{businessUid}/profile/{profileId} {
-      allow read: if canViewProfile(businessUid);
-      allow create: if hasPermission(businessUid, 'profile', 'edit')
-        && (
-          profileId != 'company'
-          || !hasPrivilegedRole(request.resource.data.get('role', ''))
+      allow read: if (
+          request.auth != null
+          && request.auth.uid == businessUid
+          && profileId == 'company'
+        )
+        || canViewProfile(businessUid);
+      allow create: if (
+          profileId == 'company'
+          && signedIn()
+          && request.auth.uid == businessUid
+          && isAccountEnabled(businessUid)
+          && !exists(membershipPath(request.auth.uid))
+          && request.resource.data.get('name', '') is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.get('ownerName', '') is string
+          && request.resource.data.ownerName.size() <= 100
+          && !hasPrivilegedRole(request.resource.data.get('role', ''))
+        )
+        || (
+          hasPermission(businessUid, 'profile', 'edit')
+          && (
+            profileId != 'company'
+            || !hasPrivilegedRole(request.resource.data.get('role', ''))
+          )
         );
       allow update: if hasPermission(businessUid, 'profile', 'edit')
         && (
@@ -854,5 +1110,541 @@ service cloud.firestore {
       allow create, update, delete: if isBusinessOwner(businessUid)
         || isSuperAdmin();
     }
+
+    // MJASI MARKET: public content. Any signed-in account can read it, but
+    // only Business owners can publish.
+    function validMarketProfile(data) {
+      return data.keys().hasOnly([
+          'name',
+          'nameLower',
+          'category',
+          'bio',
+          'city',
+          'photoUrl',
+          'whatsapp',
+          'followersCount',
+          'followingCount',
+          'postsCount',
+          'createdAt',
+          'updatedAt',
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.nameLower is string
+        && data.get('category', '') is string
+        && data.get('bio', '') is string
+        && data.get('bio', '').size() <= 500
+        && data.get('city', '').size() <= 80
+        && data.get('photoUrl', '').size() <= 2048
+        && data.get('whatsapp', '').matches('^$|^[0-9]{8,15}$');
+    }
+
+    function validLinkedMarketProduct(data) {
+      let productPath = /databases/$(database)/documents/users/$(data.productOwnerUid)/products/$(data.productId);
+      return exists(productPath)
+        && get(productPath).data.get('active', true) == true
+        && data.productName == get(productPath).data.name
+        && data.price == get(productPath).data.sellPrice
+        && data.inStock == (
+          get(productPath).data.get('tracked', true) == false
+          || get(productPath).data.get('quantity', 0) > 0
+        );
+    }
+
+    function validMarketPost(data) {
+      return data.keys().hasOnly([
+          'authorUid',
+          'authorName',
+          'authorPhotoUrl',
+          'type',
+          'caption',
+          'category',
+          'images',
+          'productId',
+          'productName',
+          'price',
+          'productOwnerUid',
+          'currency',
+          'purchaseMethod',
+          'inStock',
+          'whatsapp',
+          'likesCount',
+          'commentsCount',
+          'hidden',
+          'createdAt',
+          'expiresAt',
+          'audioUrl',
+          'audioTitle',
+          'publishAt',
+          'publishNotified',
+          'videoUrl',
+          'textBg',
+          'textFont',
+        ])
+         && data.get('textBg', 0) is int
+         && data.get('textBg', 0) >= 0
+         && data.get('textBg', 0) < 20
+         && data.get('textFont', 0) is int
+         && data.get('textFont', 0) >= 0
+         && data.get('textFont', 0) < 20
+        && data.get('videoUrl', '') is string
+        && data.get('videoUrl', '').size() <= 2048
+        && (data.get('publishAt', null) == null
+          || data.get('publishAt', null) is timestamp)
+        && data.get('audioUrl', '') is string
+        && data.get('audioUrl', '').size() <= 2048
+        && data.get('audioTitle', '') is string
+        && data.get('audioTitle', '').size() <= 80
+        && data.type in ['post', 'status', 'product']
+        && data.get('caption', '') is string
+        && data.get('caption', '').size() <= 2000
+        && data.images is list
+        && (data.images.size() >= 1 || data.get('videoUrl', '').size() > 0
+         || (data.type != 'product' && data.get('caption', '').size() > 0))
+        && data.images.size() <= 10
+        && (data.type != 'status' || data.images.size() <= 1)
+        && data.get('purchaseMethod', '') is string
+        && (
+          data.type != 'product'
+          || (
+            data.price is number
+            && data.price >= 0
+            && data.productName is string
+            && data.productName.size() > 0
+            && data.productName.size() <= 120
+            && data.whatsapp is string
+            && data.whatsapp.matches('^[0-9]{8,15}$')
+            && (
+              data.get('productId', '') == ''
+              || (
+                data.productId is string
+                && data.productOwnerUid == data.authorUid
+                && validLinkedMarketProduct(data)
+              )
+            )
+          )
+        )
+        && (
+          data.type != 'status'
+          || data.get('productId', '') == ''
+          || (
+            data.productId is string
+            && data.productOwnerUid is string
+            && data.whatsapp is string
+            && data.whatsapp.matches('^[0-9]{8,15}$')
+            && (
+              isBusinessOwner(data.productOwnerUid)
+              || hasPermission(data.productOwnerUid, 'stock', 'view')
+            )
+            && validLinkedMarketProduct(data)
+          )
+        );
+    }
+
+    match /publicProfiles/{profileUid} {
+      allow read: if true;
+      allow create: if (
+          isBusinessOwner(profileUid)
+          || hasPermission(profileUid, 'profile', 'edit')
+          || (
+            signedIn()
+            && request.auth.uid == profileUid
+            && isAccountEnabled(request.auth.uid)
+          )
+        )
+        && validMarketProfile(request.resource.data)
+        && request.resource.data.get('followersCount', 0) == 0
+        && request.resource.data.get('followingCount', 0) == 0
+        && request.resource.data.get('postsCount', 0) == 0;
+      allow update: if (
+          isBusinessOwner(profileUid)
+          || hasPermission(profileUid, 'profile', 'edit')
+          || (signedIn() && request.auth.uid == profileUid
+            && isAccountEnabled(request.auth.uid))
+        )
+        && validMarketProfile(request.resource.data)
+        && request.resource.data.get('followersCount', 0)
+          == resource.data.get('followersCount', 0)
+        && request.resource.data.get('followingCount', 0)
+          == resource.data.get('followingCount', 0)
+        && request.resource.data.get('postsCount', 0)
+          == resource.data.get('postsCount', 0)
+        && request.resource.data.get('createdAt', null)
+          == resource.data.get('createdAt', null);
+      allow delete: if isBusinessOwner(profileUid) || isSuperAdmin();
+
+      match /businessDocuments/{documentId} {
+        allow get, list: if signedIn() && isAccountEnabled(request.auth.uid);
+        allow create, update: if signedIn()
+          && isAccountEnabled(request.auth.uid)
+          && (
+            isBusinessOwner(profileUid)
+            || hasPermission(profileUid, 'profile', 'edit')
+          )
+          && request.resource.data.keys().hasOnly([
+            'type', 'fileName', 'url', 'storagePath', 'contentType',
+            'uploadedAt', 'uploadedBy'
+          ])
+          && request.resource.data.keys().hasAll([
+            'type', 'fileName', 'url', 'storagePath', 'contentType',
+            'uploadedAt', 'uploadedBy'
+          ])
+          && request.resource.data.type == documentId
+          && documentId in ['tin', 'tra', 'brela', 'other']
+          && request.resource.data.fileName is string
+          && request.resource.data.fileName.size() > 0
+          && request.resource.data.fileName.size() <= 255
+          && request.resource.data.url is string
+          && request.resource.data.url.matches('https://firebasestorage\\.googleapis\\.com/.*')
+          && request.resource.data.storagePath is string
+          && request.resource.data.storagePath.size() <= 500
+          && request.resource.data.contentType in [
+            'application/pdf', 'image/jpeg', 'image/png', 'image/webp'
+          ]
+          && request.resource.data.uploadedAt == request.time
+          && request.resource.data.uploadedBy == request.auth.uid;
+        allow delete: if signedIn()
+          && isAccountEnabled(request.auth.uid)
+          && (
+            isBusinessOwner(profileUid)
+            || hasPermission(profileUid, 'profile', 'edit')
+          );
+      }
+    }
+
+    match /{path=**}/businessDocuments/{documentId} {
+      allow get, list: if signedIn() && isAccountEnabled(request.auth.uid);
+    }
+
+    match /marketBusinessVerifications/{businessUid} {
+      allow get: if signedIn() && isAccountEnabled(request.auth.uid);
+      allow list: if isSuperAdmin();
+      allow create, update: if isSuperAdmin()
+        && request.resource.data.keys().hasOnly([
+          'businessUid', 'verified', 'verifiedBy', 'verifiedAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'businessUid', 'verified', 'verifiedBy', 'verifiedAt', 'updatedAt'
+        ])
+        && request.resource.data.businessUid == businessUid
+        && request.resource.data.verified is bool
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.verified
+          || hasBusinessVerificationDocument(businessUid))
+        && (request.resource.data.verified
+          ? request.resource.data.verifiedAt == request.time
+          : request.resource.data.verifiedAt == null);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /marketSounds/{soundId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && !isSuperAdmin()
+        && request.resource.data.keys().hasOnly(['title', 'url', 'createdAt', 'coverUrl', 'durationMs', 'ownerUid', 'source'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.source == 'video'
+        && request.resource.data.get('coverUrl', '') is string
+        && request.resource.data.get('coverUrl', '').size() <= 2048
+        && request.resource.data.get('durationMs', 0) is number
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.url is string
+        && request.resource.data.url.size() <= 2048;
+      allow create: if isSuperAdmin()
+        && request.resource.data.keys().hasOnly(['title', 'url', 'createdAt', 'coverUrl', 'durationMs'])
+        && request.resource.data.get('coverUrl', '') is string
+        && request.resource.data.get('coverUrl', '').size() <= 2048
+        && request.resource.data.get('durationMs', 0) is number
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.url is string
+        && request.resource.data.url.size() <= 2048;
+      allow update: if isSuperAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'coverUrl'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.get('coverUrl', '') is string
+        && request.resource.data.get('coverUrl', '').size() <= 2048;
+      allow delete: if isSuperAdmin()
+        || (signedIn() && resource.data.get('ownerUid', '') == request.auth.uid);
+    }
+
+    match /marketPosts/{postId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && validMarketPost(request.resource.data)
+        && request.resource.data.get('likesCount', 0) == 0
+        && request.resource.data.get('commentsCount', 0) == 0
+        && request.resource.data.get('hidden', false) == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.get('expiresAt', null) == null
+        && (
+          (
+            request.resource.data.type == 'product'
+            && (
+              isBusinessOwner(request.resource.data.authorUid)
+              || hasPermission(
+                request.resource.data.authorUid,
+                'stock',
+                'create'
+              )
+            )
+          )
+          || (
+            request.resource.data.type in ['post', 'status']
+            && request.resource.data.authorUid == request.auth.uid
+          )
+        );
+      allow update: if (
+          isBusinessOwner(resource.data.authorUid)
+          || (
+            resource.data.type in ['post', 'status']
+            && resource.data.authorUid == request.auth.uid
+          )
+          || (
+            resource.data.type == 'product'
+            && hasPermission(resource.data.authorUid, 'stock', 'edit')
+          )
+        )
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'caption', 'images', 'category', 'productName', 'price',
+          'purchaseMethod', 'whatsapp', 'inStock'
+        ])
+        && request.resource.data.expiresAt == resource.data.expiresAt
+        && request.resource.data.get('likesCount', 0)
+          == resource.data.get('likesCount', 0)
+        && request.resource.data.get('commentsCount', 0)
+          == resource.data.get('commentsCount', 0)
+        && validMarketPost(request.resource.data);
+      allow delete: if isBusinessOwner(resource.data.authorUid)
+        || (resource.data.type in ['post', 'status']
+          && resource.data.authorUid == request.auth.uid)
+        || (resource.data.type == 'product'
+          && hasPermission(resource.data.authorUid, 'stock', 'delete'))
+        || isSuperAdmin();
+
+      match /likes/{uid} {
+        allow read: if signedIn() && isAccountEnabled(request.auth.uid);
+        allow create: if signedIn()
+          && isAccountEnabled(request.auth.uid)
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.createdAt == request.time;
+        allow delete: if signedIn()
+          && (request.auth.uid == uid
+            || isBusinessOwner(
+              get(/databases/$(database)/documents/marketPosts/$(postId))
+                .data.authorUid
+            ));
+        allow update: if false;
+      }
+
+      match /comments/{commentId} {
+        allow read: if signedIn() && isAccountEnabled(request.auth.uid);
+        allow create: if signedIn()
+          && isAccountEnabled(request.auth.uid)
+          && request.resource.data.keys().hasOnly([
+            'authorUid', 'authorName', 'body', 'parentId', 'createdAt'
+          ])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorName is string
+          && request.resource.data.authorName.size() <= 80
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 2000
+          && (request.resource.data.parentId == null
+            || (
+              request.resource.data.parentId is string
+              && exists(/databases/$(database)/documents/marketPosts/$(postId)/comments/$(request.resource.data.parentId))
+            ))
+          && request.resource.data.createdAt == request.time;
+        allow delete: if signedIn()
+          && (resource.data.authorUid == request.auth.uid
+            || get(/databases/$(database)/documents/marketPosts/$(postId))
+              .data.authorUid == request.auth.uid
+            || isBusinessOwner(
+              get(/databases/$(database)/documents/marketPosts/$(postId))
+                .data.authorUid
+            ));
+        allow update: if false;
+      }
+
+      match /statusReplies/{replyId} {
+        allow create: if signedIn()
+          && isAccountEnabled(request.auth.uid)
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('type', '') == 'status'
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('expiresAt', null) > request.time
+          && request.resource.data.keys().hasOnly([
+            'senderUid', 'senderName', 'text', 'emoji', 'createdAt'
+          ])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 80
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.emoji is string
+          && request.resource.data.emoji.size() <= 8
+          && (request.resource.data.text.size() > 0
+            || request.resource.data.emoji.size() > 0)
+          && request.resource.data.createdAt == request.time;
+        allow get, list: if signedIn()
+          && (
+            resource.data.senderUid == request.auth.uid
+            || get(/databases/$(database)/documents/marketPosts/$(postId))
+              .data.authorUid == request.auth.uid
+            || isBusinessOwner(
+              get(/databases/$(database)/documents/marketPosts/$(postId))
+                .data.authorUid
+            )
+          );
+        allow update, delete: if false;
+      }
+
+      match /viewers/{uid} {
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('type', '') == 'status'
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('expiresAt', null) > request.time
+          && request.resource.data.keys().hasOnly([
+            'viewerName', 'viewerPhotoUrl', 'viewedAt'
+          ])
+          && request.resource.data.viewerName is string
+          && request.resource.data.viewerName.size() <= 80
+          && request.resource.data.viewerPhotoUrl is string
+          && request.resource.data.viewerPhotoUrl.size() <= 2048
+          && request.resource.data.viewedAt == request.time;
+        allow get, list: if signedIn()
+          && (
+            get(/databases/$(database)/documents/marketPosts/$(postId))
+              .data.authorUid == request.auth.uid
+            || isBusinessOwner(
+              get(/databases/$(database)/documents/marketPosts/$(postId))
+                .data.authorUid
+            )
+          );
+        allow update: if signedIn()
+          && request.auth.uid == uid
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('type', '') == 'status'
+          && get(/databases/$(database)/documents/marketPosts/$(postId))
+            .data.get('expiresAt', null) > request.time
+          && request.resource.data.keys().hasOnly([
+            'viewerName', 'viewerPhotoUrl', 'viewedAt'
+          ])
+          && request.resource.data.viewerName is string
+          && request.resource.data.viewerName.size() <= 80
+          && request.resource.data.viewerPhotoUrl is string
+          && request.resource.data.viewerPhotoUrl.size() <= 2048
+          && request.resource.data.viewedAt == request.time;
+        allow delete: if false;
+      }
+    }
+
+    match /marketFollows/{followerUid}/following/{followingUid} {
+      allow read: if signedIn() && isAccountEnabled(request.auth.uid);
+      allow create: if signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && request.auth.uid == followerUid
+        && request.resource.data.keys().hasOnly([
+          'followerUid', 'followingUid', 'createdAt'
+        ])
+        && request.resource.data.followerUid == followerUid
+        && request.resource.data.followingUid == followingUid
+        && followingUid != followerUid
+        && request.resource.data.createdAt == request.time;
+      allow delete: if signedIn()
+        && request.auth.uid == followerUid;
+      allow update: if false;
+    }
+
+    match /{path=**}/following/{followingUid} {
+      allow read: if signedIn() && isAccountEnabled(request.auth.uid);
+    }
+
+    match /marketSavedPosts/{uid}/items/{postId} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['postId', 'savedAt'])
+        && request.resource.data.postId == postId
+        && request.resource.data.savedAt == request.time;
+      allow delete: if signedIn() && request.auth.uid == uid;
+      allow update: if false;
+    }
+
+    match /marketContactClicks/{clickId} {
+      allow create: if signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && request.resource.data.keys().hasOnly([
+          'postId', 'sellerUid', 'buyerUid', 'channel', 'createdAt'
+        ])
+        && request.resource.data.buyerUid == request.auth.uid
+        && request.resource.data.channel == 'whatsapp'
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+        && (
+          get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+            .data.get('type', '') == 'product'
+          || (
+            get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+              .data.get('type', '') == 'status'
+            && get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+              .data.get('productId', '') is string
+            && get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+              .data.get('productId', '').size() > 0
+            && validLinkedMarketProduct(
+              get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+                .data
+            )
+          )
+        )
+        && get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+          .data.get('whatsapp', '').matches('^[0-9]{8,15}$')
+        && get(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId))
+          .data.authorUid == request.resource.data.sellerUid;
+      allow get, list: if signedIn()
+        && (resource.data.buyerUid == request.auth.uid
+          || isBusinessOwner(resource.data.sellerUid));
+      allow update, delete: if false;
+    }
+
+    match /marketHiddenPosts/{uid}/items/{postId} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['postId', 'hiddenAt'])
+        && request.resource.data.postId == postId
+        && request.resource.data.hiddenAt == request.time;
+      allow delete: if signedIn() && request.auth.uid == uid;
+      allow update: if false;
+    }
+
+    match /marketReports/{reportId} {
+      allow create: if signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && request.resource.data.keys().hasOnly([
+          'postId', 'reporterUid', 'reason', 'createdAt', 'status'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reason in ['spam', 'unsafe', 'other']
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/marketPosts/$(request.resource.data.postId));
+      allow get, list, update, delete: if isSuperAdmin();
+    }
+
   }
 }

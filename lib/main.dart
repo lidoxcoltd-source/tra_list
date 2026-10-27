@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,6 +10,7 @@ import 'package:tra_list/routes.dart';
 import 'package:tra_list/invoice/app_translations.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/app_version_gate.dart';
 import 'package:tra_list/services/offline_sync_coordinator.dart';
 import 'package:tra_list/theme/app_theme.dart';
@@ -22,10 +23,20 @@ void main() async {
   await GetStorage.init(); // Initialize GetStorage for language persistence
   if (FirebaseAuth.instance.currentUser != null) {
     try {
-      await BusinessAccessService.initializeForCurrentUser();
+      if (AccountModeService.current == AccountMode.business) {
+        await BusinessAccessService.initializeForCurrentUser();
+      } else {
+        await BusinessAccessService.ensureCurrentAccountEnabled();
+        BusinessAccessService.clear();
+      }
     } on DisabledAccountException {
       await FirebaseAuth.instance.signOut();
       BusinessAccessService.clear();
+    } catch (error, stackTrace) {
+      debugPrint('Could not restore business access: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      BusinessAccessService.clear();
+      BusinessAccessService.initializationError = error.toString();
     }
   }
   await OfflineSyncCoordinator.start();

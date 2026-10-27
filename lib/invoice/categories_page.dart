@@ -23,11 +23,7 @@ String _keyOf(CategoryModel c) =>
 
 List<CategoryModel> _withIds(QuerySnapshot<CategoryModel> snap) => snap.docs
     .map(
-      (d) => CategoryModel(
-        id: d.id,
-        name: d.data().name,
-        type: d.data().type,
-      ),
+      (d) => CategoryModel(id: d.id, name: d.data().name, type: d.data().type),
     )
     .toList();
 

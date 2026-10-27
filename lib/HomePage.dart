@@ -11,8 +11,8 @@ import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/invoice/transaction_model.dart';
 import 'package:tra_list/invoice/transaction_service.dart';
-import 'package:tra_list/invoice/transactions_page.dart';
 import 'package:tra_list/jobs/controllers/debt_controller.dart';
+import 'package:tra_list/market/explore_page.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/pages/ProfilePage.dart';
 import 'package:tra_list/services/pages/document_design_page.dart';
@@ -20,8 +20,10 @@ import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/account_deletion_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notifications_page.dart';
+import 'package:tra_list/services/account_mode_service.dart';
+import 'package:tra_list/services/personal_device_lock_service.dart';
+import 'package:tra_list/services/personal_finance_page.dart';
 import 'package:tra_list/services/support_center_fab.dart';
-import 'package:tra_list/stock/pos_page.dart';
 import 'package:tra_list/stock/products_pages.dart';
 import 'package:tra_list/tasks/task_banner.dart';
 import 'package:tra_list/tasks/task_service.dart';
@@ -31,7 +33,7 @@ import 'services/subscription_controller.dart';
 
 enum _FinancePeriod { today, yesterday, thisWeek, thisMonth }
 
-enum _HomeDestination { dashboard, sales, reports }
+enum _HomeDestination { dashboard, explore, reports }
 
 class _StaffStat {
   _StaffStat(this.name);
@@ -89,6 +91,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _personalFinanceKey = GlobalKey<PersonalFinancePageState>();
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   final SubscriptionController subscriptionController = Get.put(
@@ -131,6 +134,9 @@ class _HomePageState extends State<HomePage> {
 
   bool get _isSuperAdmin => _normalizedUserRole == 'superadmin';
 
+  bool get _isPersonalMode =>
+      AccountModeService.current == AccountMode.personal;
+
   bool get _hasSubscriptionExemption =>
       _isSuperAdmin || _normalizedUserRole == 'admin';
 
@@ -138,7 +144,8 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _initConnectivityStatus();
-    if (BusinessAccessService.can('jobs', 'view')) {
+    if (_isPersonalMode) unawaited(PersonalDeviceLockService.ensure());
+    if (!_isPersonalMode && BusinessAccessService.can('jobs', 'view')) {
       debtController = Get.put(DebtController());
     }
     _loadUserRole();
@@ -178,6 +185,16 @@ class _HomePageState extends State<HomePage> {
 
   // ── Data loading (unchanged logic) ─────────────────────────────────────────
   Future<void> _loadFinanceSummary() async {
+    if (_isPersonalMode) {
+      if (!mounted) return;
+      setState(() {
+        financeLoading = false;
+        financeError = null;
+        financeIncome = 0;
+        financeExpense = 0;
+      });
+      return;
+    }
     if (!BusinessAccessService.can('transactions', 'view') &&
         !BusinessAccessService.can('analytics', 'view')) {
       if (!mounted) return;
@@ -362,6 +379,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadSubscriptionStatus() async {
+    if (_isPersonalMode) return;
     try {
       if (!BusinessAccessService.isReady.value) {
         await BusinessAccessService.initializeForCurrentUser();
@@ -392,6 +410,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUserRole() async {
+    if (_isPersonalMode) {
+      if (!mounted) return;
+      setState(() {
+        userRole = 'personal';
+        storeName = '';
+        shopNickname = '';
+        loading = false;
+      });
+      return;
+    }
     if (!BusinessAccessService.isOwner.value) {
       var loadedStoreName = BusinessAccessService.businessName.value.trim();
       var loadedShopNickname = BusinessAccessService.shopNickname.value.trim();
@@ -499,13 +527,9 @@ class _HomePageState extends State<HomePage> {
                         if (showNavigationRail)
                           Container(
                             decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xFF102D58), Color(0xFF071B3A)],
-                              ),
+                              color: MjasiColors.primaryNavy,
                               border: Border(
-                                right: BorderSide(color: Color(0xFF24446E)),
+                                right: BorderSide(color: Color(0xFF263952)),
                               ),
                             ),
                             child: _buildNavigationRail(
@@ -527,24 +551,30 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildActiveContent(BuildContext context) {
     return switch (_activeDestination) {
-      _HomeDestination.dashboard => _buildDashboardContent(context),
-      _HomeDestination.sales =>
-        BusinessAccessService.can('invoices', 'create')
-            ? const PosPage()
-            : const TransactionsPage(),
-      _HomeDestination.reports => const AnalyticsPage(),
+      _HomeDestination.dashboard =>
+        _isPersonalMode
+            ? PersonalFinancePage(key: _personalFinanceKey, embedded: true)
+            : _buildDashboardContent(context),
+      _HomeDestination.explore => const MarketExplorePage(),
+      _HomeDestination.reports =>
+        _isPersonalMode
+            ? PersonalFinancePage(
+                key: _personalFinanceKey,
+                embedded: true,
+                analyticsOnly: true,
+              )
+            : const AnalyticsPage(),
     };
   }
 
   void _selectDestination(_HomeDestination destination) {
     if (!mounted) return;
-    final previous = _activeDestination;
     setState(() => _activeDestination = destination);
-    if (destination == _HomeDestination.dashboard &&
-        previous == _HomeDestination.sales &&
-        !BusinessAccessService.can('invoices', 'create')) {
-      _loadFinanceSummary();
-    }
+  }
+
+  Future<void> _openMarket() async {
+    if (!mounted) return;
+    await Get.toNamed(AppRoutes.market);
   }
 
   Widget _buildDashboardContent(BuildContext context) {
@@ -660,7 +690,9 @@ class _HomePageState extends State<HomePage> {
       NavigationRailDestination(
         icon: const Icon(Icons.home_outlined),
         selectedIcon: const Icon(Icons.home_rounded),
-        label: Text('home_dashboard_label'.tr),
+        label: Text(
+          _isPersonalMode ? 'personal_title'.tr : 'home_dashboard_label'.tr,
+        ),
       ),
     ];
     final actions = <VoidCallback?>[
@@ -668,21 +700,18 @@ class _HomePageState extends State<HomePage> {
     ];
     var selectedIndex = 0;
 
-    if (BusinessAccessService.can('invoices', 'create') ||
-        BusinessAccessService.can('transactions', 'view')) {
-      if (_activeDestination == _HomeDestination.sales) {
-        selectedIndex = destinations.length;
-      }
-      destinations.add(
-        NavigationRailDestination(
-          icon: const Icon(Icons.point_of_sale_outlined),
-          selectedIcon: const Icon(Icons.point_of_sale_rounded),
-          label: Text(_salesDestinationLabel),
-        ),
-      );
-      actions.add(() => _openSalesDestination(inShell: true));
+    if (_activeDestination == _HomeDestination.explore) {
+      selectedIndex = destinations.length;
     }
-    if (BusinessAccessService.can('analytics', 'view')) {
+    destinations.add(
+      NavigationRailDestination(
+        icon: const Icon(Icons.explore_outlined),
+        selectedIcon: const Icon(Icons.explore_rounded),
+        label: Text('explore_title'.tr),
+      ),
+    );
+    actions.add(_openMarket);
+    if (BusinessAccessService.can('analytics', 'view') || _isPersonalMode) {
       if (_activeDestination == _HomeDestination.reports) {
         selectedIndex = destinations.length;
       }
@@ -694,10 +723,12 @@ class _HomePageState extends State<HomePage> {
         ),
       );
       actions.add(
-        () => _openRestrictedRoute(
-          AppRoutes.analytics,
-          destination: _HomeDestination.reports,
-        ),
+        () => _isPersonalMode
+            ? _selectDestination(_HomeDestination.reports)
+            : _openRestrictedRoute(
+                AppRoutes.analytics,
+                destination: _HomeDestination.reports,
+              ),
       );
     }
     destinations.add(
@@ -845,16 +876,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMobileNavigation() {
-    final canOpenSales =
-        BusinessAccessService.can('invoices', 'create') ||
-        BusinessAccessService.can('transactions', 'view');
-    final canOpenReports = BusinessAccessService.can('analytics', 'view');
+    final canOpenReports =
+        _isPersonalMode || BusinessAccessService.can('analytics', 'view');
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       decoration: BoxDecoration(
         color: MjasiColors.primaryNavy,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
         border: Border.all(color: Colors.white.withValues(alpha: .08)),
         boxShadow: const [
           BoxShadow(
@@ -865,7 +894,7 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
         child: BottomAppBar(
           color: MjasiColors.primaryNavy,
           elevation: 0,
@@ -882,25 +911,26 @@ class _HomePageState extends State<HomePage> {
                     selected: _activeDestination == _HomeDestination.dashboard,
                   ),
                 ),
-                if (canOpenSales)
-                  Expanded(
-                    child: _mobileNavigationItem(
-                      icon: Icons.point_of_sale_outlined,
-                      label: _salesNavigationLabel,
-                      onTap: () => _openSalesDestination(inShell: true),
-                      selected: _activeDestination == _HomeDestination.sales,
-                    ),
+                Expanded(
+                  child: _mobileNavigationItem(
+                    icon: Icons.explore_outlined,
+                    label: 'nav_explore'.tr,
+                    onTap: _openMarket,
+                    selected: _activeDestination == _HomeDestination.explore,
                   ),
+                ),
                 SizedBox(width: 64, child: _quickNavigationAction()),
                 if (canOpenReports)
                   Expanded(
                     child: _mobileNavigationItem(
                       icon: Icons.insert_chart_outlined,
                       label: 'nav_reports'.tr,
-                      onTap: () => _openRestrictedRoute(
-                        AppRoutes.analytics,
-                        destination: _HomeDestination.reports,
-                      ),
+                      onTap: () => _isPersonalMode
+                          ? _selectDestination(_HomeDestination.reports)
+                          : _openRestrictedRoute(
+                              AppRoutes.analytics,
+                              destination: _HomeDestination.reports,
+                            ),
                       selected: _activeDestination == _HomeDestination.reports,
                     ),
                   ),
@@ -1030,32 +1060,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _openSalesDestination({bool inShell = false}) async {
-    if (BusinessAccessService.can('invoices', 'create')) {
-      await _openRestrictedRoute(
-        AppRoutes.pos,
-        destination: inShell ? _HomeDestination.sales : null,
-      );
-    } else if (BusinessAccessService.can('transactions', 'view')) {
-      await _openRestrictedRoute(
-        AppRoutes.transactions,
-        refreshFinance: true,
-        destination: inShell ? _HomeDestination.sales : null,
-      );
-    }
-  }
-
-  String get _salesDestinationLabel =>
-      BusinessAccessService.can('invoices', 'create')
-      ? 'pos_title'.tr
-      : 'home_transactions'.tr;
-
-  String get _salesNavigationLabel =>
-      BusinessAccessService.can('invoices', 'create')
-      ? 'nav_pos'.tr
-      : 'nav_transactions'.tr;
-
   Future<void> _showQuickActions() async {
+    if (_isPersonalMode) {
+      await _personalFinanceKey.currentState?.showAddDialog();
+      return;
+    }
     final actions = <_QuickActionData>[
       if (BusinessAccessService.can('transactions', 'create'))
         (
@@ -1188,40 +1197,47 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showMoreActions({bool desktop = false}) async {
     final options = <({String label, IconData icon, String value})>[
-      if (BusinessAccessService.can('transactions', 'view'))
+      if (_isPersonalMode)
+        (
+          label: 'personal_settings'.tr,
+          icon: Icons.settings_outlined,
+          value: 'personal_settings',
+        ),
+      if (!_isPersonalMode && BusinessAccessService.can('transactions', 'view'))
         (
           label: 'home_transactions'.tr,
           icon: Icons.swap_vert_rounded,
           value: 'transactions',
         ),
-      if (BusinessAccessService.can('invoices', 'view'))
+      if (!_isPersonalMode && BusinessAccessService.can('invoices', 'view'))
         (
           label: 'home_view_invoices'.tr,
           icon: Icons.receipt_long_outlined,
           value: 'invoices',
         ),
-      if (BusinessAccessService.can('jobs', 'view'))
+      if (!_isPersonalMode && BusinessAccessService.can('jobs', 'view'))
         (
           label: 'home_manage_jobs'.tr,
           icon: Icons.work_outline_rounded,
           value: 'jobs',
         ),
-      if (BusinessAccessService.can('stock', 'view'))
+      if (!_isPersonalMode && BusinessAccessService.can('stock', 'view'))
         (
           label: 'stk_title'.tr,
           icon: Icons.inventory_2_outlined,
           value: 'stock',
         ),
-      if (BusinessAccessService.can('tasks', 'view') ||
-          BusinessAccessService.isActive.value)
+      if (!_isPersonalMode &&
+          (BusinessAccessService.can('tasks', 'view') ||
+              BusinessAccessService.isActive.value))
         (label: 'tk_my'.tr, icon: Icons.task_alt_rounded, value: 'tasks'),
-      if (BusinessAccessService.isOwner.value)
+      if (!_isPersonalMode && BusinessAccessService.isOwner.value)
         (
           label: 'home_manage_staff'.tr,
           icon: Icons.groups_2_outlined,
           value: 'staff',
         ),
-      if (BusinessAccessService.isOwner.value)
+      if (!_isPersonalMode && BusinessAccessService.isOwner.value)
         (
           label: 'home_subscription'.tr,
           icon: Icons.workspace_premium_outlined,
@@ -1517,7 +1533,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   Text(
-                    'home_dashboard_label'.tr,
+                    _isPersonalMode
+                        ? 'personal_title'.tr
+                        : 'home_dashboard_label'.tr,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1531,20 +1549,27 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(width: _Spacing.sm),
             _buildConnectivityIndicator(),
-            if (_isSuperAdmin && !compact)
+            if (!_isPersonalMode && _isSuperAdmin && !compact)
               _headerIconButton(
                 icon: Icons.admin_panel_settings_outlined,
                 tooltip: 'hub_title'.tr,
                 onPressed: () => Get.toNamed(AppRoutes.adminHub),
               ),
             if (!compact) _buildLanguageButton(),
-            const NotificationBell(),
-            if (BusinessAccessService.can('profile', 'view') ||
+            if (!_isPersonalMode) const NotificationBell(),
+            if (_isPersonalMode ||
+                BusinessAccessService.can('profile', 'view') ||
                 BusinessAccessService.isOwner.value)
               _headerIconButton(
-                icon: Icons.person_outline_rounded,
-                tooltip: 'home_profile'.tr,
-                onPressed: _openProfile,
+                icon: _isPersonalMode
+                    ? Icons.settings_outlined
+                    : Icons.person_outline_rounded,
+                tooltip: _isPersonalMode
+                    ? 'personal_settings'.tr
+                    : 'home_profile'.tr,
+                onPressed: _isPersonalMode
+                    ? () => Get.toNamed(AppRoutes.personalSettings)
+                    : _openProfile,
               ),
             if (!compact)
               Container(
@@ -1605,126 +1630,177 @@ class _HomePageState extends State<HomePage> {
       color: _AppColors.surface,
       elevation: 8,
       onSelected: _handleMenuSelection,
-      itemBuilder: (context) => [
-        if (compact && _isSuperAdmin)
-          _menuItem(
-            'admin_hub',
-            'hub_title'.tr,
-            Icons.admin_panel_settings_rounded,
-          ),
-        if (compact)
-          _menuItem(
-            'language_toggle',
-            languageController.locale.languageCode == 'sw'
-                ? 'language_english'.tr
-                : 'language_swahili'.tr,
-            Icons.language_rounded,
-          ),
-        if (compact) const PopupMenuDivider(),
-        if (BusinessAccessService.can('transactions', 'view'))
-          _menuItem('transactions', 'home_transactions'.tr, Icons.swap_vert),
-        if (BusinessAccessService.can('invoices', 'create'))
-          _menuItem(
-            'generate_invoice',
-            'home_generate_invoice'.tr,
-            Icons.note_add_outlined,
-          ),
-        if (BusinessAccessService.can('invoices', 'view'))
-          _menuItem('invoices', 'home_view_invoices'.tr, Icons.receipt_long),
-        if (_isSuperAdmin && BusinessAccessService.can('receipts', 'view'))
-          _menuItem('receipts', 'home_view_receipts'.tr, Icons.receipt),
-        if (BusinessAccessService.can('jobs', 'view'))
-          _menuItem(
-            'jobs',
-            'home_manage_jobs'.tr,
-            Icons.account_balance_wallet_outlined,
-          ),
-        if (BusinessAccessService.can('analytics', 'view'))
-          _menuItem('analytics', 'home_analytics'.tr, Icons.analytics_outlined),
-        if (BusinessAccessService.can('invoices', 'create'))
-          _menuItem('pos', 'pos_title'.tr, Icons.qr_code_scanner),
-        if (BusinessAccessService.can('stock', 'view'))
-          _menuItem('stock', 'stk_title'.tr, Icons.inventory_2_outlined),
-        if (BusinessAccessService.can('categories', 'view'))
-          _menuItem(
-            'categories',
-            'home_manage_categories'.tr,
-            Icons.category_outlined,
-          ),
-        if (BusinessAccessService.isOwner.value)
-          _menuItem('staff', 'home_manage_staff'.tr, Icons.groups_2_outlined),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_subscriptions',
-            'admin_manage_subscriptions'.tr,
-            Icons.manage_accounts_outlined,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_app_versions',
-            'admin_manage_app_versions'.tr,
-            Icons.system_update_alt_rounded,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_downloads',
-            'admin_manage_downloads'.tr,
-            Icons.cloud_download_rounded,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_analytics',
-            'admin_manage_analytics'.tr,
-            Icons.insights_rounded,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_announcements',
-            'admin_manage_announcements'.tr,
-            Icons.campaign_rounded,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'admin_support',
-            'support_admin_title'.tr,
-            Icons.support_agent_rounded,
-          ),
-        if (_isSuperAdmin)
-          _menuItem(
-            'create_receipt',
-            'home_create_receipt'.tr,
-            Icons.add_business_outlined,
-          ),
-        if (BusinessAccessService.isOwner.value)
-          _menuItem(
-            'subscription',
-            'home_subscription'.tr,
-            Icons.workspace_premium_outlined,
-          ),
-        if (BusinessAccessService.can('profile', 'view'))
-          _menuItem(
-            'document_design',
-            'Document design',
-            Icons.palette_outlined,
-          ),
-        _menuItem('about', 'home_about'.tr, Icons.info_outline),
-        const PopupMenuDivider(),
-        _menuItem(
-          'logout',
-          'home_sign_out'.tr,
-          Icons.logout_rounded,
-          destructive: true,
-        ),
-        if (!_isSuperAdmin)
-          _menuItem(
-            'delete_account',
-            'Delete account',
-            Icons.delete_forever_outlined,
-            destructive: true,
-          ),
-      ],
+      itemBuilder: (context) => _isPersonalMode
+          ? _buildPersonalMenuItems(compact)
+          : [
+              if (compact && _isSuperAdmin)
+                _menuItem(
+                  'admin_hub',
+                  'hub_title'.tr,
+                  Icons.admin_panel_settings_rounded,
+                ),
+              if (compact)
+                _menuItem(
+                  'language_toggle',
+                  languageController.locale.languageCode == 'sw'
+                      ? 'language_english'.tr
+                      : 'language_swahili'.tr,
+                  Icons.language_rounded,
+                ),
+              if (compact) const PopupMenuDivider(),
+              if (BusinessAccessService.can('transactions', 'view'))
+                _menuItem(
+                  'transactions',
+                  'home_transactions'.tr,
+                  Icons.swap_vert,
+                ),
+              if (BusinessAccessService.can('invoices', 'create'))
+                _menuItem(
+                  'generate_invoice',
+                  'home_generate_invoice'.tr,
+                  Icons.note_add_outlined,
+                ),
+              if (BusinessAccessService.can('invoices', 'view'))
+                _menuItem(
+                  'invoices',
+                  'home_view_invoices'.tr,
+                  Icons.receipt_long,
+                ),
+              if (_isSuperAdmin &&
+                  BusinessAccessService.can('receipts', 'view'))
+                _menuItem('receipts', 'home_view_receipts'.tr, Icons.receipt),
+              if (BusinessAccessService.can('jobs', 'view'))
+                _menuItem(
+                  'jobs',
+                  'home_manage_jobs'.tr,
+                  Icons.account_balance_wallet_outlined,
+                ),
+              if (BusinessAccessService.can('analytics', 'view'))
+                _menuItem(
+                  'analytics',
+                  'home_analytics'.tr,
+                  Icons.analytics_outlined,
+                ),
+              if (BusinessAccessService.can('invoices', 'create'))
+                _menuItem('pos', 'pos_title'.tr, Icons.qr_code_scanner),
+              if (BusinessAccessService.can('stock', 'view'))
+                _menuItem('stock', 'stk_title'.tr, Icons.inventory_2_outlined),
+              if (BusinessAccessService.can('categories', 'view'))
+                _menuItem(
+                  'categories',
+                  'home_manage_categories'.tr,
+                  Icons.category_outlined,
+                ),
+              if (BusinessAccessService.isOwner.value)
+                _menuItem(
+                  'staff',
+                  'home_manage_staff'.tr,
+                  Icons.groups_2_outlined,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_subscriptions',
+                  'admin_manage_subscriptions'.tr,
+                  Icons.manage_accounts_outlined,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_app_versions',
+                  'admin_manage_app_versions'.tr,
+                  Icons.system_update_alt_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_downloads',
+                  'admin_manage_downloads'.tr,
+                  Icons.cloud_download_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_analytics',
+                  'admin_manage_analytics'.tr,
+                  Icons.insights_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_announcements',
+                  'admin_manage_announcements'.tr,
+                  Icons.campaign_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'admin_support',
+                  'support_admin_title'.tr,
+                  Icons.support_agent_rounded,
+                ),
+              if (_isSuperAdmin)
+                _menuItem(
+                  'create_receipt',
+                  'home_create_receipt'.tr,
+                  Icons.add_business_outlined,
+                ),
+              if (BusinessAccessService.isOwner.value)
+                _menuItem(
+                  'subscription',
+                  'home_subscription'.tr,
+                  Icons.workspace_premium_outlined,
+                ),
+              if (BusinessAccessService.can('profile', 'view'))
+                _menuItem(
+                  'document_design',
+                  'Document design',
+                  Icons.palette_outlined,
+                ),
+              if (BusinessAccessService.availableBusinesses.length > 1)
+                _menuItem(
+                  'switch_business',
+                  'business_select'.tr,
+                  Icons.swap_horiz_rounded,
+                ),
+              _menuItem('about', 'home_about'.tr, Icons.info_outline),
+              const PopupMenuDivider(),
+              _menuItem(
+                'logout',
+                'home_sign_out'.tr,
+                Icons.logout_rounded,
+                destructive: true,
+              ),
+              if (!_isSuperAdmin)
+                _menuItem(
+                  'delete_account',
+                  'Delete account',
+                  Icons.delete_forever_outlined,
+                  destructive: true,
+                ),
+            ],
     );
   }
+
+  List<PopupMenuEntry<String>> _buildPersonalMenuItems(bool compact) => [
+    if (compact)
+      _menuItem(
+        'language_toggle',
+        languageController.locale.languageCode == 'sw'
+            ? 'language_english'.tr
+            : 'language_swahili'.tr,
+        Icons.language_rounded,
+      ),
+    if (compact) const PopupMenuDivider(),
+    _menuItem(
+      'personal_settings',
+      'personal_settings'.tr,
+      Icons.settings_outlined,
+    ),
+    _menuItem('about', 'home_about'.tr, Icons.info_outline),
+    const PopupMenuDivider(),
+    _menuItem('logout', 'home_sign_out'.tr, Icons.logout_rounded),
+    _menuItem(
+      'delete_account',
+      'Delete account',
+      Icons.delete_forever_outlined,
+      destructive: true,
+    ),
+  ];
 
   Widget _buildLanguageButton() {
     final languageCode = languageController.locale.languageCode;
@@ -1787,7 +1863,9 @@ class _HomePageState extends State<HomePage> {
   Future<void> _changeLanguage(String languageCode) async {
     final countryCode = languageCode == 'sw' ? 'TZ' : 'US';
     languageController.changeLanguage(languageCode, countryCode);
-    if (!BusinessAccessService.can('profile', 'edit')) return;
+    if (_isPersonalMode || !BusinessAccessService.can('profile', 'edit')) {
+      return;
+    }
     try {
       await ProfileService.save({'language': languageCode});
     } catch (error, stackTrace) {
@@ -1837,7 +1915,15 @@ class _HomePageState extends State<HomePage> {
   Future<void> _handleMenuSelection(String value) async {
     switch (value) {
       case 'profile':
-        _openProfile();
+        if (_isPersonalMode) {
+          await Get.toNamed(AppRoutes.personalSettings);
+        } else {
+          _openProfile();
+        }
+      case 'personal_settings':
+        await Get.toNamed(AppRoutes.personalSettings);
+      case 'switch_business':
+        await _selectBusiness();
       case 'language_toggle':
         await _changeLanguage(
           languageController.locale.languageCode == 'sw' ? 'en' : 'sw',
@@ -1910,6 +1996,28 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _selectBusiness() async {
+    final selectedId = await Get.dialog<String>(
+      SimpleDialog(
+        title: Text('business_select'.tr),
+        children: [
+          for (final business in BusinessAccessService.availableBusinesses)
+            SimpleDialogOption(
+              onPressed: () => Get.back(result: business.businessId),
+              child: Text(
+                business.businessName.isEmpty
+                    ? business.businessId
+                    : business.businessName,
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selectedId == null) return;
+    await BusinessAccessService.selectBusiness(selectedId);
+    if (mounted) Get.offAllNamed(AppRoutes.home);
+  }
+
   Future<void> _openRestrictedRoute(
     String route, {
     bool refreshFinance = false,
@@ -1954,40 +2062,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Positioned.fill(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF123B74), Color(0xFF1E40AF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: -55,
-            top: -90,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: .07),
-                  width: 34,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 75,
-            bottom: -105,
-            child: Container(
-              width: 190,
-              height: 190,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: .035),
-              ),
+              decoration: const BoxDecoration(color: _AppColors.brandDeep),
             ),
           ),
           // Content

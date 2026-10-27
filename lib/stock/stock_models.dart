@@ -11,10 +11,10 @@ String formatQty(num value) {
   return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 }
 
-String formatMoney(num value) => value
-    .round()
-    .toString()
-    .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+String formatMoney(num value) => value.round().toString().replaceAllMapped(
+  RegExp(r'\B(?=(\d{3})+(?!\d))'),
+  (m) => ',',
+);
 
 const stockUnits = <String>[
   'piece',

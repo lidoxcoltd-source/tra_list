@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 import 'task_model.dart';
 
 class TaskColors {
-  static const navy = Color(0xFF1E3A8A);
-  static const brand = Color(0xFF1E40AF);
-  static const canvas = Color(0xFFF1F5F9);
-  static const ink = Color(0xFF0F172A);
-  static const muted = Color(0xFF64748B);
-  static const border = Color(0xFFE2E8F0);
-  static const lightBlue = Color(0xFFDBEAFE);
-  static const green = Color(0xFF059669);
-  static const amber = Color(0xFFD97706);
-  static const red = Color(0xFFDC2626);
+  static const navy = MjasiColors.primaryNavy;
+  static const brand = MjasiColors.primaryBlue;
+  static const canvas = MjasiColors.background;
+  static const ink = MjasiColors.textPrimary;
+  static const muted = MjasiColors.textSecondary;
+  static const border = MjasiColors.border;
+  static const lightBlue = MjasiColors.lightBlue;
+  static const green = MjasiColors.success;
+  static const amber = MjasiColors.warning;
+  static const red = MjasiColors.error;
 }
 
 class TaskUi {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +10,13 @@ import 'package:flutter/foundation.dart';
 import 'package:tra_list/firebase_options.dart';
 import 'business_access_service.dart';
 import 'profile_service.dart';
+
+class StaffMember {
+  const StaffMember({required this.id, required this.data});
+
+  final String id;
+  final Map<String, dynamic> data;
+}
 
 class StaffService {
   static final _firestore = FirebaseFirestore.instance;
@@ -37,13 +45,88 @@ class StaffService {
   static CollectionReference<Map<String, dynamic>> get _memberships =>
       _firestore.collection('employeeMemberships');
 
-  static Stream<QuerySnapshot<Map<String, dynamic>>> watchStaff() {
+  static Stream<List<StaffMember>> watchStaff() {
     if (!BusinessAccessService.isOwner.value) {
       throw StateError('Only the business owner can manage staff.');
     }
-    return _memberships
-        .where('businessUid', isEqualTo: BusinessAccessService.businessId)
-        .snapshots();
+    final businessUid = BusinessAccessService.businessId;
+    final controller = StreamController<List<StaffMember>>();
+    List<StaffMember> legacyStaff = [];
+    List<StaffMember> accountStaff = [];
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? legacySubscription;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+    accountSubscription;
+
+    void emit() {
+      final members = <String, StaffMember>{
+        for (final member in legacyStaff) member.id: member,
+        for (final member in accountStaff) member.id: member,
+      };
+      controller.add(members.values.toList());
+    }
+
+    if (businessUid == FirebaseAuth.instance.currentUser?.uid) {
+      legacySubscription = _memberships
+          .where('businessUid', isEqualTo: businessUid)
+          .snapshots()
+          .listen((snapshot) {
+            legacyStaff = snapshot.docs
+                .map(
+                  (document) =>
+                      StaffMember(id: document.id, data: document.data()),
+                )
+                .where((member) => member.data['role'] != 'owner')
+                .toList();
+            emit();
+          }, onError: controller.addError);
+    }
+    accountSubscription = _firestore
+        .collection('businessMemberships')
+        .doc(businessUid)
+        .collection('members')
+        .snapshots()
+        .listen((snapshot) {
+          accountStaff = snapshot.docs
+              .map(
+                (document) =>
+                    StaffMember(id: document.id, data: document.data()),
+              )
+              .where((member) => member.data['role'] != 'owner')
+              .toList();
+          emit();
+        }, onError: controller.addError);
+    controller.onCancel = () async {
+      await legacySubscription?.cancel();
+      await accountSubscription?.cancel();
+    };
+    return controller.stream;
+  }
+
+  static Future<String> createInvitation({
+    required String email,
+    required String name,
+    required String phone,
+    required String shopNickname,
+    required Map<String, Map<String, bool>> permissions,
+  }) async {
+    if (!BusinessAccessService.isOwner.value) {
+      throw StateError('Only the business owner can invite staff.');
+    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createBusinessInvitation')
+        .call<Map<String, dynamic>>({
+          'businessUid': BusinessAccessService.businessId,
+          'email': email.trim(),
+          'name': name.trim(),
+          'phone': phone.trim(),
+          'shopNickname': shopNickname.trim(),
+          'permissions': permissions,
+        });
+    final code = result.data['code']?.toString() ?? '';
+    if (code.isEmpty) {
+      throw StateError('The invitation response did not include a code.');
+    }
+    return code;
   }
 
   static Future<String> createStaff({
@@ -191,11 +274,22 @@ class StaffService {
     if (employeeUid == FirebaseAuth.instance.currentUser?.uid) {
       throw StateError('A business owner cannot modify their own membership.');
     }
-    final document = _memberships.doc(employeeUid);
-    final membership = await document.get();
-    if (membership.data()?['businessUid'] != BusinessAccessService.businessId) {
+    final businessUid = BusinessAccessService.businessId;
+    final legacyDocument = _memberships.doc(employeeUid);
+    final legacyMembership = await legacyDocument.get();
+    if (legacyMembership.data()?['businessUid'] == businessUid) {
+      return legacyDocument;
+    }
+    final accountDocument = _firestore
+        .collection('businessMemberships')
+        .doc(businessUid)
+        .collection('members')
+        .doc(employeeUid);
+    final accountMembership = await accountDocument.get();
+    if (accountMembership.data()?['businessUid'] != businessUid ||
+        accountMembership.data()?['role'] == 'owner') {
       throw StateError('This staff account does not belong to this business.');
     }
-    return document;
+    return accountDocument;
   }
 }

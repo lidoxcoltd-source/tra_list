@@ -1,9 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 
 class DisabledAccountException implements Exception {
   const DisabledAccountException();
+}
+
+class BusinessAccessOption {
+  const BusinessAccessOption({
+    required this.businessId,
+    required this.businessName,
+    required this.isOwner,
+    required this.isActive,
+    required this.isMembership,
+    required this.isLegacyMembership,
+    required this.permissions,
+    required this.shopNickname,
+  });
+
+  final String businessId;
+  final String businessName;
+  final bool isOwner;
+  final bool isActive;
+  final bool isMembership;
+  final bool isLegacyMembership;
+  final Map<String, dynamic> permissions;
+  final String shopNickname;
 }
 
 class BusinessAccessService {
@@ -31,11 +54,16 @@ class BusinessAccessService {
 
   static final businessUid = ''.obs;
   static final isOwner = false.obs;
+  static final hasMembership = false.obs;
+  static final isLegacyMembership = false.obs;
   static final isActive = false.obs;
   static final isReady = false.obs;
   static final permissions = <String, dynamic>{}.obs;
   static final businessName = ''.obs;
   static final shopNickname = ''.obs;
+  static final availableBusinesses = <BusinessAccessOption>[].obs;
+  static final _storage = GetStorage();
+  static String? initializationError;
 
   static CollectionReference<Map<String, dynamic>> get _memberships =>
       FirebaseFirestore.instance.collection('employeeMemberships');
@@ -48,6 +76,9 @@ class BusinessAccessService {
     return id;
   }
 
+  static bool get hasBusinessAccess =>
+      isReady.value && isActive.value && businessUid.value.isNotEmpty;
+
   static Future<void> initializeForCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -55,7 +86,134 @@ class BusinessAccessService {
       return;
     }
 
-    isReady.value = false;
+    clear();
+    await ensureCurrentAccountEnabled();
+
+    final businesses = <BusinessAccessOption>[];
+    final ownBusinessProfile = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('profile')
+        .doc('company')
+        .get();
+    if (ownBusinessProfile.exists) {
+      final data = ownBusinessProfile.data() ?? const <String, dynamic>{};
+      businesses.add(
+        BusinessAccessOption(
+          businessId: user.uid,
+          businessName: data['name']?.toString().trim() ?? '',
+          isOwner: true,
+          isActive: true,
+          isMembership: false,
+          isLegacyMembership: false,
+          permissions: <String, dynamic>{},
+          shopNickname: data['shopNickname']?.toString().trim() ?? '',
+        ),
+      );
+    }
+
+    final legacyMembership = await _memberships.doc(user.uid).get();
+    if (legacyMembership.exists) {
+      businesses.add(
+        _optionFromMembership(
+          legacyMembership.data()!,
+          isLegacyMembership: true,
+        ),
+      );
+    }
+
+    try {
+      final modernMemberships = await FirebaseFirestore.instance
+          .collectionGroup('members')
+          .where('employeeUid', isEqualTo: user.uid)
+          .get();
+      for (final membership in modernMemberships.docs) {
+        final data = membership.data();
+        final businessId = data['businessUid']?.toString() ?? '';
+        if (businessId.isNotEmpty &&
+            businesses.every((option) => option.businessId != businessId)) {
+          businesses.add(_optionFromMembership(data));
+        }
+      }
+    } on FirebaseException catch (error) {
+      // Owners and legacy staff must still be able to open Business mode.
+      if (error.code != 'permission-denied' &&
+          error.code != 'failed-precondition') {
+        rethrow;
+      }
+    }
+
+    availableBusinesses.assignAll(businesses);
+    final savedBusinessId = _storage.read<String>(
+      'business_selection_${user.uid}',
+    );
+    BusinessAccessOption? selected;
+    for (final option in businesses) {
+      if (option.businessId == savedBusinessId && option.isActive) {
+        selected = option;
+        break;
+      }
+    }
+    selected ??= businesses.where((option) => option.isActive).firstOrNull;
+    selected ??= businesses.isEmpty ? null : businesses.first;
+
+    if (selected == null) {
+      clear();
+      isReady.value = true;
+      return;
+    }
+    _applySelection(selected);
+    isReady.value = true;
+  }
+
+  static BusinessAccessOption _optionFromMembership(
+    Map<String, dynamic> data, {
+    bool isLegacyMembership = false,
+  }) => BusinessAccessOption(
+    businessId: data['businessUid']?.toString() ?? '',
+    businessName: data['businessName']?.toString().trim() ?? '',
+    isOwner: data['role'] == 'owner',
+    isActive: data['active'] == true,
+    isMembership: true,
+    isLegacyMembership: isLegacyMembership,
+    permissions: Map<String, dynamic>.from(
+      data['permissions'] as Map? ?? const {},
+    ),
+    shopNickname: data['shopNickname']?.toString().trim() ?? '',
+  );
+
+  static Future<void> selectBusiness(String id) async {
+    BusinessAccessOption? selected;
+    for (final option in availableBusinesses) {
+      if (option.businessId == id && option.isActive) {
+        selected = option;
+        break;
+      }
+    }
+    if (selected == null) {
+      throw StateError('This business is not available to your account.');
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw StateError('Sign in to choose a business.');
+    await _storage.write('business_selection_$uid', id);
+    _applySelection(selected);
+  }
+
+  static void _applySelection(BusinessAccessOption option) {
+    businessUid.value = option.businessId;
+    isOwner.value = option.isOwner;
+    hasMembership.value = option.isMembership;
+    isLegacyMembership.value = option.isLegacyMembership;
+    isActive.value = option.isActive;
+    permissions.assignAll(option.permissions);
+    businessName.value = option.businessName;
+    shopNickname.value = option.shopNickname;
+  }
+
+  static Future<void> ensureCurrentAccountEnabled() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null)
+      throw StateError('Sign in before checking account access.');
     final accountAccess = await FirebaseFirestore.instance
         .collection('accountAccess')
         .doc(user.uid)
@@ -64,27 +222,6 @@ class BusinessAccessService {
       clear();
       throw const DisabledAccountException();
     }
-
-    final membership = await _memberships.doc(user.uid).get();
-    if (!membership.exists) {
-      businessUid.value = user.uid;
-      isOwner.value = true;
-      isActive.value = true;
-      permissions.clear();
-      businessName.value = '';
-      shopNickname.value = '';
-    } else {
-      final data = membership.data()!;
-      businessUid.value = data['businessUid']?.toString() ?? '';
-      isOwner.value = false;
-      isActive.value = data['active'] == true;
-      businessName.value = data['businessName']?.toString().trim() ?? '';
-      shopNickname.value = data['shopNickname']?.toString().trim() ?? '';
-      permissions.assignAll(
-        Map<String, dynamic>.from(data['permissions'] as Map? ?? const {}),
-      );
-    }
-    isReady.value = true;
   }
 
   static bool can(String module, String action) {
@@ -148,12 +285,16 @@ class BusinessAccessService {
   };
 
   static void clear() {
+    initializationError = null;
     businessUid.value = '';
     isOwner.value = false;
+    hasMembership.value = false;
+    isLegacyMembership.value = false;
     isActive.value = false;
     isReady.value = false;
     permissions.clear();
     businessName.value = '';
     shopNickname.value = '';
+    availableBusinesses.clear();
   }
 }

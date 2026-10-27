@@ -112,6 +112,29 @@ const _groups = <_AdminGroup>[
       Color(0xFF4F46E5),
     ),
   ]),
+  _AdminGroup('hub_group_market', [
+    _AdminItem(
+      'admin_market_verification_title',
+      'admin_market_verification_hub_desc',
+      Icons.verified_user_rounded,
+      AppRoutes.adminMarketVerification,
+      Color(0xFF0F766E),
+    ),
+    _AdminItem(
+      'market_sound_admin_title',
+      'market_sound_admin_desc',
+      Icons.library_music_rounded,
+      AppRoutes.adminMarketSounds,
+      Color(0xFF7C3AED),
+    ),
+    _AdminItem(
+      'market_report_admin_title',
+      'market_report_admin_desc',
+      Icons.flag_rounded,
+      AppRoutes.adminMarketReports,
+      Color(0xFFDC2626),
+    ),
+  ]),
 ];
 
 class SuperAdminHubPage extends StatelessWidget {

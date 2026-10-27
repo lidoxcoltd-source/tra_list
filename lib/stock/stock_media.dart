@@ -440,12 +440,11 @@ class _ScannerPageState extends State<_ScannerPage> {
                     children: [
                       MobileScanner(
                         controller: _controller,
-                        placeholderBuilder: (context) =>
-                            ScannerLoadingFallback(
-                              onPhoto: () => _fromImage(ImageSource.camera),
-                              onUpload: () => _fromImage(ImageSource.gallery),
-                              onRetry: _retryCamera,
-                            ),
+                        placeholderBuilder: (context) => ScannerLoadingFallback(
+                          onPhoto: () => _fromImage(ImageSource.camera),
+                          onUpload: () => _fromImage(ImageSource.gallery),
+                          onRetry: _retryCamera,
+                        ),
                         onDetect: (capture) {
                           for (final b in capture.barcodes) {
                             final v = b.rawValue;
@@ -457,8 +456,7 @@ class _ScannerPageState extends State<_ScannerPage> {
                         },
                         errorBuilder: (context, error) => _fallbackPanel(
                           switch (error.errorCode) {
-                            MobileScannerErrorCode.permissionDenied =>
-                              'denied',
+                            MobileScannerErrorCode.permissionDenied => 'denied',
                             MobileScannerErrorCode.unsupported => 'notfound',
                             _ => 'other',
                           },
@@ -483,9 +481,7 @@ class _ScannerPageState extends State<_ScannerPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF10263D),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .1),
-                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: .1)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
