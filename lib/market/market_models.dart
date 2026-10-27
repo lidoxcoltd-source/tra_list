@@ -175,6 +175,7 @@ class MarketPost {
     this.whatsapp = '',
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.viewsCount = 0,
     this.createdAt,
     this.expiresAt,
     this.audioUrl = '',
@@ -213,6 +214,7 @@ class MarketPost {
   final String whatsapp;
   final int likesCount;
   final int commentsCount;
+  final int viewsCount;
   final DateTime? createdAt;
   final DateTime? expiresAt;
 
@@ -279,6 +281,7 @@ class MarketPost {
       whatsapp: (data['whatsapp'] ?? '').toString(),
       likesCount: (data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
+      viewsCount: (data['viewsCount'] as num?)?.toInt() ?? 0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       expiresAt: (data['expiresAt'] as Timestamp?)?.toDate(),
       audioUrl: (data['audioUrl'] ?? '').toString(),

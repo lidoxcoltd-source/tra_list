@@ -246,12 +246,16 @@ class _ReelItemState extends State<_ReelItem> {
   @override
   void initState() {
     super.initState();
+    if (widget.active) unawaited(MarketService.recordView(widget.post.id));
     if (widget.active || widget.preload) unawaited(_start());
   }
 
   @override
   void didUpdateWidget(_ReelItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      unawaited(MarketService.recordView(widget.post.id));
+    }
     final needed = widget.active || widget.preload;
     if (!needed) {
       _release();

@@ -535,6 +535,36 @@ class _MarketExplorePageState extends State<MarketExplorePage> {
         for (final p in _posts)
           if (p.hasVideo) p,
       ];
+      if (widget.searchAutofocus) {
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = (constraints.maxWidth / 140).floor().clamp(3, 6);
+              return GridView.builder(
+                controller: _scrollController,
+                cacheExtent: 1200,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 4, bottom: 90),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 2,
+                  crossAxisSpacing: 2,
+                  childAspectRatio: .75,
+                ),
+                itemCount: _posts.length + (_hasMorePosts ? 1 : 0),
+                itemBuilder: (context, index) => index >= _posts.length
+                    ? const Center(child: CircularProgressIndicator())
+                    : _GridPostTile(
+                        key: ValueKey(_posts[index].id),
+                        post: _posts[index],
+                        videoPosts: videoPosts,
+                      ),
+              );
+            },
+          ),
+        );
+      }
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView.separated(
@@ -741,6 +771,134 @@ class _ShopTile extends StatelessWidget {
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 color: MarketPalette.blue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _compactCount(int value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1).replaceAll('.0', '')} M';
+  }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(value >= 100000 ? 0 : 1).replaceAll('.0', '')}K';
+  }
+  return '$value';
+}
+
+/// Instagram-style square-ish tile: media only, with the view count.
+class _GridPostTile extends StatelessWidget {
+  const _GridPostTile({
+    super.key,
+    required this.post,
+    required this.videoPosts,
+  });
+
+  final MarketPost post;
+  final List<MarketPost> videoPosts;
+
+  void _open(BuildContext context) {
+    if (post.hasVideo) {
+      final start = videoPosts.indexWhere((p) => p.id == post.id);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MarketReelsPage(
+            posts: videoPosts.isEmpty ? [post] : videoPosts,
+            initialIndex: start < 0 ? 0 : start,
+          ),
+        ),
+      );
+      return;
+    }
+    unawaited(MarketService.recordView(post.id));
+    Get.toNamed('/market/post/${post.id}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const placeholder = ColoredBox(color: MarketPalette.surfaceRaised);
+    return GestureDetector(
+      onTap: () => _open(context),
+      child: RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (post.isTextOnly)
+              MarketTextCard(
+                text: post.caption,
+                seed: post.id,
+                bg: post.textBg,
+                font: post.textFont,
+                fontSize: 13,
+                maxLines: 7,
+              )
+            else if (post.images.isEmpty)
+              placeholder
+            else
+              CachedNetworkImage(
+                imageUrl: post.images.first,
+                fit: BoxFit.cover,
+                memCacheWidth: 400,
+                placeholder: (_, _) => placeholder,
+                errorWidget: (_, _, _) => placeholder,
+              ),
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.center,
+                    colors: [Color(0x99000000), Color(0x00000000)],
+                  ),
+                ),
+              ),
+            ),
+            if (post.hasVideo)
+              const Positioned(
+                top: 6,
+                right: 6,
+                child: Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              )
+            else if (post.images.length > 1)
+              const Positioned(
+                top: 6,
+                right: 6,
+                child: Icon(
+                  Icons.collections_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            Positioned(
+              left: 6,
+              bottom: 5,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.remove_red_eye_outlined,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _compactCount(post.viewsCount),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

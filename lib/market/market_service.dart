@@ -1155,6 +1155,21 @@ class MarketService {
         .map((snapshot) => snapshot.exists);
   }
 
+  static final Set<String> _viewedPosts = {};
+
+  /// Counts one view per post per app session.
+  static Future<void> recordView(String postId) async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+    if (!_viewedPosts.add(postId)) return;
+    try {
+      await _firestore.collection('marketPosts').doc(postId).update({
+        'viewsCount': FieldValue.increment(1),
+      });
+    } catch (_) {
+      _viewedPosts.remove(postId);
+    }
+  }
+
   static Future<void> toggleLike(String postId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) throw StateError('Sign in to like posts.');

@@ -1402,6 +1402,12 @@ service cloud.firestore {
             && request.resource.data.authorUid == request.auth.uid
           )
         );
+      allow update: if signedIn()
+        && isAccountEnabled(request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['viewsCount'])
+        && request.resource.data.get('viewsCount', 0)
+          == resource.data.get('viewsCount', 0) + 1;
       allow update: if (
           isBusinessOwner(resource.data.authorUid)
           || (
