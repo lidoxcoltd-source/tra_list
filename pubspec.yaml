@@ -57,6 +57,9 @@ dependencies:
   flutter_cache_manager: ^3.4.1
   video_player: ^2.10.1
   video_compress: ^3.1.4
+  record: ^6.2.1
+  record_web: ^1.3.0
+  flutter_contacts: ^2.1.0
 dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
@@ -92,7 +95,6 @@ flutter:
     - assets/qr.png # QR code image
     - assets/tra-logo.png # Old TRA logo
     - assets/frame.png # Fallback QR frame
-    - assets/social_icons.png
     - assets/analytics_advice.json
     # Fallback QR frame
     - assets/fonts/

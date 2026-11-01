@@ -126,6 +126,13 @@ class DocumentDesignService {
     Map<String, dynamic> data,
     String documentType,
   ) async {
+    final suppliedDesign = data['documentDesign'];
+    if (suppliedDesign is Map) {
+      return {
+        ...data,
+        'documentDesign': Map<String, dynamic>.from(suppliedDesign),
+      };
+    }
     var profile = Map<String, dynamic>.from(data['company'] as Map? ?? {});
     if (BusinessAccessService.canReadBusinessProfile()) {
       profile = await ProfileService.loadOrCreate();

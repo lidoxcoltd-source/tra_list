@@ -1,10 +1,11 @@
-const { createHash, randomBytes } = require("node:crypto");
+const { createHash, randomBytes, timingSafeEqual } = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { getStorage } = require("firebase-admin/storage");
-const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { HttpsError, onCall, onRequest } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const {
   onDocumentCreated,
   onDocumentDeleted,
@@ -15,6 +16,7 @@ const { getMessaging } = require("firebase-admin/messaging");
 initializeApp();
 
 const db = getFirestore();
+const metaWebhookVerifyToken = defineSecret("META_WEBHOOK_VERIFY_TOKEN");
 
 // Status expiry is derived from Firestore's server createTime, never the
 // publishing device's clock.
@@ -520,6 +522,101 @@ exports.pushStaffActivity = onDocumentCreated(
     await sendToTokens(tokens, String(data.actorName || "Staff"), String(data.summary || ""), {
       type: "activity",
     });
+  },
+);
+
+exports.notifyTransactionAmountThreshold = onDocumentCreated(
+  "users/{businessUid}/transactions/{transactionId}",
+  async (event) => {
+    const transaction = event.data?.data();
+    if (!transaction || !["income", "expense"].includes(transaction.type)) return;
+    const amount = Number(transaction.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const { businessUid, transactionId } = event.params;
+    const businessRef = db.doc(`users/${businessUid}`);
+    const [settingsSnap, profileSnap] = await Promise.all([
+      businessRef.collection("settings").doc("transactionAlerts").get(),
+      businessRef.collection("profile").doc("company").get(),
+    ]);
+    if (!settingsSnap.exists) return;
+
+    const settings = settingsSnap.data() || {};
+    const prefix = transaction.type;
+    const matches = [];
+    const above = settings[`${prefix}Above`];
+    const below = settings[`${prefix}Below`];
+    if (typeof above === "number" && amount > above) {
+      matches.push({ direction: "above", threshold: above });
+    }
+    if (typeof below === "number" && amount < below) {
+      matches.push({ direction: "below", threshold: below });
+    }
+    if (!matches.length) return;
+
+    const isSwahili = String(profileSnap.data()?.language || "")
+      .toLowerCase()
+      .startsWith("sw");
+    const formattedAmount = new Intl.NumberFormat(
+      isSwahili ? "sw-TZ" : "en-TZ",
+      { maximumFractionDigits: 0 },
+    ).format(amount);
+    const typeLabel = transaction.type === "income"
+      ? (isSwahili ? "mapato" : "income")
+      : (isSwahili ? "matumizi" : "expense");
+    const conditions = matches.map(({ direction, threshold }) => {
+      const formattedThreshold = new Intl.NumberFormat(
+        isSwahili ? "sw-TZ" : "en-TZ",
+        { maximumFractionDigits: 0 },
+      ).format(threshold);
+      if (isSwahili) {
+        return direction === "above"
+          ? `imezidi TZS ${formattedThreshold}`
+          : `iko chini ya TZS ${formattedThreshold}`;
+      }
+      return direction === "above"
+        ? `is above TZS ${formattedThreshold}`
+        : `is below TZS ${formattedThreshold}`;
+    });
+
+    const employeeUid = String(transaction.uid || "");
+    let actorName = isSwahili ? "Tahadhari ya muamala" : "Transaction alert";
+    if (employeeUid && employeeUid !== businessUid) {
+      const [legacyMember, businessMember] = await Promise.all([
+        db.collection("employeeMemberships").doc(employeeUid).get(),
+        db.doc(`businessMemberships/${businessUid}/members/${employeeUid}`).get(),
+      ]);
+      const member = businessMember.exists ? businessMember : legacyMember;
+      const staffName = String(member.data()?.name || "").trim();
+      if (staffName) actorName = staffName;
+    }
+
+    const description = String(transaction.description || "").trim();
+    const summary = isSwahili
+      ? `${typeLabel} ya TZS ${formattedAmount} ${conditions.join(" na ")}.${description ? ` Maelezo: ${description}` : ""}`
+      : `${typeLabel} of TZS ${formattedAmount} ${conditions.join(" and ")}.${description ? ` Description: ${description}` : ""}`;
+    const notificationRef = businessRef
+      .collection("notifications")
+      .doc(`transaction_threshold_${transactionId}`);
+    const created = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(notificationRef);
+      if (existing.exists) return false;
+      tx.create(notificationRef, {
+        actorUid: employeeUid || businessUid,
+        actorName,
+        action: "transaction_threshold",
+        summary: summary.slice(0, 300),
+        amount,
+        createdAt: FieldValue.serverTimestamp(),
+        read: false,
+      });
+      return true;
+    });
+    if (created) {
+      console.log(
+        `Created transaction threshold notification for ${businessUid}/${transactionId}`,
+      );
+    }
   },
 );
 
@@ -1182,3 +1279,122 @@ exports.claimBusinessInvitation = onCall(async (request) => {
   });
   return { businessUid, businessName: data.businessName };
 });
+
+exports.getBusinessChatStaff = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Sign in to open business chat.");
+  }
+  const businessUid = typeof request.data?.businessUid === "string"
+    ? request.data.businessUid.trim()
+    : "";
+  if (!businessUid) {
+    throw new HttpsError("invalid-argument", "A business ID is required.");
+  }
+
+  const [accountAccess, businessAccess, company, legacyCaller, modernCaller] =
+    await Promise.all([
+      db.collection("accountAccess").doc(uid).get(),
+      db.collection("accountAccess").doc(businessUid).get(),
+      db.doc(`users/${businessUid}/profile/company`).get(),
+      db.collection("employeeMemberships").doc(uid).get(),
+      db.doc(`businessMemberships/${businessUid}/members/${uid}`).get(),
+    ]);
+  if (
+    accountAccess.data()?.disabled === true ||
+    businessAccess.data()?.disabled === true
+  ) {
+    throw new HttpsError("permission-denied", "This business account is disabled.");
+  }
+
+  const legacyData = legacyCaller.data();
+  const modernData = modernCaller.data();
+  const owner =
+    (uid === businessUid && company.exists) ||
+    (modernData?.businessUid === businessUid &&
+      modernData.role === "owner" &&
+      modernData.active === true) ||
+    (legacyData?.businessUid === businessUid &&
+      legacyData.role === "owner" &&
+      legacyData.active === true);
+  const staff =
+    (modernData?.businessUid === businessUid &&
+      modernData.role === "staff" &&
+      modernData.active === true) ||
+    (legacyData?.businessUid === businessUid &&
+      legacyData.role !== "owner" &&
+      legacyData.active === true);
+  if (!owner && !staff) {
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have active access to this business.",
+    );
+  }
+
+  const [modernStaff, legacyStaff] = await Promise.all([
+    db.collection(`businessMemberships/${businessUid}/members`)
+      .where("active", "==", true)
+      .get(),
+    db.collection("employeeMemberships")
+      .where("businessUid", "==", businessUid)
+      .get(),
+  ]);
+  const directory = new Map();
+  for (const member of legacyStaff.docs) {
+    const data = member.data();
+    if (data.role === "owner" || data.active !== true) continue;
+    directory.set(member.id, {
+      uid: member.id,
+      name: typeof data.name === "string" && data.name.trim()
+        ? data.name.trim()
+        : "Staff",
+      isLegacy: true,
+    });
+  }
+  for (const member of modernStaff.docs) {
+    const data = member.data();
+    if (data.role !== "staff") continue;
+    directory.set(member.id, {
+      uid: member.id,
+      name: typeof data.name === "string" && data.name.trim()
+        ? data.name.trim()
+        : "Staff",
+      isLegacy: false,
+    });
+  }
+  return { staff: [...directory.values()] };
+});
+
+exports.whatsappWebhook = onRequest(
+  {
+    region: "us-central1",
+    secrets: [metaWebhookVerifyToken],
+  },
+  (request, response) => {
+    if (request.method === "GET") {
+      const mode = request.query["hub.mode"];
+      const token = request.query["hub.verify_token"];
+      const challenge = request.query["hub.challenge"];
+      const expectedToken = metaWebhookVerifyToken.value();
+
+      const tokenMatches = typeof token === "string" &&
+        timingSafeEqual(
+          createHash("sha256").update(token).digest(),
+          createHash("sha256").update(expectedToken).digest(),
+        );
+      if (mode === "subscribe" && tokenMatches && typeof challenge === "string") {
+        response.status(200).send(challenge);
+      } else {
+        response.sendStatus(403);
+      }
+      return;
+    }
+
+    if (request.method === "POST") {
+      response.status(200).send("EVENT_RECEIVED");
+      return;
+    }
+
+    response.set("Allow", "GET, POST").sendStatus(405);
+  },
+);

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,15 +13,10 @@ import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/market/market_service.dart';
+import 'package:tra_list/routes.dart';
+import 'package:tra_list/services/push_service.dart';
+import 'package:tra_list/theme/app_theme.dart';
 import 'package:get/get.dart';
-
-/// Improved and professional re-design of the original ProfilePage.
-/// Features added:
-/// - Color picker dialog (flutter_colorpicker) with quick swatches
-/// - Improved image picker (camera/gallery on mobile + file picker on web)
-/// - Interactive preview (zoom/pan) + full-screen preview dialog
-/// - Better upload progress with percent, and upload cancel support
-/// - Cleaner, card-based UI with consistent padding and icons
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -39,6 +35,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final shopNicknameC = TextEditingController();
   final addressC = TextEditingController();
   final phoneC = TextEditingController();
+  final secondaryPhoneC = TextEditingController();
   final emailC = TextEditingController();
   final websiteC = TextEditingController();
   final taxIdC = TextEditingController();
@@ -66,6 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
   UploadTask? _currentUploadTask;
   bool busy = true;
   bool _uploadingVerificationDocument = false;
+  final bool _staffProfile = !BusinessAccessService.isOwner.value;
 
   @override
   void initState() {
@@ -75,8 +73,30 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _boot() async {
     try {
-      if (FirebaseAuth.instance.currentUser == null) {
+      if (FirebaseAuth.instance.currentUser == null && !_staffProfile) {
         await FirebaseAuth.instance.signInAnonymously();
+      }
+      if (_staffProfile) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) throw StateError('Sign in to open your profile.');
+        final snapshot = await FirebaseFirestore.instance
+            .collection('userProfiles')
+            .doc(user.uid)
+            .get();
+        final data = snapshot.data() ?? const <String, dynamic>{};
+        if (!mounted) return;
+        secondaryPhoneC.text = data['secondaryPhone']?.toString() ?? '';
+        nameC.text = user.displayName?.trim().isNotEmpty == true
+            ? user.displayName!.trim()
+            : 'profile_title'.tr;
+        emailC.text = user.email ?? '';
+        final photoUrl =
+            data['photoUrl']?.toString().trim() ?? user.photoURL?.trim() ?? '';
+        setState(() {
+          logoUrl = photoUrl;
+          pickedBytes = null;
+        });
+        return;
       }
       final data = await ProfileService.loadOrCreate();
       if (!mounted) return;
@@ -140,6 +160,7 @@ class _ProfilePageState extends State<ProfilePage> {
     shopNicknameC.dispose();
     addressC.dispose();
     phoneC.dispose();
+    secondaryPhoneC.dispose();
     emailC.dispose();
     websiteC.dispose();
     taxIdC.dispose();
@@ -157,19 +178,14 @@ class _ProfilePageState extends State<ProfilePage> {
     if (busy) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (_staffProfile) return _buildStaffProfilePage();
 
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F6F9),
+        backgroundColor: MjasiColors.background,
         appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1A2B3C),
-          title: Text(
-            'profile_title'.tr,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-          ),
+          title: Text('profile_title'.tr),
           actions: [
             Obx(() {
               final businesses = BusinessAccessService.availableBusinesses;
@@ -204,22 +220,27 @@ class _ProfilePageState extends State<ProfilePage> {
             }),
           ],
           bottom: TabBar(
-            labelColor: brandColor,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: brandColor,
-            indicatorWeight: 2.5,
-            tabs: const [
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelPadding: const EdgeInsets.symmetric(
+              horizontal: MjasiSpacing.md,
+            ),
+            labelColor: MjasiColors.primaryBlue,
+            unselectedLabelColor: MjasiColors.textSecondary,
+            indicatorColor: MjasiColors.primaryBlue,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: [
               Tab(
-                icon: Icon(Icons.business_outlined, size: 18),
-                text: 'Company',
+                icon: const Icon(Icons.business_outlined, size: 18),
+                text: 'profile_company_details'.tr,
               ),
               Tab(
-                icon: Icon(Icons.payment_outlined, size: 18),
-                text: 'Payment',
+                icon: const Icon(Icons.payment_outlined, size: 18),
+                text: 'profile_payment_details'.tr,
               ),
               Tab(
-                icon: Icon(Icons.palette_outlined, size: 18),
-                text: 'Branding',
+                icon: const Icon(Icons.palette_outlined, size: 18),
+                text: 'profile_branding'.tr,
               ),
             ],
           ),
@@ -227,16 +248,35 @@ class _ProfilePageState extends State<ProfilePage> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCompanyHeader(),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _boot,
-                child: TabBarView(
-                  children: [
-                    _buildCompanyTab(),
-                    _buildPaymentTab(),
-                    _buildBrandingTab(),
-                  ],
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 900),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            MjasiSpacing.lg,
+                            MjasiSpacing.md,
+                            MjasiSpacing.lg,
+                            0,
+                          ),
+                          child: _buildCompanyHeader(),
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _buildCompanyTab(),
+                              _buildPaymentTab(),
+                              _buildBrandingTab(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -247,10 +287,178 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Widget _buildStaffProfilePage() {
+    return Scaffold(
+      backgroundColor: MjasiColors.background,
+      appBar: AppBar(
+        title: Text('personal_settings'.tr),
+        backgroundColor: MjasiColors.background,
+        actions: [
+          IconButton(
+            tooltip: 'home_sign_out'.tr,
+            onPressed: busy ? null : _signOut,
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: ListView(
+            padding: const EdgeInsets.all(MjasiSpacing.lg),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(MjasiSpacing.lg),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [MjasiColors.primaryNavy, MjasiColors.primaryBlue],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(MjasiRadius.md),
+                ),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: busy ? null : _chooseImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 34,
+                            backgroundColor: Colors.white,
+                            child: ClipOval(
+                              child: SizedBox(
+                                width: 62,
+                                height: 62,
+                                child: _previewWidget(),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 23,
+                              height: 23,
+                              decoration: BoxDecoration(
+                                color: MjasiColors.secondaryBlue,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.edit_rounded,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: MjasiSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nameC.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: MjasiSpacing.xs),
+                          Text(
+                            'personal_settings'.tr,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: MjasiSpacing.md),
+              _buildFormCard(
+                title: 'personal_settings'.tr,
+                icon: Icons.person_outline_rounded,
+                children: [
+                  Text(
+                    'personal_profile_photo'.tr,
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: MjasiSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : _chooseImage,
+                    icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                    label: Text('personal_photo_change'.tr),
+                  ),
+                  const SizedBox(height: MjasiSpacing.md),
+                  _buildTextField(
+                    secondaryPhoneC,
+                    'personal_secondary_phone'.tr,
+                    Icons.phone_iphone_outlined,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 32,
+                  ),
+                ],
+              ),
+              const SizedBox(height: MjasiSpacing.md),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: busy ? null : _saveStaffProfile,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded),
+                  label: Text('profile_save_changes'.tr),
+                ),
+              ),
+              const SizedBox(height: MjasiSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: busy ? null : _signOut,
+                icon: const Icon(Icons.logout_rounded),
+                label: Text('home_sign_out'.tr),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: MjasiColors.error,
+                  side: const BorderSide(color: MjasiColors.error),
+                  minimumSize: const Size.fromHeight(46),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompanyHeader() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      padding: const EdgeInsets.all(MjasiSpacing.md),
+      decoration: BoxDecoration(
+        color: MjasiColors.surface,
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        border: Border.all(color: MjasiColors.border),
+      ),
       child: Row(
         children: [
           GestureDetector(
@@ -258,11 +466,11 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(MjasiRadius.sm),
                   child: Container(
-                    width: 68,
-                    height: 68,
-                    color: Colors.grey.shade100,
+                    width: 60,
+                    height: 60,
+                    color: MjasiColors.background,
                     child: _previewWidget(),
                   ),
                 ),
@@ -270,8 +478,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   bottom: 0,
                   right: 0,
                   child: Container(
-                    width: 22,
-                    height: 22,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       color: brandColor,
                       shape: BoxShape.circle,
@@ -279,7 +487,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     child: const Icon(
                       Icons.edit,
-                      size: 11,
+                      size: 10,
                       color: Colors.white,
                     ),
                   ),
@@ -287,17 +495,17 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: MjasiSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  nameC.text.isNotEmpty ? nameC.text : 'Your Company',
+                  nameC.text.isNotEmpty ? nameC.text : 'profile_title'.tr,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                    color: Color(0xFF1A2B3C),
+                    fontSize: 16,
+                    color: MjasiColors.textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -305,14 +513,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 if (emailC.text.isNotEmpty)
                   Text(
                     emailC.text,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 12,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 if (phoneC.text.isNotEmpty)
                   Text(
                     phoneC.text,
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
               ],
             ),
@@ -326,16 +540,15 @@ class _ProfilePageState extends State<ProfilePage> {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        padding: const EdgeInsets.fromLTRB(
+          MjasiSpacing.lg,
+          MjasiSpacing.sm,
+          MjasiSpacing.lg,
+          MjasiSpacing.md,
+        ),
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
+          color: MjasiColors.surface,
+          border: const Border(top: BorderSide(color: MjasiColors.border)),
         ),
         child: uploadProgress != null
             ? Row(
@@ -345,7 +558,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
                         value: uploadProgress! <= 1 ? uploadProgress : null,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: MjasiColors.border,
                         valueColor: AlwaysStoppedAnimation<Color>(brandColor),
                         minHeight: 8,
                       ),
@@ -369,18 +582,9 @@ class _ProfilePageState extends State<ProfilePage> {
               )
             : SizedBox(
                 width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
+                height: 48,
+                child: FilledButton(
                   onPressed: busy ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brandColor,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: brandColor.withOpacity(0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
                   child: busy
                       ? const SizedBox(
                           width: 22,
@@ -390,12 +594,18 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Save Changes',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_rounded, size: 19),
+                            const SizedBox(width: MjasiSpacing.sm),
+                            Text(
+                              'profile_save_changes'.tr,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                 ),
               ),
@@ -405,10 +615,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildCompanyTab() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        MjasiSpacing.lg,
+        MjasiSpacing.md,
+        MjasiSpacing.lg,
+        MjasiSpacing.lg,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         _buildFormCard(
-          title: 'Language',
+          title: 'profile_language'.tr,
           icon: Icons.language_outlined,
           children: [_buildLanguageSelector()],
         ),
@@ -525,7 +741,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildPaymentTab() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        MjasiSpacing.lg,
+        MjasiSpacing.md,
+        MjasiSpacing.lg,
+        MjasiSpacing.lg,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         _buildFormCard(
           title: 'Payment Details',
@@ -552,7 +774,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildBrandingTab() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        MjasiSpacing.lg,
+        MjasiSpacing.md,
+        MjasiSpacing.lg,
+        MjasiSpacing.lg,
+      ),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         _buildFormCard(
           title: 'Brand Colors',
@@ -601,45 +829,57 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildLangOption(String code, String name, String flag) {
     final selected = langController.locale.languageCode == code;
-    return GestureDetector(
-      onTap: () {
-        if (!selected) {
-          langController.changeLanguage(code, code == 'sw' ? 'TZ' : 'US');
-          _saveLanguage(code);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected ? brandColor.withOpacity(0.08) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? brandColor : Colors.grey.shade200,
-            width: selected ? 1.5 : 1,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (!selected) {
+            langController.changeLanguage(code, code == 'sw' ? 'TZ' : 'US');
+            _saveLanguage(code);
+          }
+        },
+        borderRadius: BorderRadius.circular(MjasiRadius.sm),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(
+            vertical: MjasiSpacing.md,
+            horizontal: MjasiSpacing.md,
           ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(flag, style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                name,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? brandColor : Colors.grey.shade700,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+          decoration: BoxDecoration(
+            color: selected ? MjasiColors.lightBlue : MjasiColors.background,
+            borderRadius: BorderRadius.circular(MjasiRadius.sm),
+            border: Border.all(
+              color: selected ? MjasiColors.primaryBlue : MjasiColors.border,
             ),
-            if (selected) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.check_circle, size: 14, color: brandColor),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(flag, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: MjasiSpacing.sm),
+              Flexible(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? MjasiColors.primaryBlue
+                        : MjasiColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: MjasiSpacing.xs),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 15,
+                  color: MjasiColors.primaryBlue,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -689,49 +929,43 @@ class _ProfilePageState extends State<ProfilePage> {
     required IconData icon,
     required List<Widget> children,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: brandColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(icon, size: 17, color: brandColor),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Color(0xFF1A2B3C),
-                  ),
-                ),
-              ],
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: MjasiSpacing.md,
+              vertical: MjasiSpacing.xs,
+            ),
+            leading: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: MjasiColors.lightBlue,
+                borderRadius: BorderRadius.circular(MjasiRadius.sm),
+              ),
+              child: Icon(icon, size: 19, color: MjasiColors.primaryBlue),
+            ),
+            title: Text(
+              title,
+              style: const TextStyle(
+                color: MjasiColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          Divider(height: 1, color: Colors.grey.shade100),
+          const Divider(height: 1, color: MjasiColors.border),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            padding: const EdgeInsets.fromLTRB(
+              MjasiSpacing.md,
+              MjasiSpacing.md,
+              MjasiSpacing.md,
+              MjasiSpacing.xs,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: children,
@@ -747,33 +981,43 @@ class _ProfilePageState extends State<ProfilePage> {
     String label,
     IconData icon, {
     bool enabled = true,
+    TextInputType? keyboardType,
+    int? maxLength,
   }) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.only(bottom: MjasiSpacing.md),
     child: TextFormField(
       controller: controller,
       enabled: enabled,
+      keyboardType: keyboardType,
+      maxLength: maxLength,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, size: 18, color: Colors.grey.shade500),
+        prefixIcon: Icon(icon, size: 19, color: MjasiColors.textSecondary),
         labelText: label,
-        labelStyle: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+        labelStyle: const TextStyle(
+          fontSize: 13,
+          color: MjasiColors.textSecondary,
+        ),
         filled: true,
-        fillColor: const Color(0xFFF8F9FA),
+        fillColor: enabled ? MjasiColors.surface : MjasiColors.background,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
+          horizontal: MjasiSpacing.md,
+          vertical: MjasiSpacing.md,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          borderSide: const BorderSide(color: MjasiColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          borderSide: const BorderSide(color: MjasiColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: brandColor, width: 1.8),
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          borderSide: const BorderSide(
+            color: MjasiColors.primaryBlue,
+            width: 1.5,
+          ),
         ),
       ),
     ),
@@ -785,27 +1029,30 @@ class _ProfilePageState extends State<ProfilePage> {
     ValueChanged<Color> onColorSelected,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: MjasiSpacing.md),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF4A5568),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: MjasiColors.textPrimary,
               ),
             ),
           ),
           GestureDetector(
             onTap: () => _showColorPicker(color, onColorSelected),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(
+                horizontal: MjasiSpacing.md,
+                vertical: MjasiSpacing.sm,
+              ),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade200),
+                color: MjasiColors.background,
+                borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                border: Border.all(color: MjasiColors.border),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -815,26 +1062,23 @@ class _ProfilePageState extends State<ProfilePage> {
                     height: 20,
                     decoration: BoxDecoration(
                       color: color,
-                      borderRadius: BorderRadius.circular(5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.4),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: MjasiSpacing.sm),
                   Text(
                     '#${color.value.toRadixString(16).substring(2).toUpperCase()}',
-                    style: const TextStyle(fontSize: 12, letterSpacing: 0.5),
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 12,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
-                    color: Colors.grey.shade500,
+                    color: MjasiColors.textSecondary,
                   ),
                 ],
               ),
@@ -964,7 +1208,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: MjasiSpacing.md),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1141,6 +1385,99 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     } catch (e) {
       Get.snackbar('Error', 'Could not save language preference: $e');
+    }
+  }
+
+  Future<String> _uploadStaffPhoto(Uint8List bytes, String? ext) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw StateError('Sign in before updating your photo.');
+    if (bytes.length >= 5 * 1024 * 1024) {
+      throw ArgumentError('Choose an image smaller than 5 MB.');
+    }
+    final safeExt = switch (ext?.toLowerCase()) {
+      'jpg' || 'jpeg' => 'jpg',
+      'png' => 'png',
+      'webp' => 'webp',
+      _ => throw ArgumentError('Choose a JPG, PNG, or WebP image.'),
+    };
+    final contentType = switch (safeExt) {
+      'jpg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => throw StateError('Unsupported profile image format.'),
+    };
+    final ref = FirebaseStorage.instance.ref().child(
+      'userProfiles/${user.uid}/profile/profile_${DateTime.now().millisecondsSinceEpoch}.$safeExt',
+    );
+    final task = ref.putData(
+      bytes,
+      SettableMetadata(contentType: contentType, cacheControl: 'private'),
+    );
+    _currentUploadTask = task;
+    try {
+      final result = await task.timeout(const Duration(seconds: 120));
+      if (result.state != TaskState.success) {
+        throw StateError('Profile image upload failed: ${result.state}.');
+      }
+      return await ref.getDownloadURL();
+    } finally {
+      _currentUploadTask = null;
+    }
+  }
+
+  Future<void> _saveStaffProfile() async {
+    if (busy) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar('error'.tr, 'personal_save_error'.tr);
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      var photoUrl = logoUrl ?? '';
+      if (pickedBytes != null) {
+        photoUrl = await _uploadStaffPhoto(pickedBytes!, pickedExt);
+      }
+      await user.updatePhotoURL(photoUrl.isEmpty ? null : photoUrl);
+      await FirebaseFirestore.instance
+          .collection('userProfiles')
+          .doc(user.uid)
+          .set({
+            'displayName': user.displayName ?? '',
+            'photoUrl': photoUrl,
+            'secondaryPhone': secondaryPhoneC.text.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+      if (!mounted) return;
+      setState(() {
+        logoUrl = photoUrl;
+        pickedBytes = null;
+      });
+      Get.snackbar('success'.tr, 'personal_settings_saved'.tr);
+    } catch (error, stackTrace) {
+      debugPrint('Could not save staff profile: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) Get.snackbar('error'.tr, 'personal_save_error'.tr);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await PushService.unregister();
+      await FirebaseAuth.instance.signOut();
+      BusinessAccessService.clear();
+      Get.offAllNamed(AppRoutes.login);
+    } catch (error, stackTrace) {
+      debugPrint('Could not sign out from profile: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        setState(() => busy = false);
+        Get.snackbar('error'.tr, 'personal_sign_out_error'.tr);
+      }
     }
   }
 

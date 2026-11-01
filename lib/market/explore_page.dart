@@ -20,6 +20,7 @@ import 'market_comments_sheet.dart';
 import 'market_avatar.dart';
 import 'market_hashtags.dart';
 import 'market_models.dart';
+import 'market_post_state.dart';
 import 'market_order_dialog.dart';
 import 'market_service.dart';
 import 'status_stories_strip.dart';
@@ -35,7 +36,6 @@ class MarketExplorePage extends StatefulWidget {
     this.showFeedModeTabs = false,
     this.showControls = true,
     this.searchAutofocus = false,
-    this.hideFeedHeader = false,
     this.initialHashtag = '',
   });
 
@@ -43,7 +43,6 @@ class MarketExplorePage extends StatefulWidget {
   final bool showFeedModeTabs;
   final bool showControls;
   final bool searchAutofocus;
-  final bool hideFeedHeader;
   final String initialHashtag;
 
   @override
@@ -124,7 +123,9 @@ class _MarketExplorePageState extends State<MarketExplorePage> {
           _shopStatuses = groups;
         }
       } else {
-        final page = await _fetchCurrentPostPage();
+        final page = await _fetchCurrentPostPage().timeout(
+          const Duration(seconds: 25),
+        );
         if (mounted && id == _requestId) {
           _posts = page.posts;
           _postCursor = page.lastDocument;
@@ -261,34 +262,43 @@ class _MarketExplorePageState extends State<MarketExplorePage> {
               (_tab == MarketExploreTab.posts ||
                   _tab == MarketExploreTab.products))
             _buildHashtags(),
-          if (widget.showFeedModeTabs ||
-              (_tab == MarketExploreTab.posts &&
-                  _feedMode == MarketExploreFeedMode.forYou))
-            ClipRect(
-              child: AnimatedAlign(
-                alignment: Alignment.topCenter,
-                heightFactor: widget.hideFeedHeader ? 0 : 1,
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeInOutCubic,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.showFeedModeTabs) _buildFeedModeTabs(),
-                    if (_tab == MarketExploreTab.posts &&
-                        _feedMode == MarketExploreFeedMode.forYou)
-                      StatusStoriesStrip(
-                        onCreateStatus: () =>
-                            _openPostComposer(initialType: 'status'),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+          if (_hasFeedHeader && !_headerInList) _buildFeedHeader(),
           Expanded(child: _buildBody()),
         ],
       ),
     );
   }
+
+  bool get _hasFeedHeader =>
+      widget.showFeedModeTabs ||
+      (_tab == MarketExploreTab.posts &&
+          _feedMode == MarketExploreFeedMode.forYou);
+
+  // The header scrolls with the posts whenever the feed list is visible.
+  bool get _headerInList =>
+      _hasFeedHeader &&
+      !widget.searchAutofocus &&
+      !_loading &&
+      _error == null &&
+      _tab == MarketExploreTab.posts &&
+      _posts.isNotEmpty;
+
+  Widget _buildFeedHeader() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (widget.showFeedModeTabs) _buildFeedModeTabs(),
+      if (_tab == MarketExploreTab.posts &&
+          _feedMode == MarketExploreFeedMode.forYou)
+        StatusStoriesStrip(
+          onCreateStatus: () => _openPostComposer(initialType: 'status'),
+        ),
+    ],
+  );
+
+  Widget _segmentLabel(String text) => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(text, maxLines: 1, softWrap: false),
+  );
 
   Widget _buildFeedModeTabs() => Padding(
     padding: const EdgeInsets.fromLTRB(
@@ -305,18 +315,18 @@ class _MarketExplorePageState extends State<MarketExplorePage> {
         segments: [
           ButtonSegment(
             value: MarketExploreFeedMode.forYou,
-            label: Text('market_for_you'.tr),
+            label: _segmentLabel('market_for_you'.tr),
             icon: const Icon(Icons.auto_awesome_outlined),
           ),
           ButtonSegment(
             value: MarketExploreFeedMode.following,
-            label: Text('market_following_count'.tr),
+            label: _segmentLabel('market_following_count'.tr),
             icon: const Icon(Icons.people_outline_rounded),
           ),
-          const ButtonSegment(
+          ButtonSegment(
             value: MarketExploreFeedMode.reels,
-            label: Text('Reels'),
-            icon: Icon(Icons.play_circle_outline_rounded),
+            label: _segmentLabel('Reels'),
+            icon: const Icon(Icons.play_circle_outline_rounded),
           ),
         ],
         selected: {_feedMode},
@@ -565,26 +575,32 @@ class _MarketExplorePageState extends State<MarketExplorePage> {
           ),
         );
       }
+      final header = _headerInList;
+      final offset = header ? 1 : 0;
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView.separated(
           controller: _scrollController,
           cacheExtent: 1500,
           padding: const EdgeInsets.fromLTRB(0, 0, 0, MjasiSpacing.lg),
-          itemCount: _posts.length + (_hasMorePosts ? 1 : 0),
+          itemCount: _posts.length + (_hasMorePosts ? 1 : 0) + offset,
           separatorBuilder: (_, _) => const SizedBox(height: MjasiSpacing.md),
-          itemBuilder: (context, index) => index >= _posts.length
-              ? const Padding(
-                  padding: EdgeInsets.all(MjasiSpacing.md),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : RepaintBoundary(
-                  child: _FeedPostTile(
-                    key: ValueKey(_posts[index].id),
-                    post: _posts[index],
-                    videoPosts: videoPosts,
-                  ),
-                ),
+          itemBuilder: (context, rawIndex) {
+            if (header && rawIndex == 0) return _buildFeedHeader();
+            final index = rawIndex - offset;
+            return index >= _posts.length
+                ? const Padding(
+                    padding: EdgeInsets.all(MjasiSpacing.md),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : RepaintBoundary(
+                    child: _FeedPostTile(
+                      key: ValueKey(_posts[index].id),
+                      post: _posts[index],
+                      videoPosts: videoPosts,
+                    ),
+                  );
+          },
         ),
       );
     }
@@ -836,11 +852,13 @@ class _GridPostTile extends StatelessWidget {
                 fontSize: 13,
                 maxLines: 7,
               )
-            else if (post.images.isEmpty)
+            else if (post.images.isEmpty && post.videoThumb.isEmpty)
               placeholder
             else
               CachedNetworkImage(
-                imageUrl: post.images.first,
+                imageUrl: post.images.isNotEmpty
+                    ? post.images.first
+                    : post.videoThumb,
                 fit: BoxFit.cover,
                 memCacheWidth: 400,
                 placeholder: (_, _) => placeholder,
@@ -889,13 +907,16 @@ class _GridPostTile extends StatelessWidget {
                     size: 16,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    _compactCount(post.viewsCount),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                  ValueListenableBuilder<Map<String, int>>(
+                    valueListenable: MarketService.viewBumps,
+                    builder: (_, bumps, _) => Text(
+                      _compactCount(post.viewsCount + (bumps[post.id] ?? 0)),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                      ),
                     ),
                   ),
                 ],
@@ -1123,6 +1144,13 @@ class _FeedPostTileState extends State<_FeedPostTile> {
   int _imageIndex = 0;
   bool _busy = false;
   bool _deleted = false;
+  late final Stream<MarketPostLive> _live = watchMarketPostLive(widget.post);
+
+  @override
+  void initState() {
+    super.initState();
+    MarketUserSets.instance.ensureStarted();
+  }
 
   MarketPost get post => widget.post;
 
@@ -1347,9 +1375,9 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                     ),
                   ),
                 if (uid != null && uid != post.authorUid)
-                  StreamBuilder<bool>(
-                    stream: MarketService.watchFollowing(post.authorUid),
-                    builder: (context, snapshot) => TextButton(
+                  ValueListenableBuilder<Set<String>>(
+                    valueListenable: MarketUserSets.instance.following,
+                    builder: (context, following, _) => TextButton(
                       onPressed: _busy
                           ? null
                           : () async {
@@ -1365,7 +1393,7 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                               }
                             },
                       child: Text(
-                        snapshot.data == true
+                        following.contains(post.authorUid)
                             ? 'market_following'.tr
                             : 'market_follow'.tr,
                       ),
@@ -1518,10 +1546,11 @@ class _FeedPostTileState extends State<_FeedPostTile> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
-            child: StreamBuilder<MarketPost?>(
-              stream: MarketService.watchPost(post.id),
+            child: StreamBuilder<MarketPostLive>(
+              stream: _live,
               builder: (context, postSnapshot) {
-                final current = postSnapshot.data ?? post;
+                final current = postSnapshot.data?.post ?? post;
+                final liked = postSnapshot.data?.liked ?? false;
                 final iconConstraints = const BoxConstraints(
                   minWidth: 48,
                   minHeight: 48,
@@ -1534,48 +1563,45 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                 );
                 return Row(
                   children: [
-                    StreamBuilder<bool>(
-                      stream: MarketService.watchLike(post.id),
-                      builder: (context, snapshot) => Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            constraints: iconConstraints,
-                            style: iconStyle,
-                            tooltip: snapshot.data == true
-                                ? 'market_unlike'.tr
-                                : 'market_like'.tr,
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    setState(() => _busy = true);
-                                    try {
-                                      await MarketService.toggleLike(post.id);
-                                    } catch (error) {
-                                      if (mounted) _message('$error');
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => _busy = false);
-                                      }
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          constraints: iconConstraints,
+                          style: iconStyle,
+                          tooltip: liked
+                              ? 'market_unlike'.tr
+                              : 'market_like'.tr,
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  setState(() => _busy = true);
+                                  try {
+                                    await MarketService.toggleLike(post.id);
+                                  } catch (error) {
+                                    if (mounted) _message('$error');
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() => _busy = false);
                                     }
-                                  },
-                            icon: Icon(
-                              snapshot.data == true
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
+                                  }
+                                },
+                          icon: Icon(
+                            liked
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            color: Colors.white,
+                            size: 28,
                           ),
-                          Text(
-                            NumberFormat.compact().format(current.likesCount),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                            ),
+                        ),
+                        Text(
+                          NumberFormat.compact().format(current.likesCount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     const SizedBox(width: 8),
                     Row(
@@ -1613,29 +1639,32 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                       ),
                     ),
                     const Spacer(),
-                    StreamBuilder<bool>(
-                      stream: MarketService.watchSaved(post.id),
-                      builder: (context, snapshot) => IconButton(
-                        constraints: iconConstraints,
-                        style: iconStyle,
-                        tooltip: snapshot.data == true
-                            ? 'market_unsave'.tr
-                            : 'market_save'.tr,
-                        onPressed: () async {
-                          try {
-                            await MarketService.toggleSaved(post.id);
-                          } catch (error) {
-                            if (mounted) _message('$error');
-                          }
-                        },
-                        icon: Icon(
-                          snapshot.data == true
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
+                    ValueListenableBuilder<Set<String>>(
+                      valueListenable: MarketUserSets.instance.saved,
+                      builder: (context, savedIds, _) {
+                        final isSaved = savedIds.contains(post.id);
+                        return IconButton(
+                          constraints: iconConstraints,
+                          style: iconStyle,
+                          tooltip: isSaved
+                              ? 'market_unsave'.tr
+                              : 'market_save'.tr,
+                          onPressed: () async {
+                            try {
+                              await MarketService.toggleSaved(post.id);
+                            } catch (error) {
+                              if (mounted) _message('$error');
+                            }
+                          },
+                          icon: Icon(
+                            isSaved
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 );

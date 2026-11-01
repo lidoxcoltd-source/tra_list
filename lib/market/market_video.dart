@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
+import 'market_media_route_observer.dart';
 import 'market_video_trim_page.dart';
 
 const marketVideoMaxSeconds = 30;
@@ -119,11 +120,12 @@ class MarketVideoView extends StatefulWidget {
   State<MarketVideoView> createState() => _MarketVideoViewState();
 }
 
-class _MarketVideoViewState extends State<MarketVideoView> {
+class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
   VideoPlayerController? _controller;
   bool _visible = false;
   bool _muted = true;
   bool _failed = false;
+  ModalRoute<dynamic>? _route;
 
   bool get _held => widget.paused?.value ?? false;
 
@@ -139,6 +141,32 @@ class _MarketVideoViewState extends State<MarketVideoView> {
     if (oldWidget.paused != widget.paused) {
       oldWidget.paused?.removeListener(_onHoldChanged);
       widget.paused?.addListener(_onHoldChanged);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    if (_route != null) marketMediaRouteObserver.unsubscribe(this);
+    _route = route;
+    if (route != null) marketMediaRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() {
+    unawaited(_controller?.pause());
+  }
+
+  @override
+  void didPopNext() {
+    final controller = _controller;
+    if (_visible &&
+        !_held &&
+        controller != null &&
+        controller.value.isInitialized) {
+      unawaited(controller.play());
     }
   }
 
@@ -220,6 +248,7 @@ class _MarketVideoViewState extends State<MarketVideoView> {
   void dispose() {
     _initTimer?.cancel();
     _releaseTimer?.cancel();
+    marketMediaRouteObserver.unsubscribe(this);
     widget.paused?.removeListener(_onHoldChanged);
     unawaited(_controller?.dispose());
     super.dispose();

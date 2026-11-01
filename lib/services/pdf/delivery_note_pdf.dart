@@ -73,23 +73,10 @@ class DeliveryNotePdf {
     final items =
         (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
 
-    // Load logo from profile logoUrl; fallback to asset.
-    pw.ImageProvider? logo;
-    try {
-      final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
-      if (logoBytes != null) {
-        logo = pw.MemoryImage(logoBytes);
-      } else {
-        final b = await rootBundle.load('assets/lidox_logo.png');
-        logo = pw.MemoryImage(b.buffer.asUint8List());
-      }
-    } catch (e) {
-      print(
-        'Failed to load network image for PDF, falling back to local asset: $e',
-      );
-      final b = await rootBundle.load('assets/lidox_logo.png');
-      logo = pw.MemoryImage(b.buffer.asUint8List());
-    }
+    final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
+    final pw.ImageProvider? logo = logoBytes == null
+        ? null
+        : pw.MemoryImage(logoBytes);
 
     pw.ImageProvider? socialIcons;
     try {

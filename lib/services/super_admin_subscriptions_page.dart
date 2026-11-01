@@ -31,6 +31,12 @@ class _SuperAdminSubscriptionsPageState
   SubscriptionPlanSettings _plan = SubscriptionPlanSettings.defaults;
   bool _loading = true;
   bool _savingPlan = false;
+  TrialSettings _trial = TrialSettings.defaults;
+  bool _trialEnabled = true;
+  bool _savingTrial = false;
+  final TextEditingController _trialDaysController = TextEditingController(
+    text: '7',
+  );
   String? _error;
   String _statusFilter = 'all';
   final Set<String> _updating = {};
@@ -47,6 +53,7 @@ class _SuperAdminSubscriptionsPageState
   void dispose() {
     _searchController.dispose();
     _planAmountController.dispose();
+    _trialDaysController.dispose();
     _planMonthsController.dispose();
     _planDaysController.dispose();
     _mobileLogosController.dispose();
@@ -74,8 +81,12 @@ class _SuperAdminSubscriptionsPageState
     try {
       final businesses = await SuperAdminSubscriptionService.loadBusinesses();
       final plan = await SuperAdminSubscriptionService.loadPlanSettings();
+      final trial = await SuperAdminSubscriptionService.loadTrialSettings();
       if (!mounted) return;
       setState(() {
+        _trial = trial;
+        _trialEnabled = trial.enabled;
+        _trialDaysController.text = '${trial.durationDays}';
         _businesses = businesses;
         _plan = plan;
         _planAmountController.text = '${plan.amount}';
@@ -602,6 +613,8 @@ class _SuperAdminSubscriptionsPageState
                       const SizedBox(height: 8),
                       _buildPlanSettings(),
                       const SizedBox(height: 8),
+                      _buildTrialSettings(),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _searchController,
                         onChanged: (_) => setState(() {}),
@@ -719,6 +732,195 @@ class _SuperAdminSubscriptionsPageState
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveTrial() async {
+    final days = int.tryParse(_trialDaysController.text.trim());
+    if (days == null || days < 1 || days > 365) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('admin_trial_invalid'.tr)));
+      return;
+    }
+    setState(() => _savingTrial = true);
+    try {
+      await SuperAdminSubscriptionService.saveTrialSettings(
+        enabled: _trialEnabled,
+        durationDays: days,
+      );
+      if (!mounted) return;
+      setState(
+        () =>
+            _trial = TrialSettings(enabled: _trialEnabled, durationDays: days),
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('admin_trial_saved'.tr)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'admin_subscription_update_error'.trParams({
+              'error': error.toString(),
+            }),
+          ),
+          backgroundColor: const Color(0xFFB34343),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingTrial = false);
+    }
+  }
+
+  Future<void> _grantTrial(ManagedBusinessSubscription business) async {
+    final controller = TextEditingController(text: '${_trial.durationDays}');
+    final days = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('admin_trial_grant'.tr),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'admin_trial_days'.tr),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value != null && value >= 1 && value <= 365) {
+                Navigator.pop(context, value);
+              }
+            },
+            child: Text('admin_trial_grant'.tr),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (days == null) return;
+    await _runTrialAction(
+      business,
+      () => SuperAdminSubscriptionService.grantTrial(
+        business.businessId,
+        days: days,
+      ),
+    );
+  }
+
+  Future<void> _runTrialAction(
+    ManagedBusinessSubscription business,
+    Future<void> Function() action,
+  ) async {
+    setState(() => _updating.add(business.businessId));
+    try {
+      await action();
+      await _loadBusinesses();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('admin_trial_updated'.tr)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'admin_subscription_update_error'.trParams({
+              'error': error.toString(),
+            }),
+          ),
+          backgroundColor: const Color(0xFFB34343),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating.remove(business.businessId));
+    }
+  }
+
+  Widget _buildTrialSettings() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E9EA)),
+      ),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 12),
+        visualDensity: VisualDensity.compact,
+        leading: const Icon(
+          Icons.card_giftcard_outlined,
+          color: _brand,
+          size: 20,
+        ),
+        title: Text(
+          'admin_trial_settings'.tr,
+          style: const TextStyle(
+            color: _ink,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          _trial.enabled
+              ? 'admin_trial_summary_on'.trParams({
+                  'days': '${_trial.durationDays}',
+                })
+              : 'admin_trial_summary_off'.tr,
+          style: const TextStyle(fontSize: 12),
+        ),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'admin_trial_help'.tr,
+              style: const TextStyle(color: Color(0xFF75838A), fontSize: 12),
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _trialEnabled,
+            onChanged: (value) => setState(() => _trialEnabled = value),
+            title: Text('admin_trial_enabled'.tr),
+          ),
+          TextField(
+            controller: _trialDaysController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'admin_trial_days'.tr,
+              prefixIcon: const Icon(Icons.calendar_today_outlined),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _savingTrial || _loading ? null : _saveTrial,
+              icon: _savingTrial
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text('save'.tr),
+            ),
+          ),
         ],
       ),
     );
@@ -1230,11 +1432,41 @@ class _SuperAdminSubscriptionsPageState
                 onSelected: (action) {
                   if (action == 'extend') {
                     _extendSubscription(business);
+                  } else if (action == 'trial') {
+                    _grantTrial(business);
+                  } else if (action == 'endtrial') {
+                    _runTrialAction(
+                      business,
+                      () => SuperAdminSubscriptionService.endTrial(
+                        business.businessId,
+                      ),
+                    );
                   } else {
                     _changeAccountAccess(business);
                   }
                 },
                 itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'trial',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.card_giftcard_outlined, size: 20),
+                        const SizedBox(width: 12),
+                        Text('admin_trial_grant'.tr),
+                      ],
+                    ),
+                  ),
+                  if (business.isTrial)
+                    PopupMenuItem(
+                      value: 'endtrial',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.timer_off_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          Text('admin_trial_end'.tr),
+                        ],
+                      ),
+                    ),
                   PopupMenuItem(
                     value: 'extend',
                     child: Row(

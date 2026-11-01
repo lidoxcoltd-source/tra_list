@@ -182,11 +182,13 @@ class MarketPost {
     this.audioTitle = '',
     this.publishAt,
     this.videoUrl = '',
+    this.videoThumb = '',
     this.textBg = -1,
     this.textFont = 0,
   });
 
   final String videoUrl;
+  final String videoThumb;
   final int textBg;
   final int textFont;
   bool get hasVideo => videoUrl.isNotEmpty;
@@ -288,6 +290,7 @@ class MarketPost {
       audioTitle: (data['audioTitle'] ?? '').toString(),
       publishAt: (data['publishAt'] as Timestamp?)?.toDate(),
       videoUrl: (data['videoUrl'] ?? '').toString(),
+      videoThumb: (data['videoThumb'] ?? '').toString(),
       textBg: (data['textBg'] as num?)?.toInt() ?? -1,
       textFont: (data['textFont'] as num?)?.toInt() ?? 0,
     );

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math' show Random;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -19,11 +21,13 @@ import 'package:tra_list/services/pages/document_design_page.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/account_deletion_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/chat_page.dart';
 import 'package:tra_list/services/notifications_page.dart';
 import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/personal_device_lock_service.dart';
 import 'package:tra_list/services/personal_finance_page.dart';
 import 'package:tra_list/services/support_center_fab.dart';
+import 'package:tra_list/services/staff_service.dart';
 import 'package:tra_list/stock/products_pages.dart';
 import 'package:tra_list/tasks/task_banner.dart';
 import 'package:tra_list/tasks/task_service.dart';
@@ -33,7 +37,7 @@ import 'services/subscription_controller.dart';
 
 enum _FinancePeriod { today, yesterday, thisWeek, thisMonth }
 
-enum _HomeDestination { dashboard, explore, reports }
+enum _HomeDestination { dashboard, explore, reports, chat }
 
 class _StaffStat {
   _StaffStat(this.name);
@@ -41,6 +45,20 @@ class _StaffStat {
   double income = 0;
   double expense = 0;
   int count = 0;
+}
+
+class _BusinessRecommendation {
+  const _BusinessRecommendation({
+    required this.titleKey,
+    required this.descriptionKey,
+    required this.icon,
+    required this.color,
+  });
+
+  final String titleKey;
+  final String descriptionKey;
+  final IconData icon;
+  final Color color;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +102,9 @@ class _Radius {
 // HomePage
 // ─────────────────────────────────────────────────────────────────────────────
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.initialSection});
+
+  final String? initialSection;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -106,6 +126,8 @@ class _HomePageState extends State<HomePage> {
   String subscriptionBadge = '';
   String storeName = '';
   String shopNickname = '';
+  String ownerName = '';
+  String businessAddress = '';
   bool isSubscribed = false;
   bool isTrial = false;
   String userRole = 'user';
@@ -122,9 +144,13 @@ class _HomePageState extends State<HomePage> {
   bool _staffOpen = false;
   bool _quickActionsOpen = false;
   bool _desktopRailExtended = true;
-  _HomeDestination _activeDestination = _HomeDestination.dashboard;
+  late _HomeDestination _activeDestination;
   List<_StaffStat> staffStats = [];
-  _FinancePeriod _financePeriod = _FinancePeriod.today;
+  List<String> _availableShopNicknames = [];
+  Map<String, String> _shopByStaffUid = {};
+  Map<String, String> _nameByStaffUid = {};
+  String _selectedShopNickname = '';
+  _FinancePeriod _financePeriod = _FinancePeriod.thisWeek;
   int _financeRequest = 0;
   bool _desktop = false;
   bool _isOnline = false;
@@ -137,12 +163,28 @@ class _HomePageState extends State<HomePage> {
   bool get _isPersonalMode =>
       AccountModeService.current == AccountMode.personal;
 
+  bool get _canSwitchBusiness =>
+      BusinessAccessService.availableBusinesses
+          .where((business) => business.isActive)
+          .length >
+      1;
+
+  bool get _canSelectDashboardShop =>
+      BusinessAccessService.isOwner.value &&
+      _availableShopNicknames.isNotEmpty;
+
   bool get _hasSubscriptionExemption =>
       _isSuperAdmin || _normalizedUserRole == 'admin';
 
   @override
   void initState() {
     super.initState();
+    _activeDestination = switch (widget.initialSection) {
+      'explore' => _HomeDestination.explore,
+      'reports' => _HomeDestination.reports,
+      'chat' => _HomeDestination.chat,
+      _ => _HomeDestination.dashboard,
+    };
     _initConnectivityStatus();
     if (_isPersonalMode) unawaited(PersonalDeviceLockService.ensure());
     if (!_isPersonalMode && BusinessAccessService.can('jobs', 'view')) {
@@ -240,6 +282,9 @@ class _HomePageState extends State<HomePage> {
       final totals = await TransactionService.getTotals(
         startDate: start,
         endDate: end,
+        shopNickname: _selectedShopNickname.isEmpty
+            ? null
+            : _selectedShopNickname,
       );
       if (!mounted || request != _financeRequest) return;
       setState(() {
@@ -272,6 +317,7 @@ class _HomePageState extends State<HomePage> {
           .where('businessUid', isEqualTo: BusinessAccessService.businessId)
           .get();
       final names = {
+        ..._nameByStaffUid,
         for (final m in members.docs)
           m.id: (m.data()['name'] ?? '').toString().trim(),
       };
@@ -279,6 +325,9 @@ class _HomePageState extends State<HomePage> {
         limit: 1000,
         startDate: start,
         endDate: end,
+        shopNickname: _selectedShopNickname.isEmpty
+            ? null
+            : _selectedShopNickname,
       );
       final byUid = <String, _StaffStat>{
         for (final e in names.entries)
@@ -323,6 +372,17 @@ class _HomePageState extends State<HomePage> {
       var count = 0;
       var total = 0.0;
       if (BusinessAccessService.can('invoices', 'view')) {
+        Set<String>? invoiceStaffUids;
+        if (_selectedShopNickname.isNotEmpty) {
+          invoiceStaffUids = {
+            for (final entry in _shopByStaffUid.entries)
+              if (entry.value == _selectedShopNickname) entry.key,
+          };
+          final ownerUid = FirebaseAuth.instance.currentUser?.uid;
+          if (_selectedShopNickname == shopNickname && ownerUid != null) {
+            invoiceStaffUids.add(ownerUid);
+          }
+        }
         final snap = await base
             .collection('invoices')
             .where(
@@ -334,6 +394,10 @@ class _HomePageState extends State<HomePage> {
         for (final doc in snap.docs) {
           final data = doc.data();
           if (data['kind'] == 'quotation') continue;
+          if (invoiceStaffUids != null &&
+              !invoiceStaffUids.contains(data['uid']?.toString())) {
+            continue;
+          }
           count++;
           total += (data['total'] as num?)?.toDouble() ?? 0;
         }
@@ -349,8 +413,19 @@ class _HomePageState extends State<HomePage> {
       }
       var tasks = 0;
       try {
-        tasks = await TaskService.activeCount();
-      } catch (_) {}
+        final taskList = await TaskService.watchTasks().first;
+        tasks = taskList
+            .where(
+              (task) =>
+                  !task.isFinal &&
+                  (_selectedShopNickname.isEmpty ||
+                      task.assigneeShop.trim() == _selectedShopNickname),
+            )
+            .length;
+      } catch (error, stackTrace) {
+        debugPrint('Could not load dashboard task count: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       if (!mounted || request != _financeRequest) return;
       setState(() {
         taskCount = tasks;
@@ -370,6 +445,361 @@ class _HomePageState extends State<HomePage> {
       _FinancePeriod.thisWeek => 'transactions_this_week'.tr,
       _FinancePeriod.thisMonth => 'transactions_this_month'.tr,
     };
+  }
+
+  List<_BusinessRecommendation> _buildBusinessRecommendations() {
+    final recommendations = <_BusinessRecommendation>[
+      const _BusinessRecommendation(
+        titleKey: 'home_ai_next_step_review_goal',
+        descriptionKey: 'home_ai_next_step_review_goal_desc',
+        icon: Icons.flag_outlined,
+        color: MjasiColors.primaryBlue,
+      ),
+      const _BusinessRecommendation(
+        titleKey: 'home_ai_next_step_follow_up_customers',
+        descriptionKey: 'home_ai_next_step_follow_up_customers_desc',
+        icon: Icons.people_alt_outlined,
+        color: Color(0xFF7C3AED),
+      ),
+    ];
+    final net = financeIncome - financeExpense;
+
+    if (financeIncome <= 0) {
+      recommendations.add(
+        const _BusinessRecommendation(
+          titleKey: 'home_ai_next_step_record_sales',
+          descriptionKey: 'home_ai_next_step_record_sales_desc',
+          icon: Icons.point_of_sale_rounded,
+          color: MjasiColors.warning,
+        ),
+      );
+      recommendations.add(
+        const _BusinessRecommendation(
+          titleKey: 'home_ai_next_step_review_pricing',
+          descriptionKey: 'home_ai_next_step_review_pricing_desc',
+          icon: Icons.sell_outlined,
+          color: MjasiColors.error,
+        ),
+      );
+    } else {
+      final expenseRatio = financeExpense / financeIncome;
+      if (expenseRatio >= 0.65) {
+        recommendations.add(
+          const _BusinessRecommendation(
+            titleKey: 'home_ai_next_step_review_costs',
+            descriptionKey: 'home_ai_next_step_review_costs_desc',
+            icon: Icons.trending_down_rounded,
+            color: MjasiColors.error,
+          ),
+        );
+        if (net <= 0) {
+          recommendations.add(
+            const _BusinessRecommendation(
+              titleKey: 'home_ai_next_step_review_pricing',
+              descriptionKey: 'home_ai_next_step_review_pricing_desc',
+              icon: Icons.sell_outlined,
+              color: MjasiColors.error,
+            ),
+          );
+        }
+      }
+      if (net > 0) {
+        recommendations.add(
+          const _BusinessRecommendation(
+            titleKey: 'home_ai_next_step_protect_surplus',
+            descriptionKey: 'home_ai_next_step_protect_surplus_desc',
+            icon: Icons.savings_outlined,
+            color: MjasiColors.success,
+          ),
+        );
+      }
+    }
+
+    if (_selectedShopNickname.isEmpty) {
+      if (docCount == 0) {
+        recommendations.add(
+          const _BusinessRecommendation(
+            titleKey: 'home_ai_next_step_invoice_sales',
+            descriptionKey: 'home_ai_next_step_invoice_sales_desc',
+            icon: Icons.receipt_long_outlined,
+            color: Color(0xFF7C3AED),
+          ),
+        );
+      } else if (docTotal > financeIncome) {
+        recommendations.add(
+          const _BusinessRecommendation(
+            titleKey: 'home_ai_next_step_reconcile_payments',
+            descriptionKey: 'home_ai_next_step_reconcile_payments_desc',
+            icon: Icons.fact_check_outlined,
+            color: Color(0xFF7C3AED),
+          ),
+        );
+      }
+    }
+
+    if (taskCount > 0) {
+      recommendations.add(
+        const _BusinessRecommendation(
+          titleKey: 'home_ai_next_step_prioritize_tasks',
+          descriptionKey: 'home_ai_next_step_prioritize_tasks_desc',
+          icon: Icons.task_alt_rounded,
+          color: MjasiColors.warning,
+        ),
+      );
+    }
+    if ((staffCount ?? 0) > 0) {
+      recommendations.add(
+        const _BusinessRecommendation(
+          titleKey: 'home_ai_next_step_align_team',
+          descriptionKey: 'home_ai_next_step_align_team_desc',
+          icon: Icons.groups_2_outlined,
+          color: MjasiColors.primaryBlue,
+        ),
+      );
+    }
+
+    recommendations.shuffle(Random());
+    return recommendations.take(3).toList();
+  }
+
+  Future<void> _showHomeBusinessSummary() async {
+    if (financeLoading) await _loadFinanceSummary();
+    if (!mounted) return;
+
+    final net = financeIncome - financeExpense;
+    final recommendations = _buildBusinessRecommendations();
+    final insight = financeIncome <= 0
+        ? 'home_ai_no_income_insight'.tr
+        : (financeIncome - financeExpense).abs() < 0.01
+        ? 'analytics_summary_balanced'.tr
+        : net > 0
+        ? 'analytics_summary_positive'.tr
+        : 'analytics_summary_negative'.tr;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_Radius.lg),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 12, 8),
+        contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        title: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [MjasiColors.primaryNavy, MjasiColors.primaryBlue],
+                ),
+                borderRadius: BorderRadius.circular(_Radius.sm),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: _Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'analytics_ai_summary'.tr,
+                    style: const TextStyle(
+                      color: _AppColors.ink,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    _financePeriodLabel(_financePeriod),
+                    style: const TextStyle(
+                      color: _AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'close'.tr,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 520,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * .68,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (financeLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (financeError != null)
+                  Text(
+                    financeError!,
+                    style: const TextStyle(color: MjasiColors.error),
+                  )
+                else ...[
+                  _homeSummaryMetric(
+                    'analytics_total_income'.tr,
+                    'TSH ${_formatAmount(financeIncome)}',
+                    Icons.south_west_rounded,
+                    MjasiColors.success,
+                  ),
+                  _homeSummaryMetric(
+                    'analytics_total_expense'.tr,
+                    'TSH ${_formatAmount(financeExpense)}',
+                    Icons.north_east_rounded,
+                    MjasiColors.error,
+                  ),
+                  _homeSummaryMetric(
+                    'net'.tr,
+                    '${net >= 0 ? '+' : '-'}TSH ${_formatAmount(net.abs())}',
+                    Icons.account_balance_wallet_rounded,
+                    net >= 0 ? MjasiColors.primaryBlue : MjasiColors.warning,
+                  ),
+                  const SizedBox(height: _Spacing.md),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(_Spacing.md),
+                    decoration: BoxDecoration(
+                      color: MjasiColors.primaryBlue.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(_Radius.sm),
+                    ),
+                    child: Text(
+                      insight,
+                      style: const TextStyle(
+                        color: _AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: _Spacing.lg),
+                  Text(
+                    'home_ai_next_steps'.tr,
+                    style: const TextStyle(
+                      color: _AppColors.ink,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: _Spacing.sm),
+                  for (final recommendation in recommendations)
+                    _homeRecommendationCard(recommendation),
+                  const SizedBox(height: _Spacing.md),
+                  Text(
+                    'analytics_summary_disclaimer'.tr,
+                    style: const TextStyle(
+                      color: _AppColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _homeRecommendationCard(_BusinessRecommendation recommendation) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: _Spacing.sm),
+      padding: const EdgeInsets.all(_Spacing.md),
+      decoration: BoxDecoration(
+        color: recommendation.color.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(_Radius.sm),
+        border: Border(
+          left: BorderSide(color: recommendation.color, width: 3),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(recommendation.icon, color: recommendation.color, size: 20),
+          const SizedBox(width: _Spacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recommendation.titleKey.tr,
+                  style: TextStyle(
+                    color: recommendation.color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  recommendation.descriptionKey.tr,
+                  style: const TextStyle(
+                    color: _AppColors.ink,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _homeSummaryMetric(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: _Spacing.sm),
+      padding: const EdgeInsets.all(_Spacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(_Radius.sm),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: _Spacing.md),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _AppColors.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: _Spacing.sm),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                color: _AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _selectFinancePeriod(_FinancePeriod period) {
@@ -416,6 +846,8 @@ class _HomePageState extends State<HomePage> {
         userRole = 'personal';
         storeName = '';
         shopNickname = '';
+        ownerName = '';
+        businessAddress = '';
         loading = false;
       });
       return;
@@ -439,17 +871,71 @@ class _HomePageState extends State<HomePage> {
         userRole = 'staff';
         storeName = loadedStoreName;
         shopNickname = loadedShopNickname;
+        ownerName =
+            FirebaseAuth.instance.currentUser?.displayName?.trim() ?? '';
         loading = false;
       });
       return;
     }
     try {
       final profile = await ProfileService.loadOrCreate();
+      final availableShopNicknames = <String>{};
+      final profileShopNickname =
+          profile['shopNickname']?.toString().trim() ?? '';
+      final shopByStaffUid = <String, String>{};
+      final nameByStaffUid = <String, String>{};
+      if (profileShopNickname.isNotEmpty) {
+        availableShopNicknames.add(profileShopNickname);
+      }
+      try {
+        final staff = await StaffService.fetchStaff();
+        shopByStaffUid.addEntries(
+          staff
+              .where((member) => member.data['active'] == true)
+              .map(
+                (member) => MapEntry(
+                  member.id,
+                  member.data['shopNickname']?.toString().trim() ?? '',
+                ),
+              )
+              .where((entry) => entry.value.isNotEmpty),
+        );
+        nameByStaffUid.addEntries(
+          staff
+              .where((member) => member.data['active'] == true)
+              .map(
+                (member) => MapEntry(
+                  member.id,
+                  member.data['name']?.toString().trim() ?? '',
+                ),
+              ),
+        );
+        availableShopNicknames.addAll(
+          staff
+              .where((member) => member.data['active'] == true)
+              .map(
+                (member) =>
+                    member.data['shopNickname']?.toString().trim() ?? '',
+              )
+              .where((nickname) => nickname.isNotEmpty),
+        );
+      } catch (error, stackTrace) {
+        debugPrint('Could not load dashboard shop branches: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       if (!mounted) return;
       setState(() {
         userRole = profile['role']?.toString() ?? 'user';
         storeName = profile['name']?.toString().trim() ?? '';
-        shopNickname = profile['shopNickname']?.toString().trim() ?? '';
+        shopNickname = profileShopNickname;
+        _availableShopNicknames = availableShopNicknames.toList()..sort();
+        _shopByStaffUid = shopByStaffUid;
+        _nameByStaffUid = nameByStaffUid;
+        ownerName =
+            profile['ownerName']?.toString().trim() ??
+            FirebaseAuth.instance.currentUser?.displayName?.trim() ??
+            '';
+        businessAddress = profile['address']?.toString().trim() ?? '';
         loading = false;
       });
     } catch (error, stackTrace) {
@@ -460,6 +946,8 @@ class _HomePageState extends State<HomePage> {
         userRole = 'user';
         storeName = '';
         shopNickname = '';
+        ownerName = '';
+        businessAddress = '';
         loading = false;
       });
     }
@@ -507,9 +995,18 @@ class _HomePageState extends State<HomePage> {
     }
 
     final useNavigationRail = MediaQuery.sizeOf(context).width >= 900;
+    final mobileBusinessDashboard =
+        !useNavigationRail &&
+        !_isPersonalMode &&
+        _activeDestination == _HomeDestination.dashboard;
     return SupportCenterFabOverlay(
+      onAiAnalysisPressed: _showHomeBusinessSummary,
       child: Scaffold(
-        backgroundColor: _AppColors.canvas,
+        backgroundColor: _activeDestination == _HomeDestination.chat
+            ? const Color(0xFF191D24)
+            : mobileBusinessDashboard
+            ? Colors.white
+            : _AppColors.canvas,
         bottomNavigationBar: useNavigationRail
             ? null
             : _buildMobileNavigation(),
@@ -517,7 +1014,9 @@ class _HomePageState extends State<HomePage> {
           bottom: false,
           child: Column(
             children: [
-              _buildHeader(context),
+              if (_activeDestination != _HomeDestination.chat &&
+                  !mobileBusinessDashboard)
+                _buildHeader(context),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -564,11 +1063,22 @@ class _HomePageState extends State<HomePage> {
                 analyticsOnly: true,
               )
             : const AnalyticsPage(),
+      _HomeDestination.chat => const ChatPage(),
     };
   }
 
   void _selectDestination(_HomeDestination destination) {
     if (!mounted) return;
+    if (kIsWeb) {
+      final route = switch (destination) {
+        _HomeDestination.dashboard => AppRoutes.home,
+        _HomeDestination.explore => AppRoutes.getHomeSectionRoute('explore'),
+        _HomeDestination.reports => AppRoutes.getHomeSectionRoute('reports'),
+        _HomeDestination.chat => AppRoutes.getHomeSectionRoute('chat'),
+      };
+      if (Get.currentRoute != route) unawaited(Get.toNamed(route));
+      return;
+    }
     setState(() => _activeDestination = destination);
   }
 
@@ -577,11 +1087,18 @@ class _HomePageState extends State<HomePage> {
     await Get.toNamed(AppRoutes.market);
   }
 
+  Future<void> _openChat() async {
+    _selectDestination(_HomeDestination.chat);
+  }
+
   Widget _buildDashboardContent(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 960;
         _desktop = wide;
+        if (constraints.maxWidth < 600 && !_isPersonalMode) {
+          return _buildMobileBusinessDashboard();
+        }
         final showFinance =
             BusinessAccessService.can('transactions', 'view') ||
             BusinessAccessService.can('analytics', 'view');
@@ -680,6 +1197,658 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildMobileBusinessDashboard() {
+    final user = FirebaseAuth.instance.currentUser;
+    final greetingName = ownerName.isNotEmpty
+        ? ownerName.split(RegExp(r'\s+')).first
+        : user?.displayName?.trim().split(RegExp(r'\s+')).first ??
+              user?.email?.split('@').first ??
+              'MJASI';
+    final activeShopNickname = BusinessAccessService.isOwner.value
+        ? _selectedShopNickname
+        : shopNickname;
+    final shopSubtitle = BusinessAccessService.isOwner.value
+        ? activeShopNickname.isNotEmpty
+              ? activeShopNickname
+              : 'home_all_shops'.tr
+        : activeShopNickname.isNotEmpty
+        ? activeShopNickname
+        : storeName;
+    final canViewFinance =
+        BusinessAccessService.can('transactions', 'view') ||
+        BusinessAccessService.can('analytics', 'view');
+
+    return RefreshIndicator(
+      onRefresh: _loadFinanceSummary,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+        children: [
+          _buildMobileHomeHeader(user),
+          const SizedBox(height: 20),
+          Text(
+            'mobile_greeting'.trParams({'name': greetingName}),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF10233F),
+              fontSize: 23,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.55,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Tooltip(
+            message: 'home_select_shop'.tr,
+            child: InkWell(
+              onTap: _canSelectDashboardShop ? _selectDashboardShop : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        BusinessAccessService.isOwner.value &&
+                                activeShopNickname.isEmpty
+                            ? shopSubtitle
+                            : 'mobile_shop_label'.trParams({
+                                'shop': activeShopNickname,
+                              }),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF26364C),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    if (_canSelectDashboardShop)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 5),
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: Color(0xFF26364C),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildMobileBalanceCard(canViewFinance),
+          const SizedBox(height: 10),
+          _buildMobilePaymentActions(),
+          if (canViewFinance) ...[
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'home_finance_summary'.tr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF10233F),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.35,
+                    ),
+                  ),
+                ),
+                _periodPicker(),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildMobileFinanceSummary(),
+          ],
+          const SizedBox(height: 20),
+          _buildMobileShortcuts(),
+          const SizedBox(height: 22),
+          _buildMobileMarketBanner(),
+          if (BusinessAccessService.isOwner.value) ...[
+            const SizedBox(height: 14),
+            _buildSubscriptionLink(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileHomeHeader(User? user) {
+    final initials =
+        (ownerName.isNotEmpty
+                ? ownerName
+                : user?.displayName ?? user?.email?.split('@').first ?? 'MJ')
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .take(2)
+            .map((part) => part.characters.first.toUpperCase())
+            .join();
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'home_more'.tr,
+          onPressed: _showMoreActions,
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.menu_rounded, size: 27),
+          color: const Color(0xFF10233F),
+        ),
+        const SizedBox(width: 2),
+        const Expanded(
+          child: Text(
+            'MJASI Social POS',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Color(0xFF10233F),
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.55,
+            ),
+          ),
+        ),
+        _buildLanguageButton(dark: true),
+        if (!_isPersonalMode)
+          const NotificationBell(iconColor: Color(0xFF10233F)),
+        const SizedBox(width: 4),
+        InkWell(
+          onTap: _isPersonalMode
+              ? () => Get.toNamed(AppRoutes.personalSettings)
+              : _openProfile,
+          customBorder: const CircleBorder(),
+          child: CircleAvatar(
+            radius: 21,
+            backgroundColor: const Color(0xFF0D6FEB),
+            foregroundImage: user?.photoURL == null
+                ? null
+                : NetworkImage(user!.photoURL!),
+            child: Text(
+              initials.isEmpty ? 'MJ' : initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileBalanceCard(bool canViewFinance) {
+    final balance = financeIncome - financeExpense;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1266D8), Color(0xFF064CB5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x251256C4),
+            blurRadius: 16,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'mobile_business_balance'.tr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .88),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (financeLoading && canViewFinance)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'TZS ${_formatAmount(canViewFinance ? balance : 0)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -.55,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (BusinessAccessService.can('transactions', 'create'))
+            TextButton.icon(
+              onPressed: () => _openTransactionForm(TransactionType.income),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF084AA9),
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 10,
+                ),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: Text('mobile_add_sale'.tr),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobilePaymentActions() {
+    final actions = <({String label, IconData icon, VoidCallback onTap})>[
+      if (BusinessAccessService.can('transactions', 'create'))
+        (
+          label: 'income'.tr,
+          icon: Icons.south_rounded,
+          onTap: () => _openTransactionForm(TransactionType.income),
+        ),
+      if (BusinessAccessService.can('transactions', 'create'))
+        (
+          label: 'expense'.tr,
+          icon: Icons.north_rounded,
+          onTap: () => _openTransactionForm(TransactionType.expense),
+        ),
+      if (BusinessAccessService.can('staff', 'view') ||
+          BusinessAccessService.isOwner.value)
+        (
+          label: 'home_manage_staff'.tr,
+          icon: Icons.groups_2_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.staff),
+        ),
+      if (BusinessAccessService.can('invoices', 'view'))
+        (
+          label: 'home_view_invoices'.tr,
+          icon: Icons.receipt_long_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.invoicesList),
+        ),
+      (
+        label: 'home_more'.tr,
+        icon: Icons.more_horiz_rounded,
+        onTap: _showMoreActions,
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F7FD),
+        border: Border.all(color: const Color(0xFFE6ECF5)),
+        borderRadius: BorderRadius.circular(19),
+      ),
+      child: Row(
+        children: [
+          for (final action in actions)
+            Expanded(
+              child: InkWell(
+                onTap: action.onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        action.icon,
+                        color: const Color(0xFF0759BE),
+                        size: 24,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        action.label,
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF17263D),
+                          fontSize: 9.5,
+                          height: 1.15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFinanceSummary() {
+    final metrics = [
+      (
+        title: 'income'.tr,
+        amount: financeIncome,
+        color: const Color(0xFF059669),
+        background: const Color(0xFFE6F7F1),
+        icon: Icons.north_east_rounded,
+        onTap: () => _openTransactionsByType(TransactionType.income),
+      ),
+      (
+        title: 'expenses'.tr,
+        amount: financeExpense,
+        color: const Color(0xFFB4232D),
+        background: const Color(0xFFFCEBED),
+        icon: Icons.south_west_rounded,
+        onTap: () => _openTransactionsByType(TransactionType.expense),
+      ),
+      (
+        title: 'net'.tr,
+        amount: financeIncome - financeExpense,
+        color: const Color(0xFF1459B8),
+        background: const Color(0xFFEAF2FF),
+        icon: Icons.bar_chart_rounded,
+        onTap: () =>
+            _openRestrictedRoute(AppRoutes.transactions, refreshFinance: true),
+      ),
+    ];
+    return Row(
+      children: [
+        for (var index = 0; index < metrics.length; index++) ...[
+          if (index > 0) const SizedBox(width: 7),
+          Expanded(
+            child: Material(
+              color: metrics[index].background,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                onTap: metrics[index].onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 11, 8, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            metrics[index].icon,
+                            color: metrics[index].color,
+                            size: 19,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              metrics[index].title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF17263D),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'TZS ${_formatAmount(metrics[index].amount)}',
+                          style: TextStyle(
+                            color: metrics[index].color,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -.3,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileShortcuts() {
+    final shortcuts = <({String label, IconData icon, VoidCallback onTap})>[
+      (
+        label: 'efd_receipt'.tr,
+        icon: Icons.receipt_rounded,
+        onTap: () {
+          if (_isSuperAdmin) {
+            _openRestrictedRoute(AppRoutes.addReceipt);
+          } else {
+            Get.snackbar(
+              'efd_receipt'.tr,
+              'efd_receipt_coming_soon'.tr,
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          }
+        },
+      ),
+      if (BusinessAccessService.can('invoices', 'create'))
+        (
+          label: 'pos_title'.tr,
+          icon: Icons.point_of_sale_rounded,
+          onTap: () => _openRestrictedRoute(AppRoutes.pos),
+        ),
+      if (BusinessAccessService.can('stock', 'view'))
+        (
+          label: 'stk_title'.tr,
+          icon: Icons.inventory_2_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.stock),
+        ),
+      if (BusinessAccessService.can('invoices', 'view'))
+        (
+          label: 'home_view_invoices'.tr,
+          icon: Icons.receipt_long_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.invoicesList),
+        ),
+      if (BusinessAccessService.can('categories', 'view'))
+        (
+          label: 'home_manage_categories'.tr,
+          icon: Icons.category_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.categories),
+        ),
+      if (BusinessAccessService.can('staff', 'view') ||
+          BusinessAccessService.isOwner.value)
+        (
+          label: 'home_manage_staff'.tr,
+          icon: Icons.groups_2_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.staff),
+        ),
+      if (BusinessAccessService.can('tasks', 'view') ||
+          BusinessAccessService.isActive.value)
+        (
+          label: 'tk_my'.tr,
+          icon: Icons.task_alt_rounded,
+          onTap: () => _openRestrictedRoute(AppRoutes.tasks),
+        ),
+      if (BusinessAccessService.can('jobs', 'view'))
+        (
+          label: 'home_manage_jobs'.tr,
+          icon: Icons.work_outline_rounded,
+          onTap: () => _openRestrictedRoute(AppRoutes.jobs),
+        ),
+      if (BusinessAccessService.can('analytics', 'view'))
+        (
+          label: 'home_analytics'.tr,
+          icon: Icons.bar_chart_rounded,
+          onTap: () => _openRestrictedRoute(AppRoutes.analytics),
+        ),
+    ];
+    if (shortcuts.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 7.0;
+        const columns = 4;
+        final tileWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final shortcut in shortcuts)
+              SizedBox(
+                width: tileWidth,
+                height: 92,
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    onTap: shortcut.onTap,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5EAF2)),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            shortcut.icon,
+                            color: const Color(0xFF0759BE),
+                            size: 30,
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            shortcut.label,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF17263D),
+                              fontSize: 10.5,
+                              height: 1.15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileMarketBanner() {
+    return Material(
+      color: const Color(0xFFEAF2FF),
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        onTap: _openMarket,
+        borderRadius: BorderRadius.circular(19),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D6FEB),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'mobile_market_title'.tr,
+                      style: const TextStyle(
+                        color: Color(0xFF10233F),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'mobile_market_subtitle'.tr,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF26364C),
+                        fontSize: 11.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF10233F),
+                size: 27,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNavigationRail({required bool extended}) {
     final railTextStyle = TextStyle(
       color: Colors.white.withValues(alpha: .82),
@@ -711,6 +1880,19 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     actions.add(_openMarket);
+    if (!_isPersonalMode && BusinessAccessService.hasBusinessAccess) {
+      if (_activeDestination == _HomeDestination.chat) {
+        selectedIndex = destinations.length;
+      }
+      destinations.add(
+        NavigationRailDestination(
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: const Icon(Icons.chat_rounded),
+          label: Text('chat_nav_label'.tr),
+        ),
+      );
+      actions.add(_openChat);
+    }
     if (BusinessAccessService.can('analytics', 'view') || _isPersonalMode) {
       if (_activeDestination == _HomeDestination.reports) {
         selectedIndex = destinations.length;
@@ -878,29 +2060,44 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMobileNavigation() {
     final canOpenReports =
         _isPersonalMode || BusinessAccessService.can('analytics', 'view');
+    final canOpenChat =
+        !_isPersonalMode && BusinessAccessService.hasBusinessAccess;
+    final lightStyle =
+        !_isPersonalMode && _activeDestination == _HomeDestination.dashboard;
+    final background = lightStyle ? Colors.white : MjasiColors.primaryNavy;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      margin: lightStyle
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(12, 0, 12, 8),
       decoration: BoxDecoration(
-        color: MjasiColors.primaryNavy,
-        borderRadius: BorderRadius.circular(MjasiRadius.md),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26071B3A),
-            blurRadius: 18,
-            offset: Offset(0, 6),
-          ),
-        ],
+        color: background,
+        borderRadius: lightStyle
+            ? BorderRadius.zero
+            : BorderRadius.circular(MjasiRadius.md),
+        border: lightStyle
+            ? const Border(top: BorderSide(color: Color(0xFFE6ECF5)))
+            : Border.all(color: Colors.white.withValues(alpha: .08)),
+        boxShadow: lightStyle
+            ? const []
+            : const [
+                BoxShadow(
+                  color: Color(0x26071B3A),
+                  blurRadius: 18,
+                  offset: Offset(0, 6),
+                ),
+              ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        borderRadius: lightStyle
+            ? BorderRadius.zero
+            : BorderRadius.circular(MjasiRadius.md),
         child: BottomAppBar(
-          color: MjasiColors.primaryNavy,
+          color: background,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: EdgeInsets.symmetric(horizontal: lightStyle ? 4 : 10),
           child: SizedBox(
-            height: 72,
+            height: lightStyle ? 76 : 72,
             child: Row(
               children: [
                 Expanded(
@@ -909,6 +2106,7 @@ class _HomePageState extends State<HomePage> {
                     label: 'nav_home'.tr,
                     onTap: () => _selectDestination(_HomeDestination.dashboard),
                     selected: _activeDestination == _HomeDestination.dashboard,
+                    lightStyle: lightStyle,
                   ),
                 ),
                 Expanded(
@@ -917,9 +2115,23 @@ class _HomePageState extends State<HomePage> {
                     label: 'nav_explore'.tr,
                     onTap: _openMarket,
                     selected: _activeDestination == _HomeDestination.explore,
+                    lightStyle: lightStyle,
                   ),
                 ),
-                SizedBox(width: 64, child: _quickNavigationAction()),
+                SizedBox(
+                  width: lightStyle ? 60 : 64,
+                  child: _quickNavigationAction(lightStyle: lightStyle),
+                ),
+                if (canOpenChat)
+                  Expanded(
+                    child: _mobileNavigationItem(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: 'chat_nav_label'.tr,
+                      onTap: _openChat,
+                      selected: _activeDestination == _HomeDestination.chat,
+                      lightStyle: lightStyle,
+                    ),
+                  ),
                 if (canOpenReports)
                   Expanded(
                     child: _mobileNavigationItem(
@@ -932,15 +2144,9 @@ class _HomePageState extends State<HomePage> {
                               destination: _HomeDestination.reports,
                             ),
                       selected: _activeDestination == _HomeDestination.reports,
+                      lightStyle: lightStyle,
                     ),
                   ),
-                Expanded(
-                  child: _mobileNavigationItem(
-                    icon: Icons.grid_view_outlined,
-                    label: 'home_more'.tr,
-                    onTap: _showMoreActions,
-                  ),
-                ),
               ],
             ),
           ),
@@ -949,7 +2155,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _quickNavigationAction() {
+  Widget _quickNavigationAction({bool lightStyle = false}) {
     return Semantics(
       button: true,
       label: 'home_quick_access'.tr,
@@ -957,16 +2163,18 @@ class _HomePageState extends State<HomePage> {
         onTap: _showQuickActions,
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
-          height: 66,
+          height: 70,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 38,
-                height: 34,
+                width: lightStyle ? 46 : 38,
+                height: lightStyle ? 46 : 34,
                 decoration: BoxDecoration(
-                  color: MjasiColors.secondaryBlue,
-                  borderRadius: BorderRadius.circular(12),
+                  color: lightStyle
+                      ? const Color(0xFF0D6FEB)
+                      : MjasiColors.secondaryBlue,
+                  borderRadius: BorderRadius.circular(lightStyle ? 23 : 12),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x333B82F6),
@@ -992,8 +2200,10 @@ class _HomePageState extends State<HomePage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: .9),
-                  fontSize: 8,
+                  color: lightStyle
+                      ? const Color(0xFF17263D)
+                      : Colors.white.withValues(alpha: .9),
+                  fontSize: 9,
                   height: 1.1,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1010,10 +2220,13 @@ class _HomePageState extends State<HomePage> {
     required String label,
     required VoidCallback onTap,
     bool selected = false,
+    bool lightStyle = false,
   }) {
-    final color = selected
-        ? const Color(0xFF8DBBFF)
-        : Colors.white.withValues(alpha: .68);
+    final color = lightStyle
+        ? (selected ? const Color(0xFF0D6FEB) : const Color(0xFF52657D))
+        : (selected
+              ? const Color(0xFF8DBBFF)
+              : Colors.white.withValues(alpha: .68));
     return Semantics(
       button: true,
       selected: selected,
@@ -1029,10 +2242,12 @@ class _HomePageState extends State<HomePage> {
               curve: Curves.easeOut,
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
-                color: selected
+                color: selected && lightStyle
+                    ? const Color(0xFFEAF2FF)
+                    : selected
                     ? Colors.white.withValues(alpha: .09)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(lightStyle ? 24 : 14),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1045,8 +2260,12 @@ class _HomePageState extends State<HomePage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: selected ? Colors.white : color,
-                      fontSize: 9,
+                      color: lightStyle
+                          ? const Color(0xFF17263D)
+                          : selected
+                          ? Colors.white
+                          : color,
+                      fontSize: 9.5,
                       height: 1.1,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -1243,6 +2462,48 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.workspace_premium_outlined,
           value: 'subscription',
         ),
+      if (_isSuperAdmin) ...[
+        (
+          label: 'hub_title'.tr,
+          icon: Icons.admin_panel_settings_rounded,
+          value: 'admin_hub',
+        ),
+        (
+          label: 'admin_manage_subscriptions'.tr,
+          icon: Icons.manage_accounts_outlined,
+          value: 'admin_subscriptions',
+        ),
+        (
+          label: 'admin_manage_app_versions'.tr,
+          icon: Icons.system_update_alt_rounded,
+          value: 'admin_app_versions',
+        ),
+        (
+          label: 'admin_manage_downloads'.tr,
+          icon: Icons.cloud_download_rounded,
+          value: 'admin_downloads',
+        ),
+        (
+          label: 'admin_manage_analytics'.tr,
+          icon: Icons.insights_rounded,
+          value: 'admin_analytics',
+        ),
+        (
+          label: 'admin_manage_announcements'.tr,
+          icon: Icons.campaign_rounded,
+          value: 'admin_announcements',
+        ),
+        (
+          label: 'support_admin_title'.tr,
+          icon: Icons.support_agent_rounded,
+          value: 'admin_support',
+        ),
+        (
+          label: 'home_create_receipt'.tr,
+          icon: Icons.add_business_outlined,
+          value: 'create_receipt',
+        ),
+      ],
     ];
 
     if (!mounted) return;
@@ -1397,22 +2658,55 @@ class _HomePageState extends State<HomePage> {
                         (constraints.maxWidth - _Spacing.lg * 2 - spacing) / 2;
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(_Spacing.lg),
-                      child: Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (final option in options)
-                            SizedBox(
-                              width: itemWidth,
-                              child: _moreActionTile(
-                                label: option.label,
-                                icon: option.icon,
-                                onTap: () {
-                                  Navigator.pop(sheetContext);
-                                  _handleMenuSelection(option.value);
-                                },
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              for (final option in options)
+                                SizedBox(
+                                  width: itemWidth,
+                                  child: _moreActionTile(
+                                    label: option.label,
+                                    icon: option.icon,
+                                    onTap: () {
+                                      Navigator.pop(sheetContext);
+                                      _handleMenuSelection(option.value);
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: _Spacing.lg),
+                          const Divider(color: _AppColors.border),
+                          const SizedBox(height: _Spacing.sm),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(sheetContext);
+                              _handleMenuSelection('logout');
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _AppColors.negative,
+                              side: BorderSide(
+                                color: _AppColors.negative.withValues(
+                                  alpha: .35,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: _Spacing.md,
+                                vertical: _Spacing.md,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  _Radius.sm,
+                                ),
                               ),
                             ),
+                            icon: const Icon(Icons.logout_rounded),
+                            label: Text('home_sign_out'.tr),
+                          ),
                         ],
                       ),
                     );
@@ -1502,6 +2796,19 @@ class _HomePageState extends State<HomePage> {
         height: compact ? 60 : 68,
         child: Row(
           children: [
+            if (kIsWeb && _activeDestination != _HomeDestination.dashboard)
+              IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () {
+                  if (Get.key.currentState?.canPop() == true) {
+                    Get.back();
+                  } else {
+                    Get.offNamed(AppRoutes.home);
+                  }
+                },
+                color: Colors.white,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
             Container(
               width: compact ? 36 : 40,
               height: compact ? 36 : 40,
@@ -1554,6 +2861,12 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.admin_panel_settings_outlined,
                 tooltip: 'hub_title'.tr,
                 onPressed: () => Get.toNamed(AppRoutes.adminHub),
+              ),
+            if (!_isPersonalMode && BusinessAccessService.hasBusinessAccess)
+              _headerIconButton(
+                icon: Icons.forum_outlined,
+                tooltip: 'chat_title'.tr,
+                onPressed: () => Get.toNamed(AppRoutes.chat),
               ),
             if (!compact) _buildLanguageButton(),
             if (!_isPersonalMode) const NotificationBell(),
@@ -1751,7 +3064,7 @@ class _HomePageState extends State<HomePage> {
                   'Document design',
                   Icons.palette_outlined,
                 ),
-              if (BusinessAccessService.availableBusinesses.length > 1)
+              if (_canSwitchBusiness)
                 _menuItem(
                   'switch_business',
                   'business_select'.tr,
@@ -1802,8 +3115,11 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  Widget _buildLanguageButton() {
+  Widget _buildLanguageButton({bool dark = false}) {
     final languageCode = languageController.locale.languageCode;
+    final foregroundColor = dark
+        ? const Color(0xFF10233F)
+        : Colors.white.withValues(alpha: 0.9);
     return PopupMenuButton<String>(
       tooltip: 'language'.tr,
       onSelected: _changeLanguage,
@@ -1822,7 +3138,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(
             Icons.language_rounded,
-            color: Colors.white.withValues(alpha: 0.9),
+            color: foregroundColor,
             size: 20,
           ),
           if (MediaQuery.sizeOf(context).width >= 360) ...[
@@ -1834,7 +3150,7 @@ class _HomePageState extends State<HomePage> {
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
-              ),
+              ).copyWith(color: foregroundColor),
             ),
           ],
         ],
@@ -1997,25 +3313,270 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _selectBusiness() async {
+    final businesses = BusinessAccessService.availableBusinesses
+        .where((business) => business.isActive)
+        .toList();
+    if (businesses.length < 2) return;
+
     final selectedId = await Get.dialog<String>(
       SimpleDialog(
         title: Text('business_select'.tr),
         children: [
-          for (final business in BusinessAccessService.availableBusinesses)
+          for (final business in businesses)
             SimpleDialogOption(
               onPressed: () => Get.back(result: business.businessId),
-              child: Text(
-                business.businessName.isEmpty
-                    ? business.businessId
-                    : business.businessName,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.storefront_outlined,
+                    color: MjasiColors.primaryBlue,
+                  ),
+                  const SizedBox(width: _Spacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          business.businessName.isEmpty
+                              ? business.businessId
+                              : business.businessName,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (business.shopNickname.isNotEmpty)
+                          Text(
+                            business.shopNickname,
+                            style: const TextStyle(
+                              color: _AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (business.businessId ==
+                      BusinessAccessService.businessUid.value)
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: MjasiColors.primaryBlue,
+                    ),
+                ],
               ),
             ),
         ],
       ),
     );
-    if (selectedId == null) return;
-    await BusinessAccessService.selectBusiness(selectedId);
-    if (mounted) Get.offAllNamed(AppRoutes.home);
+    if (selectedId == null ||
+        selectedId == BusinessAccessService.businessUid.value) {
+      return;
+    }
+
+    try {
+      await BusinessAccessService.selectBusiness(selectedId);
+      if (mounted) Get.offAllNamed(AppRoutes.home);
+    } catch (error, stackTrace) {
+      debugPrint('Could not switch dashboard business: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar(
+          'error'.tr,
+          'business_switch_error'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    }
+  }
+
+  Future<void> _selectDashboardShop() async {
+    if (!BusinessAccessService.isOwner.value ||
+        !_canSelectDashboardShop) {
+      return;
+    }
+
+    Widget shopOption({
+      required String name,
+      required String value,
+      required IconData icon,
+    }) {
+      final isSelected = _selectedShopNickname == value;
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Get.back(result: value),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            margin: const EdgeInsets.only(bottom: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? MjasiColors.primaryBlue.withValues(alpha: .08)
+                  : const Color(0xFFF7F9FC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected
+                    ? MjasiColors.primaryBlue.withValues(alpha: .42)
+                    : const Color(0xFFE8EDF4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? MjasiColors.primaryBlue
+                        : const Color(0xFFE9EFF8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected
+                        ? Colors.white
+                        : MjasiColors.primaryNavy,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: isSelected
+                      ? MjasiColors.primaryBlue
+                      : MjasiColors.border,
+                  size: 21,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final selectedShop = await Get.dialog<String>(
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 430,
+            maxHeight: MediaQuery.sizeOf(context).height * .78,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x260C2340),
+                  blurRadius: 28,
+                  offset: Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            MjasiColors.primaryNavy,
+                            MjasiColors.primaryBlue,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: const Icon(
+                        Icons.storefront_rounded,
+                        color: Colors.white,
+                        size: 23,
+                      ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'home_select_shop'.tr,
+                            style: const TextStyle(
+                              color: MjasiColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'home_select_shop_hint'.tr,
+                            style: const TextStyle(
+                              color: MjasiColors.textSecondary,
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'close'.tr,
+                      onPressed: () => Get.back(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        shopOption(
+                          name: 'home_all_shops'.tr,
+                          value: '',
+                          icon: Icons.store_mall_directory_outlined,
+                        ),
+                        for (final shop in _availableShopNicknames)
+                          shopOption(
+                            name: shop,
+                            value: shop,
+                            icon: Icons.storefront_outlined,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (selectedShop == null || selectedShop == _selectedShopNickname) return;
+    setState(() {
+      _selectedShopNickname = selectedShop;
+      financeLoading = true;
+    });
+    await _loadFinanceSummary();
   }
 
   Future<void> _openRestrictedRoute(
@@ -2041,7 +3602,15 @@ class _HomePageState extends State<HomePage> {
       _selectDestination(destination);
       return;
     }
-    await Get.toNamed(route);
+    final result = await Get.toNamed(
+      route,
+      arguments: route == AppRoutes.transactions
+          ? {'shopNickname': _selectedShopNickname}
+          : null,
+    );
+    if (route == AppRoutes.tasks && result == 'open_chat' && mounted) {
+      _selectDestination(_HomeDestination.chat);
+    }
     if (refreshFinance && mounted) await _loadFinanceSummary();
   }
 
@@ -2068,8 +3637,8 @@ class _HomePageState extends State<HomePage> {
           // Content
           Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: wide ? _Spacing.xl : _Spacing.lg,
-              vertical: wide ? _Spacing.xl : _Spacing.lg,
+              horizontal: wide ? _Spacing.lg : _Spacing.md,
+              vertical: wide ? _Spacing.md : _Spacing.sm,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -2087,7 +3656,7 @@ class _HomePageState extends State<HomePage> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: wide ? 22 : 18,
+                                fontSize: wide ? 20 : 16,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.45,
                               ),
@@ -2327,7 +3896,7 @@ class _HomePageState extends State<HomePage> {
               borderRadius: BorderRadius.circular(_Radius.sm),
               border: Border.all(color: Colors.white.withValues(alpha: .08)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2353,7 +3922,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 3),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -2361,7 +3930,7 @@ class _HomePageState extends State<HomePage> {
                     count ? amount.toInt().toString() : _formatAmount(amount),
                     style: TextStyle(
                       color: valueColor,
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -2833,6 +4402,7 @@ class _HomePageState extends State<HomePage> {
           Icons.call_received_rounded,
           _AppColors.positive,
           _AppColors.positiveBg,
+          DebtFilter.customerOwesShop,
         ),
         _DebtMetric(
           'home_debt_payable'.tr,
@@ -2840,6 +4410,7 @@ class _HomePageState extends State<HomePage> {
           Icons.call_made_rounded,
           _AppColors.warning,
           _AppColors.warningBg,
+          DebtFilter.shopOwesOther,
         ),
         _DebtMetric(
           'debt_overdue'.tr,
@@ -2847,6 +4418,7 @@ class _HomePageState extends State<HomePage> {
           Icons.event_busy_outlined,
           _AppColors.negative,
           _AppColors.negativeBg,
+          DebtFilter.overdue,
         ),
       ];
       return LayoutBuilder(
@@ -2861,6 +4433,10 @@ class _HomePageState extends State<HomePage> {
                     metrics[i],
                     wide: wide,
                     compact: constraints.maxWidth < 500,
+                    onTap: () {
+                      debts.filter.value = metrics[i].filter;
+                      _openRestrictedRoute(AppRoutes.jobs);
+                    },
                   ),
                 ),
               ],
@@ -2875,89 +4451,96 @@ class _HomePageState extends State<HomePage> {
     _DebtMetric metric, {
     bool wide = false,
     bool compact = false,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      padding: EdgeInsets.all(compact ? 8 : 12),
-      decoration: BoxDecoration(
-        color: metric.background,
+    return Material(
+      color: metric.background,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_Radius.md),
-        border: Border.all(color: metric.color.withValues(alpha: .13)),
+        side: BorderSide(color: metric.color.withValues(alpha: .13)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_Radius.md),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 8 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: compact
-                    ? 24
-                    : wide
-                    ? 34
-                    : 28,
-                height: compact
-                    ? 24
-                    : wide
-                    ? 34
-                    : 28,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .78),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(
-                  metric.icon,
-                  size: compact
-                      ? 13
-                      : wide
-                      ? 17
-                      : 14,
-                  color: metric.color,
-                ),
-              ),
-              const SizedBox(width: _Spacing.xs),
-              Expanded(
-                child: Text(
-                  metric.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _AppColors.inkSoft,
-                    fontSize: compact
-                        ? 9
+              Row(
+                children: [
+                  Container(
+                    width: compact
+                        ? 24
                         : wide
-                        ? 11.5
-                        : 10,
-                    fontWeight: FontWeight.w700,
+                        ? 34
+                        : 28,
+                    height: compact
+                        ? 24
+                        : wide
+                        ? 34
+                        : 28,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .78),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(
+                      metric.icon,
+                      size: compact
+                          ? 13
+                          : wide
+                          ? 17
+                          : 14,
+                      color: metric.color,
+                    ),
+                  ),
+                  const SizedBox(width: _Spacing.xs),
+                  Expanded(
+                    child: Text(
+                      metric.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _AppColors.inkSoft,
+                        fontSize: compact
+                            ? 9
+                            : wide
+                            ? 11.5
+                            : 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: compact
+                    ? 3
+                    : wide
+                    ? 10
+                    : 6,
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  metric.value,
+                  style: TextStyle(
+                    color: metric.color,
+                    fontSize: compact
+                        ? 13
+                        : wide
+                        ? 19
+                        : 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.35,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
             ],
           ),
-          SizedBox(
-            height: compact
-                ? 3
-                : wide
-                ? 10
-                : 6,
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              metric.value,
-              style: TextStyle(
-                color: metric.color,
-                fontSize: compact
-                    ? 13
-                    : wide
-                    ? 19
-                    : 15,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.35,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2978,20 +4561,6 @@ class _HomePageState extends State<HomePage> {
           'admin_manage_analytics'.tr,
           Icons.insights_rounded,
           () => Get.toNamed(AppRoutes.adminAnalytics),
-        ),
-      if (BusinessAccessService.can('transactions', 'create'))
-        _quickAction(
-          'home_add_income'.tr,
-          Icons.add_circle_outline_rounded,
-          () => _openTransactionForm(TransactionType.income),
-          accent: _AppColors.positive,
-        ),
-      if (BusinessAccessService.can('transactions', 'create'))
-        _quickAction(
-          'home_add_expense'.tr,
-          Icons.remove_circle_outline_rounded,
-          () => _openTransactionForm(TransactionType.expense),
-          accent: _AppColors.negative,
         ),
       if (BusinessAccessService.can('invoices', 'view'))
         _quickAction(
@@ -3319,6 +4888,7 @@ class _HomePageState extends State<HomePage> {
       arguments: {
         'type': type == TransactionType.income ? 'income' : 'expense',
         'period': _financePeriod.name,
+        'shopNickname': _selectedShopNickname,
       },
     );
     if (mounted) await _loadFinanceSummary();
@@ -3372,16 +4942,143 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showAboutDialog() {
-    Get.dialog(
-      AlertDialog(
+    final sw = Get.locale?.languageCode == 'sw';
+    String t(String en, String swText) => sw ? swText : en;
+
+    Widget link(IconData icon, String label, VoidCallback onTap) {
+      return ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_Radius.md),
         ),
-        title: Text('home_about'.tr),
-        content: const Text(
-          'Mjasi POS helps you manage income, expenses, invoices, receipts and jobs.',
+        leading: Icon(icon, color: _AppColors.brand, size: 22),
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: _AppColors.ink,
+          ),
         ),
-        actions: [TextButton(onPressed: Get.back, child: Text('close'.tr))],
+        trailing: const Icon(Icons.chevron_right, color: _AppColors.muted),
+        onTap: onTap,
+      );
+    }
+
+    void open(String route) {
+      Get.back();
+      Get.toNamed(route);
+    }
+
+    Get.dialog(
+      Dialog(
+        backgroundColor: _AppColors.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_AppColors.brandDeep, _AppColors.brand],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.storefront_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'MJASI POS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        t(
+                          'Manage income, expenses, invoices, receipts and jobs',
+                          'Simamia mapato, matumizi, ankara, risiti na kazi',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+                  child: Column(
+                    children: [
+                      link(
+                        Icons.privacy_tip_outlined,
+                        t('Privacy Policy', 'Sera ya Faragha'),
+                        () => open(AppRoutes.privacy),
+                      ),
+                      link(
+                        Icons.gavel_outlined,
+                        t('Terms & Conditions', 'Masharti na Vigezo'),
+                        () => open(AppRoutes.terms),
+                      ),
+                      link(
+                        Icons.link_rounded,
+                        t('All app links', 'Viungo vyote vya app'),
+                        () => open(AppRoutes.appUrls),
+                      ),
+                      link(
+                        Icons.support_agent_outlined,
+                        t('Help & Support', 'Msaada'),
+                        () => open(AppRoutes.support),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    height: 46,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _AppColors.brand,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(_Radius.md),
+                        ),
+                      ),
+                      onPressed: Get.back,
+                      child: Text('close'.tr),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -3394,6 +5091,7 @@ class _DebtMetric {
     this.icon,
     this.color,
     this.background,
+    this.filter,
   );
 
   final String label;
@@ -3401,6 +5099,7 @@ class _DebtMetric {
   final IconData icon;
   final Color color;
   final Color background;
+  final DebtFilter filter;
 }
 
 typedef _QuickActionData = ({String label, IconData icon, VoidCallback onTap});

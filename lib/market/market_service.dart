@@ -46,6 +46,7 @@ class MarketService {
     required List<String> imageExtensions,
     MarketAudioSelection? audio,
     MarketVideoSelection? video,
+    Uint8List? videoThumb,
     DateTime? publishAt,
     int textBg = -1,
     int textFont = 0,
@@ -98,11 +99,39 @@ class MarketService {
     final uploadedRefs = <Reference>[];
     try {
       final imageUrls = <String>[];
-      final totalBytes = imageBytes.fold<int>(
-        0,
-        (total, bytes) => total + bytes.length,
-      );
+      final audioBytes = audio?.bytes;
+      if (audioBytes != null && audioBytes.length > marketAudioMaxBytes) {
+        throw ArgumentError('Sound must be 5 MB or smaller.');
+      }
+      final uploadVideoThumb =
+          videoThumb != null &&
+          videoThumb.isNotEmpty &&
+          videoThumb.length <= 2 * 1024 * 1024;
+      final validVideoThumb = uploadVideoThumb ? videoThumb : null;
+      final totalBytes =
+          imageBytes.fold<int>(0, (total, bytes) => total + bytes.length) +
+          (video?.bytes.length ?? 0) +
+          (validVideoThumb?.length ?? 0) +
+          (audioBytes?.length ?? 0);
       var completedBytes = 0;
+
+      Future<void> uploadBytes(
+        Reference reference,
+        Uint8List bytes,
+        SettableMetadata metadata,
+      ) async {
+        uploadedRefs.add(reference);
+        final upload = reference.putData(bytes, metadata);
+        await for (final snapshot in upload.snapshotEvents) {
+          if (totalBytes > 0) {
+            onProgress?.call(
+              (completedBytes + snapshot.bytesTransferred) / totalBytes,
+            );
+          }
+        }
+        completedBytes += bytes.length;
+      }
+
       for (var index = 0; index < imageBytes.length; index++) {
         final extension = imageExtensions[index].toLowerCase();
         final contentType = switch (extension) {
@@ -118,24 +147,17 @@ class MarketService {
         final imageRef = FirebaseStorage.instance.ref(
           'market/$authorUid/${postRef.id}_${index + 1}.$extension',
         );
-        uploadedRefs.add(imageRef);
-        final upload = imageRef.putData(
+        await uploadBytes(
+          imageRef,
           imageBytes[index],
           SettableMetadata(contentType: contentType),
         );
-        await for (final snapshot in upload.snapshotEvents) {
-          if (totalBytes > 0) {
-            onProgress?.call(
-              (completedBytes + snapshot.bytesTransferred) / totalBytes,
-            );
-          }
-        }
-        completedBytes += imageBytes[index].length;
         imageUrls.add(await imageRef.getDownloadURL());
       }
 
       var audioUrl = audio?.url ?? '';
       var videoUrl = '';
+      var videoThumbUrl = '';
       if (video != null) {
         final extension = video.extension.toLowerCase();
         if (!marketVideoExtensions.contains(extension)) {
@@ -144,29 +166,42 @@ class MarketService {
         final videoRef = FirebaseStorage.instance.ref(
           'market/$authorUid/video/${postRef.id}.$extension',
         );
-        uploadedRefs.add(videoRef);
-        await videoRef.putData(
+        await uploadBytes(
+          videoRef,
           video.bytes,
           SettableMetadata(contentType: marketVideoContentType(extension)),
         );
         videoUrl = await videoRef.getDownloadURL();
-      }
-      final audioBytes = audio?.bytes;
-      if (audio != null && audioBytes != null) {
-        if (audioBytes.length > marketAudioMaxBytes) {
-          throw ArgumentError('Sound must be 5 MB or smaller.');
+        if (validVideoThumb != null) {
+          try {
+            final thumbRef = FirebaseStorage.instance.ref(
+              'market/$authorUid/${postRef.id}_thumb.jpg',
+            );
+            await uploadBytes(
+              thumbRef,
+              validVideoThumb,
+              SettableMetadata(contentType: 'image/jpeg'),
+            );
+            videoThumbUrl = await thumbRef.getDownloadURL();
+          } catch (error) {
+            debugPrint('Video poster upload failed: $error');
+            completedBytes += validVideoThumb.length;
+          }
         }
+      }
+      if (audio != null && audioBytes != null) {
         final extension = audio.extension.toLowerCase();
         final audioRef = FirebaseStorage.instance.ref(
           'market/$authorUid/audio/${postRef.id}.$extension',
         );
-        uploadedRefs.add(audioRef);
-        await audioRef.putData(
+        await uploadBytes(
+          audioRef,
           audioBytes,
           SettableMetadata(contentType: marketAudioContentType(extension)),
         );
         audioUrl = await audioRef.getDownloadURL();
       }
+      onProgress?.call(1);
 
       final businessName = (isProduct || isBusinessOwner)
           ? BusinessAccessService.businessName.value.trim()
@@ -197,6 +232,7 @@ class MarketService {
         'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': null,
         if (videoUrl.isNotEmpty) 'videoUrl': videoUrl,
+        if (videoThumbUrl.isNotEmpty) 'videoThumb': videoThumbUrl,
         if (textOnly && textBg >= 0) 'textBg': textBg,
         if (textOnly && textFont > 0) 'textFont': textFont,
         if (publishAt != null && type != 'status')
@@ -1161,14 +1197,20 @@ class MarketService {
   static Future<void> recordView(String postId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
     if (!_viewedPosts.add(postId)) return;
+    viewBumps.value = {...viewBumps.value, postId: 1};
     try {
       await _firestore.collection('marketPosts').doc(postId).update({
         'viewsCount': FieldValue.increment(1),
       });
-    } catch (_) {
+    } catch (error) {
+      debugPrint('recordView failed: $error');
       _viewedPosts.remove(postId);
+      viewBumps.value = {...viewBumps.value}..remove(postId);
     }
   }
+
+  /// Local +1 shown immediately for posts viewed in this session.
+  static final ValueNotifier<Map<String, int>> viewBumps = ValueNotifier({});
 
   static Future<void> toggleLike(String postId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;

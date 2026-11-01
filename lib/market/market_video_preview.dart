@@ -72,6 +72,7 @@ class _MarketLocalVideoPreviewState extends State<MarketLocalVideoPreview> {
   late final VideoPlayerController _controller;
   bool _ready = false;
   bool _failed = false;
+  String _error = '';
 
   @override
   void initState() {
@@ -90,8 +91,14 @@ class _MarketLocalVideoPreviewState extends State<MarketLocalVideoPreview> {
       await _controller.initialize();
       await _controller.setLooping(true);
       if (mounted) setState(() => _ready = true);
-    } catch (_) {
-      if (mounted) setState(() => _failed = true);
+    } catch (error) {
+      debugPrint('Video preview failed: $error');
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _error = '$error';
+        });
+      }
     }
   }
 
@@ -109,9 +116,27 @@ class _MarketLocalVideoPreviewState extends State<MarketLocalVideoPreview> {
   @override
   Widget build(BuildContext context) {
     if (_failed) {
-      return const AspectRatio(
+      return AspectRatio(
         aspectRatio: 16 / 9,
-        child: Center(child: Icon(Icons.videocam_off_rounded)),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.videocam_off_rounded),
+                if (kIsWeb && _error.isNotEmpty)
+                  Text(
+                    _error,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11),
+                  ),
+              ],
+            ),
+          ),
+        ),
       );
     }
     if (!_ready) {

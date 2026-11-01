@@ -11,6 +11,9 @@ import 'package:tra_list/services/pdf/advance_payment_pdf.dart';
 import 'package:tra_list/services/pdf/quotation_pdf.dart';
 import 'package:tra_list/services/pages/document_design_page.dart';
 import 'package:tra_list/services/pages/document_terms_page.dart';
+import 'package:tra_list/invoice/document_share_sheet.dart';
+import 'package:tra_list/invoice/document_shares_page.dart';
+import 'package:tra_list/theme/app_theme.dart';
 
 import 'InvoicePage.dart' as invoice_page;
 import 'advance_invoice_page.dart';
@@ -118,18 +121,17 @@ class _InvoicesPageState extends State<InvoicesPage> {
     });
   }
 
-  // Beautiful UI colors
-  final Color primary = const Color(0xFF2563EB); // Modern blue
-  final Color primaryDark = const Color(0xFF1E3A8A);
-  final Color accent = const Color(0xFF3B82F6);
-  final Color bgColor = const Color(0xFFF8FAFC); // Slate 50
-  final Color surfaceColor = Colors.white;
-  final Color textMain = const Color(0xFF0F172A); // Slate 900
-  final Color textMuted = const Color(0xFF64748B); // Slate 500
+  final Color primary = MjasiColors.primaryBlue;
+  final Color primaryDark = MjasiColors.primaryNavy;
+  final Color bgColor = MjasiColors.background;
+  final Color surfaceColor = MjasiColors.surface;
+  final Color textMain = MjasiColors.textPrimary;
+  final Color textMuted = MjasiColors.textSecondary;
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     if (user == null) {
       return Scaffold(
@@ -237,7 +239,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      floatingActionButton: BusinessAccessService.can('invoices', 'create')
+      floatingActionButton:
+          screenWidth < 700 && BusinessAccessService.can('invoices', 'create')
           ? FloatingActionButton.extended(
               elevation: 4,
               highlightElevation: 8,
@@ -335,243 +338,328 @@ class _InvoicesPageState extends State<InvoicesPage> {
           return RefreshIndicator(
             color: primary,
             onRefresh: _refreshDocuments,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 140.0,
-                  floating: false,
-                  pinned: true,
-                  elevation: 0,
-                  backgroundColor: primary,
-                  foregroundColor: Colors.white,
-                  actions: [
-                    if (BusinessAccessService.can('profile', 'edit'))
-                      Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1240),
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverAppBar(
+                      toolbarHeight: screenWidth < 600 ? 54 : 58,
+                      floating: false,
+                      pinned: true,
+                      elevation: 0,
+                      backgroundColor: surfaceColor,
+                      foregroundColor: textMain,
+                      title: const Text(
+                        'Documents',
+                        style: TextStyle(
+                          color: MjasiColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 17,
                         ),
-                        child: IconButton(
-                          tooltip: 'Document terms and versions',
-                          onPressed: () {
+                      ),
+                      actions: [
+                        PopupMenuButton<String>(
+                          tooltip: 'Invoice options',
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (action) {
+                            switch (action) {
+                              case 'terms':
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const DocumentTermsPage(),
+                                  ),
+                                );
+                                break;
+                              case 'design':
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const DocumentDesignPage(),
+                                  ),
+                                );
+                                break;
+                              case 'quotation':
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const QuotationPage(),
+                                  ),
+                                );
+                                break;
+                              case 'advance':
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const AdvanceInvoicePage(),
+                                  ),
+                                );
+                                break;
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            if (BusinessAccessService.can('profile', 'edit'))
+                              const PopupMenuItem(
+                                value: 'terms',
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.description_outlined),
+                                  title: Text('Document terms and versions'),
+                                ),
+                              ),
+                            if (BusinessAccessService.can('profile', 'edit'))
+                              const PopupMenuItem(
+                                value: 'design',
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.palette_outlined),
+                                  title: Text('Document design and colors'),
+                                ),
+                              ),
+                            if (BusinessAccessService.can(
+                              'quotations',
+                              'create',
+                            ))
+                              const PopupMenuItem(
+                                value: 'quotation',
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.request_quote_outlined),
+                                  title: Text('New quotation'),
+                                ),
+                              ),
+                            if (BusinessAccessService.can('invoices', 'create'))
+                              const PopupMenuItem(
+                                value: 'advance',
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: Icon(Icons.payments_outlined),
+                                  title: Text('New advance invoice'),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          screenWidth < 600 ? 14 : 24,
+                          12,
+                          screenWidth < 600 ? 14 : 24,
+                          4,
+                        ),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Invoices & documents',
+                                    style: TextStyle(
+                                      color: MjasiColors.textPrimary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Create and manage customer documents',
+                                    style: TextStyle(
+                                      color: MjasiColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (screenWidth >= 700 &&
+                                BusinessAccessService.can(
+                                  'invoices',
+                                  'create',
+                                )) ...[
+                              const SizedBox(width: 12),
+                              FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const invoice_page.InvoicePage(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('New invoice'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          screenWidth < 600 ? 14 : 24,
+                          6,
+                          screenWidth < 600 ? 14 : 24,
+                          8,
+                        ),
+                        child: Column(
+                          children: [
+                            _buildSearchBar(),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                _StatCard(
+                                  label: 'Loaded documents',
+                                  value: '${filtered.length}',
+                                  icon: Icons.description_outlined,
+                                  color: MjasiColors.primaryBlue,
+                                  bgColor: MjasiColors.lightBlue,
+                                ),
+                                const SizedBox(width: 10),
+                                _StatCard(
+                                  label: 'Invoice value',
+                                  value: 'TSH ${_money(invoiceTotalSum)}',
+                                  icon: Icons.account_balance_wallet_outlined,
+                                  color: MjasiColors.success,
+                                  bgColor: MjasiColors.successBackground,
+                                ),
+                              ],
+                            ),
+                            if (BusinessAccessService.can('invoices', 'view') ||
+                                BusinessAccessService.can(
+                                  'quotations',
+                                  'view',
+                                )) ...[
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Get.to(
+                                    () => DocumentSharesPage(
+                                      businessUid:
+                                          BusinessAccessService.businessId,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.send_outlined),
+                                  label: const Text('Sent documents'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: primary,
+                                    minimumSize: const Size.fromHeight(42),
+                                    side: BorderSide(
+                                      color: primary.withOpacity(0.25),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (filtered.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _EmptyState(
+                          onCreate: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const DocumentTermsPage(),
+                                builder: (_) =>
+                                    const invoice_page.InvoicePage(),
                               ),
                             );
                           },
-                          icon: const Icon(Icons.description_outlined),
-                        ),
-                      ),
-                    if (BusinessAccessService.can('profile', 'edit'))
-                      Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          tooltip: 'Document design and colors',
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const DocumentDesignPage(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.palette_outlined),
-                        ),
-                      ),
-                    if (BusinessAccessService.can('quotations', 'create'))
-                      Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          tooltip: 'New Quotation',
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const QuotationPage(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.request_quote),
-                        ),
-                      ),
-                    if (BusinessAccessService.can('invoices', 'create'))
-                      Container(
-                        margin: const EdgeInsets.only(right: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          tooltip: 'New Advance Invoice',
-                          onPressed: () {
+                          onCreateAdvance: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => const AdvanceInvoicePage(),
                               ),
                             );
                           },
-                          icon: const Icon(Icons.payments_outlined),
+                          canCreate: BusinessAccessService.can(
+                            'invoices',
+                            'create',
+                          ),
+                          primary: primary,
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          screenWidth < 600 ? 14 : 24,
+                          8,
+                          screenWidth < 600 ? 14 : 24,
+                          100,
+                        ),
+                        sliver: SliverLayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.crossAxisExtent >= 900
+                                ? 2
+                                : 1;
+                            if (columns == 2) {
+                              return SliverGrid(
+                                gridDelegate:
+                                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                                      maxCrossAxisExtent: 560,
+                                      mainAxisExtent: 202,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 10,
+                                    ),
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  return _buildDocumentCard(filtered[index]);
+                                }, childCount: filtered.length),
+                              );
+                            }
+                            return SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                i,
+                              ) {
+                                return _buildDocumentCard(filtered[i]);
+                              }, childCount: filtered.length),
+                            );
+                          },
+                        ),
+                      ),
+                    if (_hasMoreDocuments)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            screenWidth < 600 ? 14 : 24,
+                            0,
+                            screenWidth < 600 ? 14 : 24,
+                            100,
+                          ),
+                          child: Center(
+                            child: OutlinedButton.icon(
+                              onPressed: _loadingMoreDocuments
+                                  ? null
+                                  : _loadMoreDocuments,
+                              icon: _loadingMoreDocuments
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.expand_more_rounded),
+                              label: Text(
+                                _loadingMoreDocuments
+                                    ? 'Loading...'
+                                    : 'Load more documents',
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                   ],
-                  flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    title: const Text(
-                      'My Invoices',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
-                    ),
-                    background: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [primaryDark, primary],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            right: -50,
-                            top: -50,
-                            child: Container(
-                              width: 200,
-                              height: 200,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.05),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: -30,
-                            bottom: -20,
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.05),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
-                SliverToBoxAdapter(
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                    child: Column(
-                      children: [
-                        _buildSearchBar(),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            _StatCard(
-                              label: 'Loaded Invoices',
-                              value: '${filtered.length}',
-                              icon: Icons.description_outlined,
-                              color: const Color(0xFF8B5CF6), // Violet
-                              bgColor: const Color(0xFFF5F3FF),
-                            ),
-                            const SizedBox(width: 16),
-                            _StatCard(
-                              label: 'Revenue Loaded',
-                              value: 'TSH ${_money(invoiceTotalSum)}',
-                              icon: Icons.account_balance_wallet_outlined,
-                              color: const Color(0xFF10B981), // Emerald
-                              bgColor: const Color(0xFFECFDF5),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (filtered.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _EmptyState(
-                      onCreate: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const invoice_page.InvoicePage(),
-                          ),
-                        );
-                      },
-                      onCreateAdvance: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AdvanceInvoicePage(),
-                          ),
-                        );
-                      },
-                      canCreate: BusinessAccessService.can(
-                        'invoices',
-                        'create',
-                      ),
-                      primary: primary,
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      20,
-                      10,
-                      20,
-                      100,
-                    ), // padding bottom for fab
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate((context, i) {
-                        final doc = filtered[i];
-                        return _buildDocumentCard(doc);
-                      }, childCount: filtered.length),
-                    ),
-                  ),
-                if (_hasMoreDocuments)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                      child: Center(
-                        child: OutlinedButton.icon(
-                          onPressed: _loadingMoreDocuments
-                              ? null
-                              : _loadMoreDocuments,
-                          icon: _loadingMoreDocuments
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.expand_more_rounded),
-                          label: Text(
-                            _loadingMoreDocuments
-                                ? 'Loading...'
-                                : 'Load more documents',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           );
         },
@@ -583,25 +671,30 @@ class _InvoicesPageState extends State<InvoicesPage> {
     return Container(
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(MjasiRadius.sm),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: MjasiColors.primaryNavy.withOpacity(0.025),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: TextField(
         controller: _searchC,
         onChanged: (q) => setState(() => _query = q.toLowerCase()),
-        style: TextStyle(color: textMain, fontSize: 16),
+        style: TextStyle(color: textMain, fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search by client or invoice no...',
-          hintStyle: TextStyle(color: Colors.grey.shade400),
-          prefixIcon: Icon(Icons.search, color: textMuted),
+          hintStyle: TextStyle(color: textMuted, fontSize: 13),
+          prefixIcon: Icon(Icons.search, color: primary, size: 20),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 42,
+            minHeight: 42,
+          ),
           suffixIcon: _query.isNotEmpty
               ? IconButton(
+                  visualDensity: VisualDensity.compact,
                   icon: Icon(Icons.clear, color: textMuted),
                   onPressed: () {
                     _searchC.clear();
@@ -610,14 +703,15 @@ class _InvoicesPageState extends State<InvoicesPage> {
                 )
               : null,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(MjasiRadius.sm),
             borderSide: BorderSide.none,
           ),
           filled: true,
           fillColor: surfaceColor,
+          isDense: true,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
+            horizontal: 12,
+            vertical: 11,
           ),
         ),
       ),
@@ -635,10 +729,10 @@ class _InvoicesPageState extends State<InvoicesPage> {
     final total = (data['total'] as num?) ?? 0;
 
     final kindColor = _getColorForKind(kind);
-    final kindBg = kindColor.withOpacity(0.1);
+    final kindBg = kindColor.withOpacity(0.09);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Dismissible(
         key: ValueKey(doc.id),
         direction: canDelete
@@ -665,34 +759,35 @@ class _InvoicesPageState extends State<InvoicesPage> {
         child: Container(
           decoration: BoxDecoration(
             color: surfaceColor,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(MjasiRadius.sm),
+            border: Border.all(color: MjasiColors.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+                color: MjasiColors.primaryNavy.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(MjasiRadius.sm),
               onTap: () => _previewPdf(data, kind),
               onLongPress: () => _showActions(context, doc),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 child: Column(
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          height: 52,
-                          width: 52,
+                          height: 36,
+                          width: 36,
                           decoration: BoxDecoration(
                             color: kindBg,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: kindColor.withOpacity(0.2),
                               width: 1,
@@ -701,106 +796,131 @@ class _InvoicesPageState extends State<InvoicesPage> {
                           child: Icon(
                             _getIconForKind(kind),
                             color: kindColor,
-                            size: 26,
+                            size: 18,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Flexible(
+                                  Expanded(
                                     child: Text(
-                                      client['name'] ?? 'Unknown client',
+                                      (client['name'] ?? 'Unknown client')
+                                          .toString(),
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                        fontSize: 13,
                                         color: textMain,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: kindBg,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _getTitleForKind(kind),
-                                          style: TextStyle(
-                                            color: kindColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      IconButton(
-                                        constraints: const BoxConstraints(),
-                                        padding: EdgeInsets.zero,
-                                        icon: Icon(
-                                          Icons.more_vert,
-                                          color: textMuted,
-                                          size: 22,
-                                        ),
-                                        onPressed: () =>
-                                            _showActions(context, doc),
-                                      ),
-                                    ],
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    tooltip: 'Document actions',
+                                    icon: Icon(
+                                      Icons.more_horiz_rounded,
+                                      color: textMuted,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => _showActions(context, doc),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '#${invoice['number'] ?? doc.id.substring(0, 6)}',
-                                style: TextStyle(
-                                  color: textMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              const SizedBox(height: 2),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    '#${invoice['number'] ?? doc.id.substring(0, 6)}',
+                                    style: TextStyle(
+                                      color: textMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: kindBg,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      _getTitleForKind(kind),
+                                      style: TextStyle(
+                                        color: kindColor,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Divider(color: Colors.grey.shade100, height: 1),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Column(
+                    const SizedBox(height: 7),
+                    Divider(color: MjasiColors.border, height: 1),
+                    const SizedBox(height: 7),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final amount = Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Total amount',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: textMuted,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'TSH ${_money(total)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: textMain,
+                              ),
+                            ),
+                          ],
+                        );
+                        final metadata = Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.calendar_today_outlined,
-                                  size: 14,
-                                  color: Colors.grey.shade500,
+                                  size: 13,
+                                  color: textMuted,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   _fmt(created),
                                   style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 13,
+                                    color: textMuted,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ],
@@ -808,51 +928,86 @@ class _InvoicesPageState extends State<InvoicesPage> {
                             if ((invoice['paymentMethod'] ?? '')
                                 .toString()
                                 .isNotEmpty) ...[
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.payment_outlined,
-                                    size: 14,
-                                    color: Colors.grey.shade500,
+                                    size: 13,
+                                    color: textMuted,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    (invoice['paymentMethod'] ?? '').toString(),
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 13,
+                                  Flexible(
+                                    child: Text(
+                                      (invoice['paymentMethod'] ?? '')
+                                          .toString(),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: textMuted,
+                                        fontSize: 11,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ],
                           ],
-                        ),
-                        Column(
+                        );
+
+                        if (constraints.maxWidth < 360) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              metadata,
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: amount,
+                              ),
+                            ],
+                          );
+                        }
+                        return Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              'Total Amount',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'TSH ${_money(total)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: textMain,
-                              ),
-                            ),
+                            Expanded(child: metadata),
+                            const SizedBox(width: 12),
+                            Flexible(child: amount),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
+                    if (BusinessAccessService.can(module, 'create') ||
+                        BusinessAccessService.can(module, 'edit')) ...[
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => showDocumentShareSheet(
+                            context: context,
+                            businessUid: BusinessAccessService.businessId,
+                            documentId: doc.id,
+                            document: data,
+                          ),
+                          icon: const Icon(Icons.chat_outlined, size: 16),
+                          label: const Text('Share with customer'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: MjasiColors.success,
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 9),
+                            textStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            side: const BorderSide(
+                              color: MjasiColors.successBackground,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -931,6 +1086,25 @@ class _InvoicesPageState extends State<InvoicesPage> {
                   _savePdf(data, kind);
                 },
               ),
+              if (BusinessAccessService.can(module, 'create') ||
+                  BusinessAccessService.can(module, 'edit'))
+                _ActionTile(
+                  icon: Icons.chat_outlined,
+                  title: 'Share customer link on WhatsApp',
+                  color: const Color(0xFF168A62),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Future<void>.delayed(Duration.zero, () {
+                      if (!mounted) return;
+                      showDocumentShareSheet(
+                        context: context,
+                        businessUid: BusinessAccessService.businessId,
+                        documentId: doc.id,
+                        document: data,
+                      );
+                    });
+                  },
+                ),
               Divider(color: Colors.grey.shade100, height: 24),
               ExpansionTile(
                 leading: Icon(Icons.file_copy_outlined, color: textMain),
@@ -1128,12 +1302,12 @@ class _InvoicesPageState extends State<InvoicesPage> {
 
   Color _getColorForKind(String kind) {
     return switch (kind) {
-      'proforma' => const Color(0xFFF59E0B), // Amber
-      'quotation' => const Color(0xFF8B5CF6), // Violet
-      'delivery' => const Color(0xFF10B981), // Emerald
-      'reminder' => const Color(0xFFEF4444), // Red
-      'advance' => const Color(0xFF06B6D4), // Cyan
-      _ => primary, // invoice (Blue)
+      'proforma' => MjasiColors.warning,
+      'quotation' => MjasiColors.secondaryBlue,
+      'delivery' => MjasiColors.success,
+      'reminder' => MjasiColors.error,
+      'advance' => MjasiColors.primaryNavy,
+      _ => primary,
     };
   }
 
@@ -1278,81 +1452,88 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.description_outlined, size: 80, color: primary),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'No documents yet',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Create your first invoice or quotation and keep track of your business easily.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: Color(0xFF64748B),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (canCreate)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.09),
+                  shape: BoxShape.circle,
                 ),
-                onPressed: onCreate,
-                icon: const Icon(Icons.add),
-                label: const Text(
-                  'Create New Document',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                child: Icon(
+                  Icons.description_outlined,
+                  size: 52,
+                  color: primary,
                 ),
               ),
-            if (canCreate) const SizedBox(height: 16),
-            if (canCreate)
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: onCreateAdvance,
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text(
-                  'Create Advance Invoice',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              const SizedBox(height: 16),
+              const Text(
+                'No documents yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: MjasiColors.textPrimary,
                 ),
               ),
-          ],
+              const SizedBox(height: 8),
+              const Text(
+                'Create your first invoice or quotation to keep track of your business.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: MjasiColors.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (canCreate)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 11,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text(
+                    'Create New Document',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+              if (canCreate) const SizedBox(height: 6),
+              if (canCreate)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 9,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                    ),
+                  ),
+                  onPressed: onCreateAdvance,
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  label: const Text(
+                    'Create Advance Invoice',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1378,60 +1559,52 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: MjasiColors.surface,
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          border: Border.all(color: MjasiColors.border),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 12,
-                  color: Colors.grey.shade300,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(9),
               ),
+              child: Icon(icon, color: color, size: 16),
             ),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        color: MjasiColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

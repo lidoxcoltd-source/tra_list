@@ -74,8 +74,22 @@ class _TasksPageState extends State<TasksPage> {
           const TaskBell(),
         ],
       ),
-      floatingActionButton: TaskService.canAssign
-          ? FloatingActionButton.extended(
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: 'tasks_chat_fab',
+            mini: true,
+            tooltip: 'chat_title'.tr,
+            backgroundColor: TaskColors.navy,
+            foregroundColor: Colors.white,
+            onPressed: () => Navigator.of(context).pop('open_chat'),
+            child: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
+          if (TaskService.canAssign) ...[
+            const SizedBox(width: 12),
+            FloatingActionButton.extended(
+              heroTag: 'tasks_add_fab',
               backgroundColor: TaskColors.brand,
               foregroundColor: Colors.white,
               onPressed: () => Navigator.of(
@@ -84,8 +98,10 @@ class _TasksPageState extends State<TasksPage> {
               icon: const Icon(Icons.add_rounded),
               shape: const StadiumBorder(),
               label: Text('tk_new'.tr),
-            )
-          : null,
+            ),
+          ],
+        ],
+      ),
       body: StreamBuilder<List<TaskModel>>(
         stream: _stream,
         builder: (context, snapshot) {

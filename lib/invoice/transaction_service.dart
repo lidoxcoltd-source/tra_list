@@ -124,6 +124,32 @@ class TransactionService {
     return query.limit(limit).get();
   }
 
+  static Future<double> getStaffDailyExpenseTotal({
+    required String employeeUid,
+    required DateTime date,
+    String? excludeTransactionId,
+  }) async {
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    final snapshot = await getCollectionRef()
+        .where('uid', isEqualTo: employeeUid)
+        .where(
+          'shopNickname',
+          isEqualTo: BusinessAccessService.shopNickname.value,
+        )
+        .where('date', isGreaterThanOrEqualTo: dayStart)
+        .where('date', isLessThan: dayEnd)
+        .get();
+    return snapshot.docs.fold<double>(0, (total, document) {
+      final transaction = document.data();
+      if (transaction.type != TransactionType.expense ||
+          document.id == excludeTransactionId) {
+        return total;
+      }
+      return total + transaction.amount;
+    });
+  }
+
   static Future<Map<String, double>> getTotals({
     DateTime? startDate,
     DateTime? endDate,

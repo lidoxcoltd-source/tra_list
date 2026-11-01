@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -303,9 +305,19 @@ class LoginController extends GetxController {
             });
           }
         }
+        final pendingWebRoute = needsBusinessSetup
+            ? null
+            : AppRoutes.takePendingWebRoute();
         Get.offAllNamed(
           needsBusinessSetup ? AppRoutes.businessSetup : AppRoutes.home,
         );
+        if (pendingWebRoute != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_auth.currentUser != null) {
+              unawaited(Get.toNamed(pendingWebRoute));
+            }
+          });
+        }
         Get.snackbar(
           'Success',
           'Welcome back!',
@@ -1065,6 +1077,25 @@ class _LoginPageState extends State<LoginPage> {
                         size: 18,
                       ),
                       label: Text('login_change_mode'.tr),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => Get.toNamed(AppRoutes.privacy),
+                      child: Text(
+                        'legal_privacy_link'.tr,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Get.toNamed(AppRoutes.terms),
+                      child: Text(
+                        'legal_terms_link'.tr,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                   ],
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/theme/app_theme.dart';
+
 import 'stock_media.dart';
 import 'stock_models.dart';
 
@@ -13,33 +14,60 @@ const kStockOk = MjasiColors.success;
 const kStockWarn = MjasiColors.warning;
 const kStockBad = MjasiColors.error;
 
+const double _stockRadius = 12;
+const double _stockPagePadding = 16;
+
 String fmtText(String key, Map<String, String> values) {
   var text = key.tr;
-  values.forEach((k, v) => text = text.replaceAll('@$k', v));
+  values.forEach((key, value) {
+    text = text.replaceAll('@$key', value);
+  });
   return text;
 }
 
 String unitLabel(String unit) {
   final key = 'stk_unit_$unit';
-  final t = key.tr;
-  return t == key ? unit : t;
+  final translated = key.tr;
+  return translated == key ? unit : translated;
 }
 
-/// Translates StockException keys (and shows other errors verbatim).
+/// Translates StockException keys and displays other errors verbatim.
 String stockErrorText(Object error) {
-  if (error is StockException) return fmtText(error.messageKey, error.args);
+  if (error is StockException) {
+    return fmtText(error.messageKey, error.args);
+  }
   return '$error';
 }
 
-void stockToast(String title, String message, {bool error = false}) {
+void stockToast(
+  String title,
+  String message, {
+  bool error = false,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
   Get.snackbar(
     title,
     message,
     snackPosition: SnackPosition.BOTTOM,
-    backgroundColor: error ? kStockBad : kStockOk,
+    backgroundColor: error ? kStockBad : kStockNavy,
     colorText: Colors.white,
     margin: const EdgeInsets.all(12),
     maxWidth: 520,
+    borderRadius: 12,
+    duration: Duration(seconds: onAction == null ? 3 : 8),
+    mainButton: onAction == null || actionLabel == null
+        ? null
+        : TextButton(
+            onPressed: onAction,
+            child: Text(
+              actionLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
   );
 }
 
@@ -51,6 +79,7 @@ void stockGoBack(BuildContext context) {
   }
 }
 
+/// Shared page scaffold for all stock-management screens.
 class StockScaffold extends StatelessWidget {
   const StockScaffold({
     super.key,
@@ -74,63 +103,46 @@ class StockScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: kStockBg,
       appBar: AppBar(
-        toolbarHeight: 64,
-        titleSpacing: 8,
+        toolbarHeight: 58,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: kStockNavy,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 4,
         title: Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: Colors.white,
+            fontSize: 18,
             fontWeight: FontWeight.w700,
-            fontSize: 17,
-            letterSpacing: -0.2,
+            letterSpacing: -.3,
           ),
         ),
-        backgroundColor: kStockNavy,
-        foregroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => stockGoBack(context),
+          icon: const Icon(Icons.arrow_back_rounded, size: 21),
         ),
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: IconButton(
-            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            icon: const Icon(Icons.arrow_back_rounded, size: 20),
-            style: IconButton.styleFrom(
-              foregroundColor: Colors.white,
-              backgroundColor: Colors.white.withValues(alpha: .12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-            onPressed: () => stockGoBack(context),
-          ),
-        ),
-        actions: actions
-            ?.map(
-              (action) => IconTheme(
-                data: const IconThemeData(color: Colors.white),
-                child: action,
-              ),
-            )
-            .toList(),
+        actions: actions,
         bottom: bottom,
       ),
       floatingActionButton: fab,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: SizedBox(width: double.infinity, child: body),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: SizedBox(width: double.infinity, child: body),
+          ),
         ),
       ),
     );
   }
 }
 
+/// Consistent section title with optional helper text and trailing action.
 class StockSectionHeading extends StatelessWidget {
   const StockSectionHeading({
     super.key,
@@ -146,7 +158,7 @@ class StockSectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -160,7 +172,7 @@ class StockSectionHeading extends StatelessWidget {
                     color: MjasiColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -.15,
+                    letterSpacing: -.2,
                   ),
                 ),
                 if (subtitle != null) ...[
@@ -170,24 +182,26 @@ class StockSectionHeading extends StatelessWidget {
                     style: const TextStyle(
                       color: MjasiColors.textSecondary,
                       fontSize: 12,
+                      height: 1.3,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-          if (action != null) action!,
+          if (action != null) ...[const SizedBox(width: 8), action!],
         ],
       ),
     );
   }
 }
 
+/// Neutral surface card. Keeps the existing StockCard API intact.
 class StockCard extends StatelessWidget {
   const StockCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(14),
     this.onTap,
     this.borderColor,
     this.height,
@@ -203,27 +217,28 @@ class StockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      elevation: 1,
-      shadowColor: const Color(0x12071B3A),
+      borderRadius: BorderRadius.circular(_stockRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(_stockRadius),
         child: Container(
           padding: padding,
+          height: height,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: borderColor ?? MjasiColors.border),
+            borderRadius: BorderRadius.circular(_stockRadius),
+            border: Border.all(
+              color: borderColor ?? MjasiColors.border,
+              width: 1,
+            ),
           ),
-          child: height == null
-              ? child
-              : SizedBox(height: height, child: child),
+          child: child,
         ),
       ),
     );
   }
 }
 
+/// Compact statistic tile for dashboards and stock summaries.
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -246,66 +261,68 @@ class StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return StockCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(14),
-      height: 124,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const Spacer(),
-              if (onTap != null)
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 16,
-                  color: MjasiColors.textSecondary.withValues(alpha: .75),
-                ),
-            ],
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .09),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 19),
           ),
-          const Spacer(),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: MjasiColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.3,
+                  ),
+                ),
+                if (caption != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    caption!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: MjasiColors.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
               color: MjasiColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 20,
-                letterSpacing: -0.5,
-                fontWeight: FontWeight.w800,
-                color: MjasiColors.textPrimary,
-              ),
-            ),
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              caption!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: MjasiColors.textSecondary,
-                fontSize: 10,
-              ),
             ),
           ],
         ],
@@ -314,8 +331,10 @@ class StatTile extends StatelessWidget {
   }
 }
 
+/// Small, low-contrast status label for product stock state.
 class StockStateChip extends StatelessWidget {
   const StockStateChip({super.key, required this.product});
+
   final Product product;
 
   @override
@@ -323,6 +342,7 @@ class StockStateChip extends StatelessWidget {
     if (!product.tracked) {
       return _chip('stk_not_tracked'.tr, Colors.blueGrey);
     }
+
     return switch (product.stockState) {
       StockState.out => _chip('stk_out_of_stock'.tr, kStockBad),
       StockState.low => _chip('stk_low_stock'.tr, kStockWarn),
@@ -330,25 +350,27 @@ class StockStateChip extends StatelessWidget {
     };
   }
 
-  Widget _chip(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.09),
-      borderRadius: BorderRadius.circular(9),
-      border: Border.all(color: color.withValues(alpha: .14)),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(
-        color: color,
-        fontSize: 11,
-        letterSpacing: 0.1,
-        fontWeight: FontWeight.w700,
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(6),
       ),
-    ),
-  );
+      child: Text(
+        text,
+        maxLines: 1,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
 }
 
+/// Reusable empty/error/info state.
 class StockMessage extends StatelessWidget {
   const StockMessage({
     super.key,
@@ -367,29 +389,31 @@ class StockMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 76,
-              height: 76,
+              width: 58,
+              height: 58,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(24),
+                color: color.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, size: 36, color: color.withValues(alpha: 0.8)),
+              child: Icon(icon, size: 28, color: color.withValues(alpha: .85)),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             Text(
               text,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: MjasiColors.textSecondary,
+                fontSize: 13,
                 height: 1.45,
               ),
             ),
-            if (action != null) ...[const SizedBox(height: 12), action!],
+            if (action != null) ...[const SizedBox(height: 14), action!],
           ],
         ),
       ),
@@ -397,38 +421,47 @@ class StockMessage extends StatelessWidget {
   }
 }
 
-InputDecoration stockInput(String label, {IconData? icon, String? suffix}) =>
-    InputDecoration(
-      labelText: label,
-      prefixIcon: icon == null ? null : Icon(icon),
-      suffixText: suffix,
-      filled: true,
-      fillColor: MjasiColors.surface,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: MjasiColors.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: MjasiColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kStockBlue, width: 1.5),
-      ),
-    );
+/// Shared input style used throughout stock forms.
+InputDecoration stockInput(String label, {IconData? icon, String? suffix}) {
+  final outline = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(10),
+    borderSide: const BorderSide(color: MjasiColors.border),
+  );
 
-Color movementColor(MovementType t, double change) =>
-    change >= 0 ? kStockOk : kStockBad;
+  return InputDecoration(
+    labelText: label,
+    prefixIcon: icon == null ? null : Icon(icon, size: 19),
+    suffixText: suffix,
+    filled: true,
+    fillColor: Colors.white,
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+    border: outline,
+    enabledBorder: outline,
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: kStockBlue, width: 1.4),
+    ),
+  );
+}
 
-String formatDate(DateTime? d) => d == null
-    ? ''
-    : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+Color movementColor(MovementType type, double change) {
+  return change >= 0 ? kStockOk : kStockBad;
+}
 
-String formatDateTime(DateTime? d) => d == null
-    ? ''
-    : '${formatDate(d)} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+String formatDate(DateTime? date) {
+  if (date == null) return '';
+  return '${date.day.toString().padLeft(2, '0')}/'
+      '${date.month.toString().padLeft(2, '0')}/'
+      '${date.year}';
+}
+
+String formatDateTime(DateTime? date) {
+  if (date == null) return '';
+  return '${formatDate(date)} '
+      '${date.hour.toString().padLeft(2, '0')}:'
+      '${date.minute.toString().padLeft(2, '0')}';
+}
 
 /// Searchable product picker. Returns null when dismissed.
 Future<Product?> pickProduct(
@@ -436,96 +469,150 @@ Future<Product?> pickProduct(
   List<Product> products, {
   bool trackedOnly = false,
 }) {
-  final list = products
-      .where((p) => p.active && (!trackedOnly || p.tracked))
+  final availableProducts = products
+      .where((product) => product.active && (!trackedOnly || product.tracked))
       .toList();
+
   return showModalBottomSheet<Product>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    useSafeArea: true,
+    backgroundColor: kStockBg,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
-    builder: (ctx) {
+    builder: (sheetContext) {
       var query = '';
+
       return StatefulBuilder(
-        builder: (ctx, setState) {
-          final q = query.trim().toLowerCase();
-          final shown = list
-              .where(
-                (p) =>
-                    q.isEmpty ||
-                    p.name.toLowerCase().contains(q) ||
-                    p.sku.toLowerCase().contains(q) ||
-                    p.barcode.toLowerCase().contains(q),
-              )
-              .toList();
-          return SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: SizedBox(
-                height: MediaQuery.of(ctx).size.height * 0.78,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
-                      child: TextField(
-                        autofocus: true,
-                        decoration:
-                            stockInput(
-                              'stk_search'.tr,
-                              icon: Icons.search_rounded,
-                            ).copyWith(
-                              suffixIcon: IconButton(
-                                tooltip: 'stk_scan'.tr,
-                                icon: const Icon(Icons.qr_code_scanner),
-                                onPressed: () async {
-                                  final p = await scanForProduct(
-                                    ctx,
-                                    list,
-                                    trackedOnly: trackedOnly,
-                                  );
-                                  if (p != null && ctx.mounted) {
-                                    Navigator.pop(ctx, p);
-                                  }
-                                },
+        builder: (context, setSheetState) {
+          final normalizedQuery = query.trim().toLowerCase();
+          final results = availableProducts.where((product) {
+            return normalizedQuery.isEmpty ||
+                product.name.toLowerCase().contains(normalizedQuery) ||
+                product.sku.toLowerCase().contains(normalizedQuery) ||
+                product.barcode.toLowerCase().contains(normalizedQuery);
+          }).toList();
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * .78,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 34,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: MjasiColors.border,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'stk_search'.tr,
+                          style: const TextStyle(
+                            color: MjasiColors.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          autofocus: true,
+                          onChanged: (value) {
+                            setSheetState(() => query = value);
+                          },
+                          decoration:
+                              stockInput(
+                                'stk_search'.tr,
+                                icon: Icons.search_rounded,
+                              ).copyWith(
+                                suffixIcon: IconButton(
+                                  tooltip: 'stk_scan'.tr,
+                                  icon: const Icon(
+                                    Icons.qr_code_scanner_rounded,
+                                    size: 20,
+                                  ),
+                                  onPressed: () async {
+                                    final selected = await scanForProduct(
+                                      sheetContext,
+                                      availableProducts,
+                                      trackedOnly: trackedOnly,
+                                    );
+                                    if (selected != null &&
+                                        sheetContext.mounted) {
+                                      Navigator.pop(sheetContext, selected);
+                                    }
+                                  },
+                                ),
                               ),
-                            ),
-                        onChanged: (v) => setState(() => query = v),
-                      ),
+                        ),
+                      ],
                     ),
-                    Expanded(
-                      child: shown.isEmpty
-                          ? StockMessage(
-                              icon: Icons.inventory_2_outlined,
-                              text: 'stk_no_products'.tr,
-                            )
-                          : ListView.separated(
-                              itemCount: shown.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (_, i) {
-                                final p = shown[i];
-                                return ListTile(
-                                  leading: ProductImage(
-                                    url: p.imageUrl,
-                                    size: 40,
-                                    radius: 12,
+                  ),
+                  Expanded(
+                    child: results.isEmpty
+                        ? StockMessage(
+                            icon: Icons.inventory_2_outlined,
+                            text: 'stk_no_products'.tr,
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            itemCount: results.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1, indent: 54),
+                            itemBuilder: (context, index) {
+                              final product = results[index];
+
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 5,
+                                ),
+                                leading: ProductImage(
+                                  url: product.imageUrl,
+                                  size: 42,
+                                  radius: 9,
+                                ),
+                                title: Text(
+                                  product.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: MjasiColors.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  title: Text(p.name),
-                                  subtitle: Text(
-                                    '${p.sku} · ${p.tracked ? '${formatQty(p.quantity)} ${unitLabel(p.unit)}' : 'stk_not_tracked'.tr}',
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    '${product.sku} · '
+                                    '${product.tracked ? '${formatQty(product.quantity)} ${unitLabel(product.unit)}' : 'stk_not_tracked'.tr}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11),
                                   ),
-                                  trailing: StockStateChip(product: p),
-                                  onTap: () => Navigator.pop(ctx, p),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+                                ),
+                                trailing: StockStateChip(product: product),
+                                onTap: () {
+                                  Navigator.pop(sheetContext, product);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
           );

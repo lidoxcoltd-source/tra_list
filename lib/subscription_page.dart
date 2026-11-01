@@ -49,6 +49,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       _phoneController.text = user!.phoneNumber!;
     }
     _loadPlan();
+    _loadTrial();
     if (!widget.checkoutOnly) _resumePendingCard();
   }
 
@@ -243,11 +244,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: checkout ? 620 : 1100),
                   child: checkout
-                      ? _checkoutCard()
+                      ? Column(children: [_trialCard(), _checkoutCard()])
                       : Column(
                           children: [
                             _heading(),
                             const SizedBox(height: 16),
+                            _trialCard(),
                             _plansView(),
                           ],
                         ),
@@ -274,6 +276,141 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   // Live subscription state so the owner sees what they already have.
+  TrialSettings _trialSettings = TrialSettings.defaults;
+  Map<String, dynamic> _subData = const {};
+  bool _trialBusy = false;
+
+  Future<void> _loadTrial() async {
+    try {
+      final settings = await SuperAdminSubscriptionService.loadTrialSettings();
+      final doc = await FirebaseFirestore.instance
+          .collection('subscriptions')
+          .doc(BusinessAccessService.businessId)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _trialSettings = settings;
+        _subData = doc.data() ?? const {};
+      });
+    } catch (error) {
+      debugPrint('Failed to load trial state: $error');
+    }
+  }
+
+  Future<void> _startTrial() async {
+    if (_trialBusy) return;
+    setState(() => _trialBusy = true);
+    try {
+      await SuperAdminSubscriptionService.startOwnTrial(
+        BusinessAccessService.businessId,
+      );
+      await _loadTrial();
+      if (!mounted) return;
+      Get.snackbar(
+        'success'.tr,
+        'subx_trial_started'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+      if (widget.checkoutOnly && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _warn(
+        error.toString().contains('trial_used')
+            ? 'subx_trial_used'.tr
+            : error.toString().contains('trial_disabled')
+            ? 'subx_trial_off'.tr
+            : error.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _trialBusy = false);
+    }
+  }
+
+  Widget _trialCard() {
+    final now = DateTime.now();
+    final start = _subData['trialStart'] is Timestamp
+        ? (_subData['trialStart'] as Timestamp).toDate()
+        : null;
+    final end = TrialSettings.runningEnd(_subData, _trialSettings, now);
+    final expiry = _subData['expiry'] is Timestamp
+        ? (_subData['expiry'] as Timestamp).toDate()
+        : null;
+    if (expiry != null && expiry.isAfter(now)) return const SizedBox.shrink();
+
+    final running = end != null;
+    final used = _subData['trialUsed'] == true || start != null;
+    final canStart =
+        !used && _trialSettings.enabled && BusinessAccessService.isOwner.value;
+    if (!running && !canStart) return const SizedBox.shrink();
+
+    final daysLeft = end != null ? end.difference(now).inDays + 1 : 0;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _gold.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.card_giftcard_rounded, color: _gold, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  running
+                      ? 'subx_trial_running'.trParams({'days': '$daysLeft'})
+                      : 'subx_trial_title'.trParams({
+                          'days': '${_trialSettings.durationDays}',
+                        }),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  running
+                      ? (daysLeft <= 3
+                            ? 'subx_trial_ending'.tr
+                            : 'subx_trial_running_sub'.tr)
+                      : 'subx_trial_sub'.tr,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          if (canStart) ...[
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: _trialBusy ? null : _startTrial,
+              style: FilledButton.styleFrom(
+                backgroundColor: _gold,
+                foregroundColor: _ink,
+              ),
+              child: _trialBusy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('subx_trial_start'.tr),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   bool _usd = false;
   static const double _tzsPerUsd = 2600;
 

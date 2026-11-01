@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:tra_list/services/pdf/saved_pdf_opener.dart'
+    as saved_pdf_opener;
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'stock_models.dart';
 import 'stock_media.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
+import 'pos_page.dart';
 import 'stock_operations_pages.dart';
+import 'product_label_print_service.dart';
 
 bool get _canSeeCost => BusinessAccessService.can('stock', 'edit');
 
@@ -72,10 +77,71 @@ class _ProductsPageState extends State<ProductsPage> {
                 p.barcode.toLowerCase().contains(q) ||
                 p.category.toLowerCase().contains(q);
           }).toList();
+          final activeCount = all.where((p) => p.active).length;
+          final lowStockCount = all
+              .where((p) => p.active && p.tracked && p.isLow)
+              .length;
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [kStockNavy, kStockBlue],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .14),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: const Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'stk_catalog_title'.tr,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              fmtText('stk_catalog_summary', {
+                                'count': '$activeCount',
+                                'low': '$lowStockCount',
+                              }),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .82),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                 child: TextField(
                   decoration:
                       stockInput(
@@ -183,7 +249,7 @@ class _ProductsPageState extends State<ProductsPage> {
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: cols,
-                                  mainAxisExtent: 112,
+                                  mainAxisExtent: 124,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 12,
                                 ),
@@ -808,7 +874,7 @@ class ProductDetailsPage extends StatelessWidget {
         final canCreate = BusinessAccessService.can('stock', 'create');
         return StockScaffold(
           title: p.name,
-          maxWidth: 900,
+          maxWidth: 1060,
           actions: [
             if (canEdit)
               IconButton(
@@ -875,175 +941,721 @@ class ProductDetailsPage extends StatelessWidget {
                 },
               ),
           ],
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              StockCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (p.imageUrl.isNotEmpty) ...[
-                          ProductImage(url: p.imageUrl, size: 72, radius: 12),
-                          const SizedBox(width: 14),
-                        ],
-                        Expanded(
-                          child: Text(
-                            p.tracked
-                                ? '${formatQty(p.quantity)} ${unitLabel(p.unit)}'
-                                : 'stk_not_tracked'.tr,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: kStockNavy,
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 760;
+              final summary = _ProductOverviewCard(product: p);
+              final metrics = _ProductMetrics(product: p);
+              final actions = _ProductQuickActions(
+                product: p,
+                canCreate: canCreate,
+                canEdit: canEdit,
+              );
+              final information = _ProductInformationCard(product: p);
+              final history = BusinessAccessService.can('stock', 'view')
+                  ? _ProductHistoryCard(service: service, product: p)
+                  : const SizedBox.shrink();
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(14),
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: Column(
+                              children: [
+                                summary,
+                                const SizedBox(height: 10),
+                                information,
+                                const SizedBox(height: 10),
+                                history,
+                              ],
                             ),
                           ),
-                        ),
-                        StockStateChip(product: p),
-                      ],
-                    ),
-                    if (!p.active)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'stk_archived'.tr,
-                          style: const TextStyle(color: kStockWarn),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              children: [
+                                metrics,
+                                const SizedBox(height: 10),
+                                actions,
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          summary,
+                          const SizedBox(height: 10),
+                          metrics,
+                          const SizedBox(height: 10),
+                          actions,
+                          const SizedBox(height: 10),
+                          information,
+                          const SizedBox(height: 10),
+                          history,
+                        ],
                       ),
-                    const Divider(height: 24),
-                    StockSectionHeading(title: 'stk_product_information'.tr),
-                    _kv('stk_sku'.tr, p.sku),
-                    if (p.barcode.isNotEmpty) _kv('stk_barcode'.tr, p.barcode),
-                    if (p.category.isNotEmpty)
-                      _kv('stk_category'.tr, p.category),
-                    if (p.supplier.isNotEmpty)
-                      _kv('stk_supplier'.tr, p.supplier),
-                    _kv('stk_sell_price'.tr, 'TZS ${formatMoney(p.sellPrice)}'),
-                    if (_canSeeCost) ...[
-                      _kv('stk_avg_cost'.tr, 'TZS ${formatMoney(p.costPrice)}'),
-                      if (p.tracked)
-                        _kv(
-                          'stk_stock_value'.tr,
-                          'TZS ${formatMoney(p.quantity * p.costPrice)}',
-                        ),
-                    ],
-                    if (p.tracked)
-                      _kv('stk_threshold'.tr, formatQty(p.lowStockThreshold)),
-                    if (p.description.isNotEmpty)
-                      _kv('stk_description'.tr, p.description),
-                  ],
-                ),
-              ),
-              if (p.tracked && p.active) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (canCreate)
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: kStockBlue,
-                        ),
-                        onPressed: () => Get.to(
-                          () => ReceiveStockPage(initialProductId: p.id),
-                        ),
-                        icon: const Icon(Icons.add_box_outlined),
-                        label: Text('stk_receive'.tr),
-                      ),
-                    if (canEdit)
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            Get.to(() => AdjustStockPage(productId: p.id)),
-                        icon: const Icon(Icons.tune),
-                        label: Text('stk_adjust'.tr),
-                      ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 20),
-              Text(
-                'stk_history'.tr,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: kStockNavy,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (BusinessAccessService.can('stock', 'view'))
-                StreamBuilder<List<StockMovement>>(
-                  stream: service.watchProductMovements(p.id!),
-                  builder: (context, ms) {
-                    if (ms.hasError) {
-                      return StockMessage(
-                        icon: Icons.error_outline,
-                        color: kStockBad,
-                        text: stockErrorText(ms.error!),
-                      );
-                    }
-                    if (!ms.hasData) {
-                      return const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (ms.data!.isEmpty) {
-                      return StockMessage(
-                        icon: Icons.history,
-                        text: 'stk_no_movements'.tr,
-                      );
-                    }
-                    return Column(
-                      children: [
-                        for (final m in ms.data!)
-                          MovementTile(movement: m, showProduct: false),
-                      ],
-                    );
-                  },
-                ),
-            ],
+              );
+            },
           ),
         );
       },
     );
   }
+}
 
-  Widget _kv(String k, String v) => LayoutBuilder(
-    builder: (context, constraints) {
-      final compact = constraints.maxWidth < 430;
-      final label = Text(
-        k,
-        style: const TextStyle(color: MjasiColors.textSecondary, fontSize: 12),
-      );
-      final value = Text(
-        v,
-        textAlign: compact ? TextAlign.start : TextAlign.end,
-        style: const TextStyle(
-          color: MjasiColors.textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: compact
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [label, const SizedBox(height: 3), value],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+class _ProductOverviewCard extends StatelessWidget {
+  const _ProductOverviewCard({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) => StockCard(
+    padding: const EdgeInsets.all(14),
+    child: Row(
+      children: [
+        ProductImage(url: product.imageUrl, size: 58, radius: 15),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                product.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: kStockNavy,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (product.category.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  product.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 7),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(child: label),
-                  const SizedBox(width: 12),
-                  Flexible(child: value),
+                  StockStateChip(product: product),
+                  if (!product.active)
+                    _ProductStatusTag(
+                      label: 'stk_archived'.tr,
+                      color: kStockWarn,
+                    ),
                 ],
               ),
-      );
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProductMetrics extends StatelessWidget {
+  const _ProductMetrics({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = (constraints.maxWidth - 8) / 2;
+      final items = <Widget>[
+        _ProductMetric(
+          width: width,
+          icon: Icons.inventory_2_outlined,
+          label: 'stk_quantity'.tr,
+          value: product.tracked
+              ? formatQty(product.quantity)
+              : 'stk_not_tracked'.tr,
+          caption: product.tracked ? unitLabel(product.unit) : null,
+          color: product.isOut ? kStockBad : kStockBlue,
+        ),
+        _ProductMetric(
+          width: width,
+          icon: Icons.sell_outlined,
+          label: 'stk_sell_price'.tr,
+          value: 'TZS ${formatMoney(product.sellPrice)}',
+          color: kStockOk,
+        ),
+        if (product.tracked)
+          _ProductMetric(
+            width: width,
+            icon: Icons.notifications_active_outlined,
+            label: 'stk_threshold'.tr,
+            value: formatQty(product.lowStockThreshold),
+            caption: unitLabel(product.unit),
+            color: kStockWarn,
+          ),
+        if (_canSeeCost)
+          _ProductMetric(
+            width: width,
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'stk_stock_value'.tr,
+            value: 'TZS ${formatMoney(product.stockCostValue)}',
+            color: kStockNavy,
+          ),
+      ];
+      return Wrap(spacing: 8, runSpacing: 8, children: items);
     },
   );
 }
+
+class _ProductMetric extends StatelessWidget {
+  const _ProductMetric({
+    required this.width,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.caption,
+  });
+
+  final double width;
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? caption;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    child: StatTile(
+      icon: icon,
+      label: label,
+      value: value,
+      color: color,
+      caption: caption,
+    ),
+  );
+}
+
+class _ProductQuickActions extends StatelessWidget {
+  const _ProductQuickActions({
+    required this.product,
+    required this.canCreate,
+    required this.canEdit,
+  });
+
+  final Product product;
+  final bool canCreate;
+  final bool canEdit;
+
+  @override
+  Widget build(BuildContext context) => StockCard(
+    padding: const EdgeInsets.all(12),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (product.active && canCreate)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 42),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              backgroundColor: kStockNavy,
+            ),
+            onPressed: () => Get.to(() => PosPage(initialProduct: product)),
+            icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+            label: Text('stk_sell_receipt'.tr),
+          ),
+        if (product.tracked && product.active && canCreate)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 42),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              backgroundColor: kStockBlue,
+            ),
+            onPressed: () =>
+                Get.to(() => ReceiveStockPage(initialProductId: product.id)),
+            icon: const Icon(Icons.add_box_outlined, size: 18),
+            label: Text('stk_receive'.tr),
+          ),
+        if (product.tracked && product.active && canEdit)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 42),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            onPressed: () =>
+                Get.to(() => AdjustStockPage(productId: product.id)),
+            icon: const Icon(Icons.tune, size: 18),
+            label: Text('stk_adjust'.tr),
+          ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 42),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+          onPressed: () => _showProductLabelDialog(context, product),
+          icon: const Icon(Icons.qr_code_2, size: 18),
+          label: Text('stk_print_labels'.tr),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProductInformationCard extends StatelessWidget {
+  const _ProductInformationCard({required this.product});
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <(String, String, IconData)>[
+      ('stk_sku'.tr, product.sku, Icons.tag_outlined),
+      if (product.barcode.isNotEmpty)
+        ('stk_barcode'.tr, product.barcode, Icons.barcode_reader),
+      if (product.supplier.isNotEmpty)
+        ('stk_supplier'.tr, product.supplier, Icons.local_shipping_outlined),
+      if (_canSeeCost)
+        (
+          'stk_avg_cost'.tr,
+          'TZS ${formatMoney(product.costPrice)}',
+          Icons.payments_outlined,
+        ),
+    ];
+    return StockCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StockSectionHeading(
+            title: 'stk_product_information'.tr,
+            subtitle: product.description.isEmpty ? null : product.description,
+          ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = (constraints.maxWidth - 10) / 2;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final (label, value, icon) in details)
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProductInfoItem(
+                        label: label,
+                        value: value,
+                        icon: icon,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductInfoItem extends StatelessWidget {
+  const _ProductInfoItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: kStockBg,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 17, color: kStockBlue),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: MjasiColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProductHistoryCard extends StatelessWidget {
+  const _ProductHistoryCard({required this.service, required this.product});
+  final StockService service;
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) => StockCard(
+    padding: EdgeInsets.zero,
+    child: Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        leading: const Icon(Icons.history, color: kStockBlue),
+        title: Text(
+          'stk_history'.tr,
+          style: const TextStyle(
+            color: kStockNavy,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        children: [
+          StreamBuilder<List<StockMovement>>(
+            stream: service.watchProductMovements(product.id!),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return StockMessage(
+                  icon: Icons.error_outline,
+                  color: kStockBad,
+                  text: stockErrorText(snapshot.error!),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.data!.isEmpty) {
+                return StockMessage(
+                  icon: Icons.history,
+                  text: 'stk_no_movements'.tr,
+                );
+              }
+              return Column(
+                children: [
+                  for (final movement in snapshot.data!)
+                    MovementTile(movement: movement, showProduct: false),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ProductStatusTag extends StatelessWidget {
+  const _ProductStatusTag({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .1),
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+Future<void> _showProductLabelDialog(
+  BuildContext context,
+  Product product,
+) async {
+  var format = ProductCodeFormat.code128;
+  var copies = 1;
+  _LabelAction? busyAction;
+  var dialogClosed = false;
+  final code = product.barcode.trim().isNotEmpty
+      ? product.barcode.trim()
+      : product.sku.trim();
+
+  Future<void> runAction(
+    BuildContext dialogContext,
+    StateSetter setDialogState,
+    _LabelAction action,
+  ) async {
+    setDialogState(() => busyAction = action);
+    try {
+      switch (action) {
+        case _LabelAction.print:
+          final printed = await ProductLabelPrintService.printLabels(
+            product: product,
+            format: format,
+            copies: copies,
+          );
+          if (printed && dialogContext.mounted) {
+            Navigator.pop(dialogContext);
+          }
+          break;
+        case _LabelAction.save:
+          final path = await ProductLabelPrintService.saveLabels(
+            product: product,
+            format: format,
+            copies: copies,
+          );
+          if (dialogContext.mounted) {
+            setDialogState(() => busyAction = null);
+            Navigator.pop(dialogContext);
+            dialogClosed = true;
+          }
+          stockToast(
+            'stk_saved'.tr,
+            'stk_labels_saved'.tr,
+            actionLabel: 'stk_open_saved_location'.tr,
+            onAction: () async {
+              try {
+                await saved_pdf_opener.openSavedPdfLocation(path);
+              } catch (error) {
+                stockToast(
+                  error is UnsupportedError
+                      ? 'stk_saved_location'.tr
+                      : 'stk_error'.tr,
+                  error is UnsupportedError
+                      ? 'stk_browser_download_location'.tr
+                      : stockErrorText(error),
+                  error: error is! UnsupportedError,
+                );
+              }
+            },
+          );
+          break;
+        case _LabelAction.share:
+          final result = await ProductLabelPrintService.shareLabels(
+            product: product,
+            format: format,
+            copies: copies,
+          );
+          if (result.status == ShareResultStatus.success) {
+            stockToast('stk_labels_shared'.tr, product.name);
+          }
+          break;
+      }
+    } catch (error) {
+      if (dialogContext.mounted) {
+        stockToast('stk_error'.tr, stockErrorText(error), error: true);
+      }
+    } finally {
+      if (dialogContext.mounted && !dialogClosed) {
+        setDialogState(() => busyAction = null);
+      }
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: Text('stk_print_labels'.tr),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                product.name,
+                style: const TextStyle(
+                  color: kStockNavy,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                fmtText('stk_label_code_value', {'code': code}),
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'stk_label_source'.tr,
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'stk_code_format'.tr,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<ProductCodeFormat>(
+                segments: [
+                  ButtonSegment(
+                    value: ProductCodeFormat.code128,
+                    icon: const Icon(Icons.barcode_reader),
+                    label: Text('stk_code128'.tr),
+                  ),
+                  ButtonSegment(
+                    value: ProductCodeFormat.qr,
+                    icon: const Icon(Icons.qr_code_2),
+                    label: Text('stk_qr_code'.tr),
+                  ),
+                ],
+                selected: {format},
+                onSelectionChanged: (selected) =>
+                    setDialogState(() => format = selected.first),
+              ),
+              if (format == ProductCodeFormat.code128 &&
+                  !RegExp(r'^[\x20-\x7E]+$').hasMatch(code))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'stk_code128_ascii_only'.tr,
+                    style: const TextStyle(color: kStockBad, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: Text('stk_label_copies'.tr)),
+                  IconButton(
+                    tooltip: 'stk_decrease'.tr,
+                    onPressed: copies > 1
+                        ? () => setDialogState(() => copies--)
+                        : null,
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                  Text(
+                    '$copies',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  IconButton(
+                    tooltip: 'stk_increase'.tr,
+                    onPressed: copies < 100
+                        ? () => setDialogState(() => copies++)
+                        : null,
+                    icon: const Icon(Icons.add_circle_outline),
+                  ),
+                ],
+              ),
+              Text(
+                'stk_label_sheet_help'.tr,
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: busyAction == null
+                        ? () => runAction(
+                            dialogContext,
+                            setDialogState,
+                            _LabelAction.save,
+                          )
+                        : null,
+                    icon: busyAction == _LabelAction.save
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined, size: 18),
+                    label: Text('stk_save_pdf'.tr),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: busyAction == null
+                        ? () => runAction(
+                            dialogContext,
+                            setDialogState,
+                            _LabelAction.share,
+                          )
+                        : null,
+                    icon: busyAction == _LabelAction.share
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.share_outlined, size: 18),
+                    label: Text('stk_share_pdf'.tr),
+                  ),
+                  FilledButton.icon(
+                    onPressed: busyAction == null
+                        ? () => runAction(
+                            dialogContext,
+                            setDialogState,
+                            _LabelAction.print,
+                          )
+                        : null,
+                    icon: busyAction == _LabelAction.print
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.print_outlined, size: 18),
+                    label: Text('stk_print'.tr),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: busyAction == null
+                ? () => Navigator.pop(dialogContext)
+                : null,
+            child: Text('stk_cancel'.tr),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+enum _LabelAction { print, save, share }
 
 class MovementTile extends StatelessWidget {
   const MovementTile({

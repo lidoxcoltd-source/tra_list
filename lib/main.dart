@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
@@ -13,6 +14,7 @@ import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/app_version_gate.dart';
 import 'package:tra_list/services/offline_sync_coordinator.dart';
+import 'package:tra_list/market/market_media_route_observer.dart';
 import 'package:tra_list/theme/app_theme.dart';
 
 import 'firebase_options.dart';
@@ -20,6 +22,12 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (kIsWeb) {
+    FirebaseFirestore.instance.settings = const Settings(
+      webExperimentalAutoDetectLongPolling: true,
+      persistenceEnabled: true,
+    );
+  }
   await GetStorage.init(); // Initialize GetStorage for language persistence
   if (FirebaseAuth.instance.currentUser != null) {
     try {
@@ -64,18 +72,25 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Web deep links (e.g. /receipt/123) must skip the splash screen.
-    final isDeepLink = kIsWeb && Uri.base.path.length > 1;
-    final isDownloads =
-        kIsWeb &&
-        Uri.base.path.replaceAll(RegExp(r'/+$'), '') == AppRoutes.downloads;
-    final String initialRoute = isDownloads
-        ? AppRoutes.downloads
-        : isDeepLink
-        ? (FirebaseAuth.instance.currentUser != null
+    final webRoute = kIsWeb ? AppRoutes.resolveWebLocation(Uri.base) : null;
+    final isDeepLink =
+        webRoute != null && webRoute != AppRoutes.home && webRoute != AppRoutes.splash;
+    final signedIn = FirebaseAuth.instance.currentUser != null;
+    final requiresAuthentication =
+        webRoute != null && AppRoutes.webRouteRequiresAuthentication(webRoute);
+    final initialRoute = isDeepLink
+        ? signedIn
               ? AppRoutes.home
-              : AppRoutes.login)
+              : AppRoutes.login
         : AppRoutes.splash;
+    if (isDeepLink && !signedIn && requiresAuthentication) {
+      AppRoutes.pendingWebRoute = webRoute;
+    }
+    final initialWebRoute = isDeepLink &&
+            (signedIn || !requiresAuthentication) &&
+            webRoute != AppRoutes.login
+        ? webRoute
+        : null;
 
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
@@ -88,11 +103,43 @@ class MyApp extends StatelessWidget {
       theme: MjasiTheme.light,
       initialRoute: initialRoute,
       getPages: AppRoutes.pages, // <-- wire routes
+      navigatorObservers: [marketMediaRouteObserver],
       scrollBehavior: const _AppScrollBehavior(),
-      builder: (context, child) =>
-          AppVersionGate(child: child ?? const SizedBox.shrink()),
       defaultTransition: kIsWeb ? Transition.fadeIn : Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),
+      builder: (context, child) => _InitialWebRouteLauncher(
+        route: initialWebRoute,
+        child: AppVersionGate(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
+}
+
+class _InitialWebRouteLauncher extends StatefulWidget {
+  const _InitialWebRouteLauncher({required this.route, required this.child});
+
+  final String? route;
+  final Widget child;
+
+  @override
+  State<_InitialWebRouteLauncher> createState() =>
+      _InitialWebRouteLauncherState();
+}
+
+class _InitialWebRouteLauncherState extends State<_InitialWebRouteLauncher> {
+  String? _launchedRoute;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = widget.route;
+    if (!kIsWeb || route == null || route == _launchedRoute) return;
+    _launchedRoute = route;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Get.toNamed(route);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

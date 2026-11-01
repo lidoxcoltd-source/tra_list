@@ -24,7 +24,7 @@ class AppConfig {
   static String get paymentCompleteEndpoint =>
       'https://us-central1-mbokashopping.cloudfunctions.net/selcomPaymentProxy';
 
-  // App URLs (now dynamic from Firebase)
+  // Built-in defaults used until a super admin publishes custom app URLs.
   static String get appBaseUrl =>
       // _tryGetContactController()?.appBaseUrl.value ??
       'https://mbokashopping.online/';

@@ -91,7 +91,9 @@ Color _colorFor(String action) {
 
 /// Bell icon with an unread badge, for the app bar.
 class NotificationBell extends StatefulWidget {
-  const NotificationBell({super.key});
+  const NotificationBell({super.key, this.iconColor = Colors.white});
+
+  final Color iconColor;
 
   @override
   State<NotificationBell> createState() => _NotificationBellState();
@@ -140,11 +142,9 @@ class _NotificationBellState extends State<NotificationBell> {
               icon: Badge(
                 isLabelVisible: count > 0,
                 label: Text(count > 99 ? '99+' : '$count'),
-                child: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.notifications_none_rounded),
               ),
+              style: IconButton.styleFrom(foregroundColor: widget.iconColor),
             );
           },
         );

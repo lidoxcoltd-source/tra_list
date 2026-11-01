@@ -4,11 +4,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'business_access_service.dart';
+import 'profile_service.dart';
 import '../utils/image_utils.dart';
 
 class CompanyLogoService {
   static const String _logoBytesPrefix = 'company_logo_bytes_';
   static const String _logoSourcePrefix = 'company_logo_source_';
+  static String? _cachedNetworkLogoUrl;
+  static Uint8List? _cachedNetworkLogoBytes;
 
   static Uint8List? tryDecodeInlineImageBytes(String url) {
     final trimmed = url.trim();
@@ -133,29 +137,20 @@ class CompanyLogoService {
   static Future<Uint8List?> resolveLogoBytes(
     Map<String, dynamic> company,
   ) async {
-    final sourceFromCompany = (company['logoSource'] ?? '')
-        .toString()
-        .trim()
-        .toLowerCase();
-    final sourceFromApp = (await getLogoSource()).trim().toLowerCase();
-    final preferredSource = sourceFromCompany.isNotEmpty
-        ? sourceFromCompany
-        : sourceFromApp;
-
-    final url = (company['logoUrl'] ?? '').toString().trim();
-    final local = await loadLocalLogoBytes();
-
-    if (preferredSource == 'local') {
-      if (local != null) return local;
-      if (url.isNotEmpty) return loadNetworkLogoBytes(url);
-      return null;
+    var url = (company['logoUrl'] ?? '').toString().trim();
+    if (FirebaseAuth.instance.currentUser != null &&
+        BusinessAccessService.canReadBusinessProfile()) {
+      final profile = await ProfileService.loadOrCreate();
+      url = (profile['logoUrl'] ?? '').toString().trim();
     }
+    if (url.isEmpty) return null;
+    if (url == _cachedNetworkLogoUrl) return _cachedNetworkLogoBytes;
 
-    if (url.isNotEmpty) {
-      final network = await loadNetworkLogoBytes(url);
-      if (network != null) return network;
+    final bytes = await loadNetworkLogoBytes(url);
+    if (bytes != null) {
+      _cachedNetworkLogoUrl = url;
+      _cachedNetworkLogoBytes = bytes;
     }
-
-    return local;
+    return bytes;
   }
 }

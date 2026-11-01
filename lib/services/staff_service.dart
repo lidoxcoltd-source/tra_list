@@ -12,10 +12,15 @@ import 'business_access_service.dart';
 import 'profile_service.dart';
 
 class StaffMember {
-  const StaffMember({required this.id, required this.data});
+  const StaffMember({
+    required this.id,
+    required this.data,
+    this.isLegacy = false,
+  });
 
   final String id;
   final Map<String, dynamic> data;
+  final bool isLegacy;
 }
 
 class StaffService {
@@ -72,8 +77,11 @@ class StaffService {
           .listen((snapshot) {
             legacyStaff = snapshot.docs
                 .map(
-                  (document) =>
-                      StaffMember(id: document.id, data: document.data()),
+                  (document) => StaffMember(
+                    id: document.id,
+                    data: document.data(),
+                    isLegacy: true,
+                  ),
                 )
                 .where((member) => member.data['role'] != 'owner')
                 .toList();
@@ -100,6 +108,42 @@ class StaffService {
       await accountSubscription?.cancel();
     };
     return controller.stream;
+  }
+
+  static Future<List<StaffMember>> fetchStaff() async {
+    if (!BusinessAccessService.isOwner.value) {
+      throw StateError('Only the business owner can manage staff.');
+    }
+    final businessUid = BusinessAccessService.businessId;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final accountFuture = _firestore
+        .collection('businessMemberships')
+        .doc(businessUid)
+        .collection('members')
+        .get();
+    final legacyFuture = businessUid == currentUid
+        ? _memberships.where('businessUid', isEqualTo: businessUid).get()
+        : Future<QuerySnapshot<Map<String, dynamic>>?>.value(null);
+    final accountSnapshot = await accountFuture;
+    final legacySnapshot = await legacyFuture;
+    final members = <String, StaffMember>{};
+    for (final document in legacySnapshot?.docs ?? const []) {
+      final data = document.data();
+      if (data['role'] != 'owner') {
+        members[document.id] = StaffMember(
+          id: document.id,
+          data: data,
+          isLegacy: true,
+        );
+      }
+    }
+    for (final document in accountSnapshot.docs) {
+      final data = document.data();
+      if (data['role'] != 'owner') {
+        members[document.id] = StaffMember(id: document.id, data: data);
+      }
+    }
+    return members.values.toList();
   }
 
   static Future<String> createInvitation({
@@ -136,7 +180,9 @@ class StaffService {
     required String shopNickname,
     required String password,
     required Map<String, Map<String, bool>> permissions,
+    required double dailyExpenseLimit,
   }) async {
+    _validateDailyExpenseLimit(dailyExpenseLimit);
     if (!BusinessAccessService.isOwner.value) {
       throw StateError('Only the business owner can add staff.');
     }
@@ -189,6 +235,7 @@ class StaffService {
         'phone': phone.trim(),
         'active': true,
         'permissions': permissions,
+        'dailyExpenseLimit': dailyExpenseLimit,
         'createdBy': FirebaseAuth.instance.currentUser!.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -220,7 +267,9 @@ class StaffService {
     required String phone,
     required String shopNickname,
     required Map<String, Map<String, bool>> permissions,
+    required double dailyExpenseLimit,
   }) async {
+    _validateDailyExpenseLimit(dailyExpenseLimit);
     final staffDocument = await _getManagedStaffDocument(employeeUid);
     await staffDocument.update({
       'name': name.trim(),
@@ -228,6 +277,19 @@ class StaffService {
       'phone': phone.trim(),
       'shopNickname': shopNickname.trim(),
       'permissions': permissions,
+      'dailyExpenseLimit': dailyExpenseLimit,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> updateDailyExpenseLimit({
+    required String employeeUid,
+    required double dailyExpenseLimit,
+  }) async {
+    _validateDailyExpenseLimit(dailyExpenseLimit);
+    final staffDocument = await _getManagedStaffDocument(employeeUid);
+    await staffDocument.update({
+      'dailyExpenseLimit': dailyExpenseLimit,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -291,5 +353,15 @@ class StaffService {
       throw StateError('This staff account does not belong to this business.');
     }
     return accountDocument;
+  }
+
+  static void _validateDailyExpenseLimit(double amount) {
+    if (!amount.isFinite || amount < 0 || amount > 1000000000) {
+      throw ArgumentError.value(
+        amount,
+        'dailyExpenseLimit',
+        'Must be between 0 and 1,000,000,000.',
+      );
+    }
   }
 }

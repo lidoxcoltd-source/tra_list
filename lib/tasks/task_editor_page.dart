@@ -7,9 +7,10 @@ import 'task_service.dart';
 import 'task_ui.dart';
 
 class TaskEditorPage extends StatefulWidget {
-  const TaskEditorPage({super.key, this.task});
+  const TaskEditorPage({super.key, this.task, this.initialAssigneeUid});
 
   final TaskModel? task;
+  final String? initialAssigneeUid;
 
   @override
   State<TaskEditorPage> createState() => _TaskEditorPageState();
@@ -46,6 +47,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       for (final step in task.steps) {
         _steps.add(TextEditingController(text: step));
       }
+    } else {
+      _assigneeUid = widget.initialAssigneeUid;
     }
     if (_steps.isEmpty) _steps.add(TextEditingController());
   }

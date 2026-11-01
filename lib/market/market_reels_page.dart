@@ -111,6 +111,25 @@ class _MarketReelsPageState extends State<MarketReelsPage> {
     initialPage: widget.initialIndex,
   );
   late int _index = widget.initialIndex;
+  int _readyIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefetch(_index);
+  }
+
+  // Warms the disk cache for the next reels before they are reached.
+  void _prefetch(int from) {
+    if (kIsWeb) return;
+    for (var i = from + 2; i <= from + 3 && i < widget.posts.length; i++) {
+      unawaited(
+        DefaultCacheManager()
+            .downloadFile(widget.posts[i].videoUrl)
+            .then((_) {}, onError: (_) {}),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -129,12 +148,26 @@ class _MarketReelsPageState extends State<MarketReelsPage> {
             scrollDirection: Axis.vertical,
             itemCount: widget.posts.length,
             allowImplicitScrolling: true,
-            onPageChanged: (value) => setState(() => _index = value),
+            onPageChanged: (value) {
+              setState(() => _index = value);
+              _prefetch(value);
+            },
             itemBuilder: (context, index) => _ReelItem(
               key: ValueKey(widget.posts[index].id),
               post: widget.posts[index],
               active: index == _index,
-              preload: (index - _index).abs() == 1,
+              // On web the next reel loads only once the current one plays,
+              // so the two downloads never compete for bandwidth.
+              preload: kIsWeb
+                  ? index == _index + 1 && _readyIndex == _index
+                  : (index - _index).abs() == 1,
+              onReady: () {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && index == _index && _readyIndex != index) {
+                    setState(() => _readyIndex = index);
+                  }
+                });
+              },
             ),
           ),
           if (!widget.embedded)
@@ -224,11 +257,13 @@ class _ReelItem extends StatefulWidget {
     required this.post,
     required this.active,
     this.preload = false,
+    this.onReady,
   });
 
   final MarketPost post;
   final bool active;
   final bool preload;
+  final VoidCallback? onReady;
 
   @override
   State<_ReelItem> createState() => _ReelItemState();
@@ -237,9 +272,10 @@ class _ReelItem extends StatefulWidget {
 class _ReelItemState extends State<_ReelItem> {
   VideoPlayerController? _controller;
   bool _failed = false;
-  bool _muted = false;
+  bool _muted = kIsWeb; // Browsers block unmuted autoplay.
   bool _expanded = false;
   bool _busy = false;
+  bool _deleted = false;
 
   MarketPost get post => widget.post;
 
@@ -268,6 +304,7 @@ class _ReelItemState extends State<_ReelItem> {
       if (controller != null && controller.value.isInitialized) {
         unawaited(controller.seekTo(Duration.zero));
         unawaited(controller.play());
+        widget.onReady?.call();
       }
     } else {
       unawaited(_controller?.pause());
@@ -294,24 +331,36 @@ class _ReelItemState extends State<_ReelItem> {
       } catch (_) {}
     }
     if (!mounted || _controller != null) return;
+    // Neighbouring reels are fully downloaded first so they start instantly.
+    if (cached == null && !kIsWeb && !widget.active) {
+      try {
+        cached = await DefaultCacheManager().downloadFile(url);
+      } catch (_) {}
+      if (!mounted || _controller != null) return;
+      if (!widget.active && !widget.preload) return;
+    }
     final controller = cached != null
         ? VideoPlayerController.file(cached.file)
         : VideoPlayerController.networkUrl(Uri.parse(url));
     _controller = controller;
-    if (cached == null && !kIsWeb) {
-      unawaited(
-        DefaultCacheManager().downloadFile(url).then((_) {}, onError: (_) {}),
-      );
-    }
     try {
       await controller.initialize();
+      if (cached == null && !kIsWeb) {
+        unawaited(
+          DefaultCacheManager().downloadFile(url).then((_) {}, onError: (_) {}),
+        );
+      }
       await controller.setLooping(true);
       await controller.setVolume(_muted ? 0 : 1);
       controller.addListener(_loopGuard);
       if (!mounted) return;
       setState(() {});
-      if (widget.active) unawaited(controller.play());
-    } catch (_) {
+      if (widget.active) {
+        unawaited(controller.play());
+        widget.onReady?.call();
+      }
+    } catch (error) {
+      debugPrint('Reel video failed to load: $error');
       _controller = null;
       await controller.dispose();
       if (mounted) setState(() => _failed = true);
@@ -370,6 +419,79 @@ class _ReelItemState extends State<_ReelItem> {
       builder: (_) => MarketCommentsSheet(postId: post.id),
     );
     if (mounted && widget.active) unawaited(_controller?.play());
+  }
+
+  Future<void> _more() async {
+    final canDelete = MarketService.canDeletePost(post);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MarketPalette.surface,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.open_in_new_rounded),
+              title: Text('market_open_post'.tr),
+              onTap: () => Navigator.pop(context, 'open'),
+            ),
+            if (canDelete)
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: MarketPalette.red,
+                ),
+                title: Text(
+                  'market_delete_post'.tr,
+                  style: const TextStyle(color: MarketPalette.red),
+                ),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'open') {
+      await _openPost();
+    } else if (choice == 'delete') {
+      await _deletePost();
+    }
+  }
+
+  Future<void> _deletePost() async {
+    unawaited(_controller?.pause());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('market_delete_post'.tr),
+        content: Text('market_delete_post_confirm'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('delete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirmed != true) {
+      if (widget.active) unawaited(_controller?.play());
+      return;
+    }
+    try {
+      await MarketService.deletePost(post);
+      if (!mounted) return;
+      _release();
+      setState(() => _deleted = true);
+    } catch (error) {
+      _message('$error');
+      if (widget.active) unawaited(_controller?.play());
+    }
   }
 
   Future<void> _openPost() async {
@@ -506,7 +628,7 @@ class _ReelItemState extends State<_ReelItem> {
               icon: _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
               onTap: _toggleSound,
             ),
-            _action(icon: Icons.more_horiz_rounded, onTap: _openPost),
+            _action(icon: Icons.more_horiz_rounded, onTap: _more),
           ],
         );
       },
@@ -616,6 +738,18 @@ class _ReelItemState extends State<_ReelItem> {
 
   @override
   Widget build(BuildContext context) {
+    if (_deleted) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: Icon(
+            Icons.delete_outline_rounded,
+            color: Colors.white38,
+            size: 56,
+          ),
+        ),
+      );
+    }
     final controller = _controller;
     final ready = controller != null && controller.value.isInitialized;
     final title = post.isProduct && post.productName.isNotEmpty
@@ -630,9 +764,11 @@ class _ReelItemState extends State<_ReelItem> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (post.images.isNotEmpty)
+              if (post.images.isNotEmpty || post.videoThumb.isNotEmpty)
                 CachedNetworkImage(
-                  imageUrl: post.images.first,
+                  imageUrl: post.images.isNotEmpty
+                      ? post.images.first
+                      : post.videoThumb,
                   fit: BoxFit.contain,
                   errorWidget: (_, _, _) => const SizedBox(),
                 ),

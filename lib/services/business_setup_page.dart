@@ -107,124 +107,259 @@ class _BusinessSetupPageState extends State<BusinessSetupPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: MjasiColors.background,
-    appBar: AppBar(
-      title: Text('business_setup_title'.tr),
-    ),
+    appBar: AppBar(title: Text('business_setup_title'.tr)),
     body: Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(
-                      Icons.storefront_rounded,
-                      size: 48,
-                      color: MjasiColors.primaryBlue,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'business_setup_description'.tr,
-                      textAlign: TextAlign.center,
-                    ),
-                    if (BusinessAccessService.initializationError != null) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4E5),
-                          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            children: [
+              _hero(),
+              const SizedBox(height: MjasiSpacing.lg),
+              Card(
+                elevation: 0,
+                color: MjasiColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(MjasiRadius.lg),
+                  side: const BorderSide(color: MjasiColors.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (BusinessAccessService.initializationError !=
+                            null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: MjasiColors.warningBackground,
+                              borderRadius: BorderRadius.circular(
+                                MjasiRadius.sm,
+                              ),
+                              border: Border.all(
+                                color: MjasiColors.warning.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'business_access_restore_failed'.tr,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: MjasiColors.textPrimary,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _saving
+                                      ? null
+                                      : _retryBusinessAccess,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: Text('business_access_retry'.tr),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+                        _sectionTitle(
+                          Icons.add_business_outlined,
+                          'business_setup_create'.tr,
                         ),
-                        child: Column(
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _businessName,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: 'account_business_name'.tr,
+                            prefixIcon: const Icon(Icons.storefront_outlined),
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'account_business_name_required'.tr
+                              : null,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _phone,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: 'account_phone_optional'.tr,
+                            prefixIcon: const Icon(Icons.phone_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            backgroundColor: MjasiColors.primaryBlue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                MjasiRadius.sm,
+                              ),
+                            ),
+                          ),
+                          onPressed: _saving ? null : _createBusiness,
+                          child: _saving
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text('business_setup_create'.tr),
+                        ),
+                        const SizedBox(height: 22),
+                        Row(
                           children: [
-                            Text(
-                              'business_access_restore_failed'.tr,
-                              textAlign: TextAlign.center,
+                            const Expanded(child: Divider()),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              child: Text(
+                                Get.locale?.languageCode == 'sw' ? 'AU' : 'OR',
+                                style: const TextStyle(
+                                  color: MjasiColors.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                            TextButton.icon(
-                              onPressed: _saving ? null : _retryBusinessAccess,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: Text('business_access_retry'.tr),
-                            ),
+                            const Expanded(child: Divider()),
                           ],
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    TextFormField(
-                      controller: _businessName,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: InputDecoration(
-                        labelText: 'account_business_name'.tr,
-                        prefixIcon: const Icon(Icons.storefront_outlined),
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'account_business_name_required'.tr
-                          : null,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _phone,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'account_phone_optional'.tr,
-                        prefixIcon: const Icon(Icons.phone_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _saving ? null : _createBusiness,
-                      child: _saving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text('business_setup_create'.tr),
-                    ),
-                    const SizedBox(height: 20),
-                    const Divider(),
-                    const SizedBox(height: 14),
-                    Text(
-                      'business_setup_join_title'.tr,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'business_setup_join_description'.tr,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: _invitationCode,
-                      textCapitalization: TextCapitalization.none,
-                      decoration: InputDecoration(
-                        labelText: 'business_invitation_code'.tr,
-                        prefixIcon: const Icon(
-                          Icons.confirmation_number_outlined,
+                        const SizedBox(height: 18),
+                        _sectionTitle(
+                          Icons.group_add_outlined,
+                          'business_setup_join_title'.tr,
                         ),
-                      ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'business_setup_join_description'.tr,
+                          style: const TextStyle(
+                            color: MjasiColors.textSecondary,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _invitationCode,
+                          textCapitalization: TextCapitalization.none,
+                          decoration: InputDecoration(
+                            labelText: 'business_invitation_code'.tr,
+                            prefixIcon: const Icon(
+                              Icons.confirmation_number_outlined,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            foregroundColor: MjasiColors.primaryBlue,
+                            side: const BorderSide(
+                              color: MjasiColors.primaryBlue,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                MjasiRadius.sm,
+                              ),
+                            ),
+                          ),
+                          onPressed: _saving ? null : _claimInvitation,
+                          icon: const Icon(Icons.group_add_outlined),
+                          label: Text('business_invitation_join'.tr),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _saving ? null : _claimInvitation,
-                      icon: const Icon(Icons.group_add_outlined),
-                      label: Text('business_invitation_join'.tr),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     ),
+  );
+
+  Widget _hero() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [MjasiColors.primaryNavy, MjasiColors.primaryBlue],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(MjasiRadius.lg),
+    ),
+    child: Column(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.storefront_rounded,
+            size: 32,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'business_setup_title'.tr,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'business_setup_description'.tr,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.85),
+            fontSize: 13.5,
+            height: 1.35,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _sectionTitle(IconData icon, String text) => Row(
+    children: [
+      Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: MjasiColors.lightBlue,
+          borderRadius: BorderRadius.circular(MjasiRadius.sm),
+        ),
+        child: Icon(icon, size: 18, color: MjasiColors.primaryBlue),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: MjasiColors.textPrimary,
+          ),
+        ),
+      ),
+    ],
   );
 }

@@ -3,9 +3,9 @@
     "short_name": "Mjasi POS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#002868",
-    "theme_color": "#002868",
-    "description": "Mjasi POS is a point of sale system designed for small and medium-sized businesses. It offers a user-friendly interface, inventory management, sales tracking, and customer management features. With Mjasi POS, businesses can streamline their operations and provide a seamless shopping experience for their customers.",
+    "background_color": "#F5F7FB",
+    "theme_color": "#10233F",
+    "description": "Mjasi POS helps businesses manage sales, inventory, receipts, and daily operations in one simple workspace.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

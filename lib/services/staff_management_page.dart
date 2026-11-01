@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -8,6 +9,9 @@ import 'business_access_service.dart';
 import 'profile_service.dart';
 import 'staff_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
+import 'package:tra_list/routes.dart';
+import 'package:tra_list/tasks/task_editor_page.dart';
+import 'chat_service.dart';
 
 class StaffManagementPage extends StatelessWidget {
   const StaffManagementPage({super.key});
@@ -29,6 +33,14 @@ class StaffManagementPage extends StatelessWidget {
         ),
         title: Text('staff_title'.tr),
         actions: [
+          if (BusinessAccessService.isOwner.value ||
+              BusinessAccessService.can('tasks', 'view') ||
+              BusinessAccessService.can('tasks', 'create'))
+            IconButton(
+              onPressed: () => Get.toNamed(AppRoutes.tasks),
+              tooltip: 'tk_all'.tr,
+              icon: const Icon(Icons.task_alt_rounded),
+            ),
           IconButton(
             onPressed: () => _showInvitationDialog(context),
             tooltip: 'staff_invite'.tr,
@@ -85,31 +97,42 @@ class StaffManagementPage extends StatelessWidget {
               }
 
               return ListView(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
+                padding: const EdgeInsets.fromLTRB(
+                  MjasiSpacing.md,
+                  MjasiSpacing.sm,
+                  MjasiSpacing.md,
+                  88,
+                ),
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(MjasiSpacing.lg),
                     decoration: BoxDecoration(
-                      color: MjasiColors.surface,
+                      gradient: const LinearGradient(
+                        colors: [
+                          MjasiColors.primaryNavy,
+                          MjasiColors.primaryBlue,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(MjasiRadius.md),
-                      border: Border.all(color: MjasiColors.border),
                     ),
                     child: Row(
                       children: [
                         Container(
-                          width: 50,
-                          height: 50,
+                          width: 48,
+                          height: 48,
                           decoration: BoxDecoration(
-                            color: MjasiColors.lightBlue,
-                            borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(MjasiRadius.md),
                           ),
                           child: const Icon(
                             Icons.groups_2_rounded,
-                            color: _brand,
-                            size: 27,
+                            color: Colors.white,
+                            size: 26,
                           ),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: MjasiSpacing.md),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,15 +140,19 @@ class StaffManagementPage extends StatelessWidget {
                               Text(
                                 'staff_subtitle'.tr,
                                 style: const TextStyle(
-                                  color: _ink,
-                                  fontSize: 17,
+                                  color: Colors.white,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 'staff_management_hint'.tr,
-                                style: const TextStyle(color: _muted),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
                               ),
                             ],
                           ),
@@ -133,39 +160,41 @@ class StaffManagementPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: MjasiSpacing.md),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: MjasiSpacing.xs,
+                    runSpacing: MjasiSpacing.xs,
                     children: [
                       _staffStat(
                         label: 'staff_total'.tr,
                         count: staff.length,
-                        color: _brand,
+                        color: MjasiColors.primaryBlue,
                         icon: Icons.people_alt_outlined,
                       ),
                       _staffStat(
                         label: 'staff_active'.tr,
                         count: activeCount,
-                        color: const Color(0xFF237A52),
+                        color: MjasiColors.success,
                         icon: Icons.check_circle_outline_rounded,
                       ),
                       _staffStat(
                         label: 'staff_disabled'.tr,
                         count: disabledCount,
-                        color: const Color(0xFFB64D4D),
+                        color: MjasiColors.warning,
                         icon: Icons.pause_circle_outline_rounded,
                       ),
                       if (removedCount > 0)
                         _staffStat(
                           label: 'staff_removed'.tr,
                           count: removedCount,
-                          color: const Color(0xFF7C657F),
+                          color: MjasiColors.error,
                           icon: Icons.person_off_outlined,
                         ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: MjasiSpacing.md),
+                  const _TransactionThresholdSettings(),
+                  const SizedBox(height: MjasiSpacing.md),
                   _StaffInsights(
                     staff: staff,
                     cardBuilder: (member, perf, rank) => _staffCard(
@@ -199,27 +228,30 @@ class StaffManagementPage extends StatelessWidget {
     required IconData icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      padding: const EdgeInsets.symmetric(
+        horizontal: MjasiSpacing.md,
+        vertical: MjasiSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5EAEC)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(MjasiRadius.sm),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: MjasiSpacing.sm),
           Text(
             '$count',
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
-              fontSize: 15,
+              fontSize: 14,
             ),
           ),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
+          const SizedBox(width: MjasiSpacing.xs),
+          Text(label, style: const TextStyle(color: _muted, fontSize: 11)),
         ],
       ),
     );
@@ -261,160 +293,291 @@ class StaffManagementPage extends StatelessWidget {
     final removed = data['removed'] == true;
     final name = data['name']?.toString() ?? '';
     final email = data['email']?.toString() ?? '';
+    final phone = data['phone']?.toString() ?? '';
+    final shopNickname = data['shopNickname']?.toString() ?? '';
+    final dailyExpenseLimit =
+        (data['dailyExpenseLimit'] as num?)?.toDouble() ?? 0;
+    Future<void> openChat() async {
+      try {
+        final conversationId = await ChatService.getOrCreateDirectChat(
+          otherUid: employeeUid,
+          otherName: name,
+        );
+        if (context.mounted) {
+          Get.toNamed(AppRoutes.getChatRoomRoute(conversationId));
+        }
+      } catch (error, stackTrace) {
+        debugPrint('Could not open staff chat: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        Get.snackbar('error'.tr, '${'chat_open_failed'.tr}: $error');
+      }
+    }
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      color: Colors.white,
-      elevation: 0,
+      margin: const EdgeInsets.only(bottom: MjasiSpacing.sm),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0xFFE5EAEC)),
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        side: BorderSide(
+          color: active
+              ? MjasiColors.primaryBlue.withValues(alpha: 0.18)
+              : MjasiColors.border,
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(15, 14, 8, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(MjasiSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Column(
+            Row(
               children: [
                 CircleAvatar(
-                  radius: 24,
+                  radius: 23,
                   backgroundColor: active
-                      ? const Color(0xFFE5F0F0)
-                      : const Color(0xFFF0F2F3),
-                  child: Text(
-                    name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-                    style: const TextStyle(
-                      color: _brand,
-                      fontWeight: FontWeight.w700,
+                      ? MjasiColors.primaryBlue.withValues(alpha: 0.15)
+                      : MjasiColors.border,
+                  child: CircleAvatar(
+                    radius: 19,
+                    backgroundColor: active
+                        ? MjasiColors.lightBlue
+                        : MjasiColors.background,
+                    child: Text(
+                      name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+                      style: const TextStyle(
+                        color: _brand,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-                if (rank != null) ...[
-                  const SizedBox(height: 6),
-                  _rankBadge(rank),
-                ],
-              ],
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                const SizedBox(width: MjasiSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _ink,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _ink,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
+                          if (rank != null) ...[
+                            const SizedBox(width: MjasiSpacing.xs),
+                            _rankBadge(rank),
+                          ],
+                          const SizedBox(width: MjasiSpacing.xs),
+                          _statusBadge(active: active, removed: removed),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      _statusBadge(active: active, removed: removed),
+                      const SizedBox(height: 3),
+                      Text(
+                        email.isEmpty ? 'staff_email_not_added'.tr : email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _muted, fontSize: 11.5),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 7),
-                  Text(
-                    email.isEmpty ? 'staff_email_not_added'.tr : email,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted, fontSize: 12),
-                  ),
-                  if ((data['shopNickname']?.toString() ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      '${'staff_shop_nickname'.tr}: ${data['shopNickname']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _muted, fontSize: 12),
-                    ),
-                  ],
-                  if ((data['phone']?.toString() ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      data['phone'].toString(),
-                      style: const TextStyle(color: _muted, fontSize: 12),
-                    ),
-                  ],
-                  if (perf != null) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _perfChip(
-                          Icons.south_west_rounded,
-                          _money(perf.income),
-                          const Color(0xFF237A52),
-                          const Color(0xFFEAF5EF),
-                        ),
-                        _perfChip(
-                          Icons.north_east_rounded,
-                          _money(perf.expense),
-                          const Color(0xFFB64D4D),
-                          const Color(0xFFFAEEEE),
-                        ),
-                        _perfChip(
-                          Icons.receipt_long_outlined,
-                          '${perf.count}',
-                          _brand,
-                          const Color(0xFFE5F0F0),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 7),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'permissions') {
-                  _showStaffDialog(
-                    context,
-                    employeeUid: employeeUid,
-                    memberData: data,
-                  );
-                } else if (value == 'password') {
-                  _changeStaffPassword(context, employeeUid);
-                } else if (value == 'remove') {
-                  _confirmRemoveStaff(context, employeeUid, name);
-                } else {
-                  _changeActive(employeeUid, !active);
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'permissions',
-                  child: Text('staff_edit'.tr),
                 ),
-                PopupMenuItem(
-                  value: 'active',
-                  child: Text(active ? 'staff_disable'.tr : 'staff_enable'.tr),
-                ),
-                if (!removed)
-                  if (data['invitationId'] == null)
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 42),
+                  iconSize: 20,
+                  tooltip: 'staff_edit'.tr,
+                  onSelected: (value) {
+                    if (value == 'permissions') {
+                      _showStaffDialog(
+                        context,
+                        employeeUid: employeeUid,
+                        memberData: data,
+                      );
+                    } else if (value == 'password') {
+                      _changeStaffPassword(context, employeeUid);
+                    } else if (value == 'remove') {
+                      _confirmRemoveStaff(context, employeeUid, name);
+                    } else {
+                      _changeActive(employeeUid, !active);
+                    }
+                  },
+                  itemBuilder: (context) => [
                     PopupMenuItem(
-                      value: 'password',
-                      child: Text('staff_change_password'.tr),
+                      value: 'permissions',
+                      child: Text('staff_edit'.tr),
                     ),
-                if (!removed)
-                  PopupMenuItem(
-                    value: 'remove',
-                    child: Text(
-                      'staff_remove'.tr,
-                      style: const TextStyle(color: Color(0xFFB64D4D)),
+                    PopupMenuItem(
+                      value: 'active',
+                      child: Text(
+                        active ? 'staff_disable'.tr : 'staff_enable'.tr,
+                      ),
                     ),
-                  ),
+                    if (!removed && data['invitationId'] == null)
+                      PopupMenuItem(
+                        value: 'password',
+                        child: Text('staff_change_password'.tr),
+                      ),
+                    if (!removed)
+                      PopupMenuItem(
+                        value: 'remove',
+                        child: Text(
+                          'staff_remove'.tr,
+                          style: const TextStyle(color: MjasiColors.error),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
+            if (shopNickname.isNotEmpty || phone.isNotEmpty) ...[
+              const SizedBox(height: MjasiSpacing.sm),
+              Wrap(
+                spacing: MjasiSpacing.md,
+                runSpacing: MjasiSpacing.xs,
+                children: [
+                  if (shopNickname.isNotEmpty)
+                    _detailLabel(Icons.storefront_outlined, shopNickname),
+                  if (phone.isNotEmpty)
+                    _detailLabel(Icons.phone_outlined, phone),
+                ],
+              ),
+            ],
+            const SizedBox(height: MjasiSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: _perfChip(
+                    Icons.warning_amber_rounded,
+                    dailyExpenseLimit > 0
+                        ? '${'staff_daily_expense_limit_short'.tr}: TZS ${_money(dailyExpenseLimit)}'
+                        : 'staff_daily_expense_limit_not_set'.tr,
+                    MjasiColors.warning,
+                    MjasiColors.warningBackground,
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: dailyExpenseLimit > 0
+                      ? 'staff_change_limit'.tr
+                      : 'staff_set_limit'.tr,
+                  onPressed: () => _editDailyExpenseLimit(
+                    context,
+                    employeeUid,
+                    dailyExpenseLimit,
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  color: _muted,
+                ),
+              ],
+            ),
+            if (active) ...[
+              const SizedBox(height: MjasiSpacing.xs),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: openChat,
+                      icon: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 16,
+                      ),
+                      label: Text(
+                        'chat_start_private'.tr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 38),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
+                  ),
+                  if (BusinessAccessService.isOwner.value) ...[
+                    const SizedBox(width: MjasiSpacing.sm),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                TaskEditorPage(initialAssigneeUid: employeeUid),
+                          ),
+                        ),
+                        icon: const Icon(Icons.add_task_rounded, size: 16),
+                        label: Text(
+                          'tk_new'.tr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 38),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          foregroundColor: MjasiColors.primaryBlue,
+                          backgroundColor: MjasiColors.lightBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+            if (perf != null) ...[
+              const Divider(height: MjasiSpacing.md),
+              Wrap(
+                spacing: MjasiSpacing.xs,
+                runSpacing: MjasiSpacing.xs,
+                children: [
+                  _perfChip(
+                    Icons.south_west_rounded,
+                    _money(perf.income),
+                    MjasiColors.success,
+                    MjasiColors.successBackground,
+                  ),
+                  _perfChip(
+                    Icons.north_east_rounded,
+                    _money(perf.expense),
+                    MjasiColors.error,
+                    MjasiColors.errorBackground,
+                  ),
+                  _perfChip(
+                    Icons.receipt_long_outlined,
+                    '${perf.count}',
+                    _brand,
+                    MjasiColors.lightBlue,
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _detailLabel(IconData icon, String text) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: _muted),
+          const SizedBox(width: MjasiSpacing.xs),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _muted, fontSize: 11.5),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -435,6 +598,8 @@ class StaffManagementPage extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: fg,
               fontSize: 11.5,
@@ -514,6 +679,34 @@ class StaffManagementPage extends StatelessWidget {
       );
     } catch (error, stackTrace) {
       debugPrint('Could not update staff status: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      Get.snackbar('error'.tr, '${'staff_update_error'.tr}: $error');
+    }
+  }
+
+  Future<void> _editDailyExpenseLimit(
+    BuildContext context,
+    String employeeUid,
+    double currentLimit,
+  ) async {
+    final dailyExpenseLimit = await Get.dialog<double>(
+      _StaffDailyExpenseLimitDialog(currentLimit: currentLimit),
+      barrierDismissible: false,
+    );
+    if (dailyExpenseLimit == null || !context.mounted) return;
+
+    try {
+      await StaffService.updateDailyExpenseLimit(
+        employeeUid: employeeUid,
+        dailyExpenseLimit: dailyExpenseLimit,
+      );
+      Get.snackbar(
+        'success'.tr,
+        'staff_daily_expense_limit_saved'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not update staff daily expense limit: $error');
       debugPrintStack(stackTrace: stackTrace);
       Get.snackbar('error'.tr, '${'staff_update_error'.tr}: $error');
     }
@@ -680,6 +873,298 @@ class _Perf {
   int count = 0;
 }
 
+class _TransactionThresholdSettings extends StatefulWidget {
+  const _TransactionThresholdSettings();
+
+  @override
+  State<_TransactionThresholdSettings> createState() =>
+      _TransactionThresholdSettingsState();
+}
+
+class _TransactionThresholdSettingsState
+    extends State<_TransactionThresholdSettings> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _expenseAbove;
+  late final TextEditingController _expenseBelow;
+  late final TextEditingController _incomeAbove;
+  late final TextEditingController _incomeBelow;
+  bool _loading = true;
+  bool _saving = false;
+
+  DocumentReference<Map<String, dynamic>> get _settingsRef => FirebaseFirestore
+      .instance
+      .collection('users')
+      .doc(BusinessAccessService.businessId)
+      .collection('settings')
+      .doc('transactionAlerts');
+
+  @override
+  void initState() {
+    super.initState();
+    _expenseAbove = TextEditingController();
+    _expenseBelow = TextEditingController();
+    _incomeAbove = TextEditingController();
+    _incomeBelow = TextEditingController();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _expenseAbove.dispose();
+    _expenseBelow.dispose();
+    _incomeAbove.dispose();
+    _incomeBelow.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final snapshot = await _settingsRef.get();
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      _expenseAbove.text = _initialThreshold(data['expenseAbove']);
+      _expenseBelow.text = _initialThreshold(data['expenseBelow']);
+      _incomeAbove.text = _initialThreshold(data['incomeAbove']);
+      _incomeBelow.text = _initialThreshold(data['incomeBelow']);
+    } catch (error, stackTrace) {
+      debugPrint('Could not load transaction alert thresholds: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar(
+          'error'.tr,
+          '${'transaction_alert_load_error'.tr}: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _initialThreshold(dynamic value) {
+    if (value is! num || value <= 0) return '';
+    return _formatDailyExpenseLimit(value.toDouble());
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await _settingsRef.set({
+        'expenseAbove': _parseDailyExpenseLimit(_expenseAbove.text),
+        'expenseBelow': _parseDailyExpenseLimit(_expenseBelow.text),
+        'incomeAbove': _parseDailyExpenseLimit(_incomeAbove.text),
+        'incomeBelow': _parseDailyExpenseLimit(_incomeBelow.text),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      Get.snackbar('success'.tr, 'transaction_alert_saved'.tr);
+    } catch (error, stackTrace) {
+      debugPrint('Could not save transaction alert thresholds: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar(
+          'error'.tr,
+          '${'transaction_alert_save_error'.tr}: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _thresholdField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: const [_ThousandsSeparatorInputFormatter()],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: 'TZS ',
+        helperText: 'transaction_alert_blank_disables'.tr,
+        isDense: true,
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) return null;
+        final amount = _parseDailyExpenseLimit(value);
+        return amount == null || amount <= 0 || amount > 1000000000
+            ? 'staff_daily_expense_limit_invalid'.tr
+            : null;
+      },
+    );
+  }
+
+  Widget _typeFields({
+    required String title,
+    required TextEditingController above,
+    required TextEditingController below,
+    required IconData icon,
+  }) {
+    final color = icon == Icons.north_east_rounded
+        ? MjasiColors.error
+        : MjasiColors.success;
+    final backgroundColor = icon == Icons.north_east_rounded
+        ? MjasiColors.errorBackground
+        : MjasiColors.successBackground;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(MjasiSpacing.md),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(MjasiRadius.sm),
+            border: Border.all(color: color.withValues(alpha: 0.16)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(MjasiRadius.sm),
+                    ),
+                    child: Icon(icon, size: 17, color: color),
+                  ),
+                  const SizedBox(width: MjasiSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: MjasiSpacing.sm),
+              _thresholdField(
+                controller: above,
+                label: 'transaction_alert_above'.tr,
+              ),
+              const SizedBox(height: MjasiSpacing.sm),
+              _thresholdField(
+                controller: below,
+                label: 'transaction_alert_below'.tr,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        side: const BorderSide(color: MjasiColors.border),
+      ),
+      child: ExpansionTile(
+        shape: const RoundedRectangleBorder(),
+        collapsedShape: const RoundedRectangleBorder(),
+        backgroundColor: MjasiColors.surface,
+        collapsedBackgroundColor: MjasiColors.surface,
+        tilePadding: const EdgeInsets.symmetric(horizontal: MjasiSpacing.md),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          MjasiSpacing.md,
+          0,
+          MjasiSpacing.md,
+          MjasiSpacing.md,
+        ),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: MjasiColors.lightBlue,
+            borderRadius: BorderRadius.circular(MjasiRadius.sm),
+          ),
+          child: const Icon(
+            Icons.notifications_active_outlined,
+            color: StaffManagementPage._brand,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          'transaction_alert_title'.tr,
+          style: const TextStyle(
+            color: StaffManagementPage._ink,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          'transaction_alert_description'.tr,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: StaffManagementPage._muted,
+            fontSize: 11,
+          ),
+        ),
+        children: [
+          const Divider(height: MjasiSpacing.md),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(MjasiSpacing.md),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _typeFields(
+                    title: 'transaction_expenses'.tr,
+                    above: _expenseAbove,
+                    below: _expenseBelow,
+                    icon: Icons.north_east_rounded,
+                  ),
+                  const SizedBox(height: MjasiSpacing.md),
+                  _typeFields(
+                    title: 'transaction_income'.tr,
+                    above: _incomeAbove,
+                    below: _incomeBelow,
+                    icon: Icons.south_west_rounded,
+                  ),
+                  const SizedBox(height: MjasiSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined, size: 18),
+                      label: Text('save'.tr),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 enum _Range { today, yesterday, week, month }
 
 class _StaffInsights extends StatefulWidget {
@@ -693,9 +1178,9 @@ class _StaffInsights extends StatefulWidget {
 }
 
 class _StaffInsightsState extends State<_StaffInsights> {
-  static const _ink = Color(0xFF19313A);
-  static const _muted = Color(0xFF75838A);
-  static const _brand = Color(0xFF0E5962);
+  static const _ink = MjasiColors.textPrimary;
+  static const _muted = MjasiColors.textSecondary;
+  static const _brand = MjasiColors.primaryBlue;
 
   _Range _range = _Range.month;
   Map<String, _Perf> _perf = {};
@@ -816,18 +1301,19 @@ class _StaffInsightsState extends State<_StaffInsights> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: MjasiSpacing.sm),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(MjasiSpacing.md),
           decoration: BoxDecoration(
-            color: _brand,
-            borderRadius: BorderRadius.circular(18),
+            color: MjasiColors.surface,
+            borderRadius: BorderRadius.circular(MjasiRadius.md),
+            border: Border.all(color: MjasiColors.border),
           ),
           child: Row(
             children: [
-              _teamStat('income'.tr, teamIncome, const Color(0xFF6EE7B7)),
-              _teamStat('expenses'.tr, teamExpense, const Color(0xFFFCA5A5)),
-              _teamStat('net'.tr, teamIncome - teamExpense, Colors.white),
+              _teamStat('income'.tr, teamIncome, MjasiColors.success),
+              _teamStat('expenses'.tr, teamExpense, MjasiColors.error),
+              _teamStat('net'.tr, teamIncome - teamExpense, _brand),
             ],
           ),
         ),
@@ -838,7 +1324,7 @@ class _StaffInsightsState extends State<_StaffInsights> {
             style: const TextStyle(color: _muted, fontSize: 12),
           ),
         ],
-        const SizedBox(height: 14),
+        const SizedBox(height: MjasiSpacing.md),
         if (_loading)
           const Padding(
             padding: EdgeInsets.all(24),
@@ -856,6 +1342,50 @@ class _StaffInsightsState extends State<_StaffInsights> {
         else ...[
           if (ranked.where((m) => (_perf[m.id]?.income ?? 0) > 0).isNotEmpty)
             _podium(ranked),
+          Padding(
+            padding: const EdgeInsets.only(
+              top: MjasiSpacing.xs,
+              bottom: MjasiSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.groups_2_rounded,
+                  size: 18,
+                  color: MjasiColors.primaryBlue,
+                ),
+                const SizedBox(width: MjasiSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'staff_title'.tr,
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: MjasiSpacing.sm,
+                    vertical: MjasiSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: MjasiColors.lightBlue,
+                    borderRadius: BorderRadius.circular(MjasiRadius.pill),
+                  ),
+                  child: Text(
+                    '${members.length}',
+                    style: const TextStyle(
+                      color: MjasiColors.primaryBlue,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           for (final m in members)
             widget.cardBuilder(
               m,
@@ -875,19 +1405,19 @@ class _StaffInsightsState extends State<_StaffInsights> {
           Text(
             label,
             style: const TextStyle(
-              color: Colors.white70,
+              color: MjasiColors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: MjasiSpacing.xs),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               StaffManagementPage._money(value),
               style: TextStyle(
                 color: color,
-                fontSize: 17,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -903,12 +1433,12 @@ class _StaffInsightsState extends State<_StaffInsights> {
         .take(3)
         .toList();
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: MjasiSpacing.md),
+      padding: const EdgeInsets.all(MjasiSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5EAEC)),
+        color: MjasiColors.surface,
+        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        border: Border.all(color: MjasiColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -970,7 +1500,7 @@ class _StaffInsightsState extends State<_StaffInsights> {
                               _perf[top[i].id]!.income,
                             ),
                             style: const TextStyle(
-                              color: Color(0xFF237A52),
+                              color: MjasiColors.success,
                               fontWeight: FontWeight.w800,
                               fontSize: 13,
                             ),
@@ -1272,6 +1802,80 @@ class _StaffPasswordDialogState extends State<_StaffPasswordDialog> {
   }
 }
 
+class _StaffDailyExpenseLimitDialog extends StatefulWidget {
+  const _StaffDailyExpenseLimitDialog({required this.currentLimit});
+
+  final double currentLimit;
+
+  @override
+  State<_StaffDailyExpenseLimitDialog> createState() =>
+      _StaffDailyExpenseLimitDialogState();
+}
+
+class _StaffDailyExpenseLimitDialogState
+    extends State<_StaffDailyExpenseLimitDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _limitController;
+
+  @override
+  void initState() {
+    super.initState();
+    _limitController = TextEditingController(
+      text: widget.currentLimit > 0
+          ? _formatDailyExpenseLimit(widget.currentLimit)
+          : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _limitController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('staff_daily_expense_limit'.tr),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _limitController,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: const [_ThousandsSeparatorInputFormatter()],
+          decoration: InputDecoration(
+            labelText: 'staff_daily_expense_limit'.tr,
+            prefixText: 'TZS ',
+            helperText: 'staff_daily_expense_limit_hint'.tr,
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return null;
+            final amount = _parseDailyExpenseLimit(value);
+            return amount == null || amount > 1000000000
+                ? 'staff_daily_expense_limit_invalid'.tr
+                : null;
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Get.back<double>(),
+          child: Text('cancel'.tr),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            final amount = _parseDailyExpenseLimit(_limitController.text) ?? 0;
+            Get.back<double>(result: amount);
+          },
+          child: Text('save'.tr),
+        ),
+      ],
+    );
+  }
+}
+
 class _StaffEditorDialog extends StatefulWidget {
   const _StaffEditorDialog({this.employeeUid, this.memberData});
 
@@ -1288,6 +1892,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
   late final TextEditingController _shopNicknameController;
+  late final TextEditingController _dailyExpenseLimitController;
   final _passwordController = TextEditingController();
   late final Future<Map<String, dynamic>> _businessProfile;
   late final Map<String, Map<String, bool>> _permissions;
@@ -1313,6 +1918,13 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           widget.memberData?['username']?.toString() ??
           '',
     );
+    _dailyExpenseLimitController = TextEditingController(
+      text: widget.memberData?['dailyExpenseLimit'] is num
+          ? _formatDailyExpenseLimit(
+              (widget.memberData!['dailyExpenseLimit'] as num).toDouble(),
+            )
+          : '',
+    );
     _businessProfile = ProfileService.loadOrCreate();
     _permissions = _readPermissions(widget.memberData?['permissions']);
   }
@@ -1323,6 +1935,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     _emailController.dispose();
     _phoneController.dispose();
     _shopNicknameController.dispose();
+    _dailyExpenseLimitController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -1465,6 +2078,24 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                         : null;
                   },
                 ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _dailyExpenseLimitController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: const [_ThousandsSeparatorInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: 'staff_daily_expense_limit'.tr,
+                    prefixIcon: const Icon(Icons.warning_amber_rounded),
+                    helperText: 'staff_daily_expense_limit_hint'.tr,
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final amount = _parseDailyExpenseLimit(value);
+                    return amount == null || amount < 0 || amount > 1000000000
+                        ? 'staff_daily_expense_limit_invalid'.tr
+                        : null;
+                  },
+                ),
                 if (!_isEditing) ...[
                   const SizedBox(height: 10),
                   TextFormField(
@@ -1600,9 +2231,12 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_permissions.values.any(
+    final hasSelectedPermission = _permissions.values.any(
       (actions) => actions.values.any((allowed) => allowed),
-    )) {
+    );
+    final dailyExpenseLimit =
+        _parseDailyExpenseLimit(_dailyExpenseLimitController.text) ?? 0;
+    if (!hasSelectedPermission && dailyExpenseLimit <= 0) {
       Get.snackbar('staff_permissions'.tr, 'staff_select_permission'.tr);
       return;
     }
@@ -1617,6 +2251,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           phone: _phoneController.text,
           shopNickname: _shopNicknameController.text,
           permissions: _permissions,
+          dailyExpenseLimit: dailyExpenseLimit,
         );
       } else {
         await StaffService.createStaff(
@@ -1626,6 +2261,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           shopNickname: _shopNicknameController.text,
           password: _passwordController.text,
           permissions: _permissions,
+          dailyExpenseLimit: dailyExpenseLimit,
         );
       }
       if (mounted) Get.back<bool>(result: true);
@@ -1822,6 +2458,62 @@ class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
         shopNickname: _shopNickname.text.trim(),
         permissions: _permissions,
       ),
+    );
+  }
+}
+
+double? _parseDailyExpenseLimit(String? value) {
+  final digits = value?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+  return digits.isEmpty ? null : double.tryParse(digits);
+}
+
+String _formatDailyExpenseLimit(double value) =>
+    NumberFormat('#,##0').format(value);
+
+class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
+  const _ThousandsSeparatorInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final rawDigits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (rawDigits.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final digitsBeforeCursor = newValue.text
+        .substring(
+          0,
+          newValue.selection.extentOffset.clamp(0, newValue.text.length),
+        )
+        .replaceAll(RegExp(r'[^0-9]'), '')
+        .length;
+    final formatted = rawDigits.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => ',',
+    );
+    var cursorOffset = 0;
+    var digitsPassed = 0;
+    while (cursorOffset < formatted.length &&
+        digitsPassed < digitsBeforeCursor) {
+      if (RegExp(r'[0-9]').hasMatch(formatted[cursorOffset])) {
+        digitsPassed++;
+      }
+      cursorOffset++;
+    }
+    while (cursorOffset < formatted.length &&
+        !RegExp(r'[0-9]').hasMatch(formatted[cursorOffset])) {
+      cursorOffset++;
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: cursorOffset),
     );
   }
 }

@@ -19,6 +19,7 @@ import 'market_image_editor_page.dart';
 import 'market_video.dart';
 import 'market_video_audio.dart';
 import 'market_video_preview.dart';
+import 'market_upload_progress.dart';
 import 'market_palette.dart';
 import 'market_service.dart';
 import 'market_text_card.dart';
@@ -73,6 +74,12 @@ Future<bool?> openMarketComposer(
   BuildContext context, {
   String initialType = 'post',
 }) async {
+  if (MarketUploadProgress.isActive) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('market_upload_in_progress'.tr)));
+    return null;
+  }
   if (AccountModeService.current != AccountMode.business) {
     final switchAccount = await showDialog<bool>(
       context: context,
@@ -581,10 +588,16 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
       _showMessage('market_status_one_image'.tr);
       return;
     }
+    final videoSelection = isVideo ? _video : null;
+    final videoThumbnail = isVideo ? _videoInfo.thumbnail : null;
+    final videoTitle = _productNameController.text.trim().isNotEmpty
+        ? _productNameController.text
+        : _captionController.text.split('\n').first;
     setState(() {
       _publishing = true;
       _uploadProgress = 0;
     });
+    final uploadId = MarketUploadProgress.start();
     try {
       await MarketService.publishPost(
         type: _type,
@@ -607,31 +620,33 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
           isVideo ? <String>[] : _imageExtensions,
         ),
         audio: isVideo ? null : _audio,
-        video: isVideo ? _video : null,
+        video: videoSelection,
+        videoThumb: videoThumbnail,
         publishAt: _type == 'status' ? null : _publishAt,
         textBg: _textBg,
         textFont: _textFont,
         onProgress: (progress) {
+          MarketUploadProgress.update(uploadId, progress);
           if (mounted) setState(() => _uploadProgress = progress);
         },
       );
-      if (!mounted) return;
-      if (isVideo && _video != null) {
-        final title = _productNameController.text.trim().isNotEmpty
-            ? _productNameController.text
-            : _captionController.text.split('\n').first;
+      MarketUploadProgress.publishing(uploadId);
+      if (videoSelection != null) {
         unawaited(
           autoShareVideoSound(
-            video: _video!.bytes,
-            videoName: _video!.name,
-            title: title,
-            cover: _videoInfo.thumbnail,
+            video: videoSelection.bytes,
+            videoName: videoSelection.name,
+            title: videoTitle,
+            cover: videoThumbnail,
           ),
         );
       }
+      MarketUploadProgress.complete(uploadId);
+      if (!mounted) return;
       _showMessage('market_published'.tr);
       Navigator.of(context).pop(true);
     } catch (error) {
+      MarketUploadProgress.fail(uploadId, error);
       if (mounted) _showMessage('${'market_publish_failed'.tr}\n$error');
     } finally {
       if (mounted) setState(() => _publishing = false);
@@ -1077,7 +1092,7 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
                 ),
                 IconButton.filledTonal(
                   tooltip: localizations.closeButtonTooltip,
-                  onPressed: _publishing ? null : () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded),
                 ),
               ],

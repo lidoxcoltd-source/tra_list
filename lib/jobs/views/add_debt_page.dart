@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:tra_list/jobs/controllers/debt_controller.dart';
 import 'package:tra_list/jobs/models/debt.dart';
 import 'package:tra_list/services/business_access_service.dart';
@@ -24,6 +28,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   final _controller = Get.find<DebtController>();
+  final _draftStorage = GetStorage();
 
   DebtDirection _direction = DebtDirection.customerOwesShop;
   String _reason = 'advance';
@@ -31,13 +36,24 @@ class _AddDebtPageState extends State<AddDebtPage> {
   DateTime? _dueDate;
   bool _loadingShops = true;
   bool _saving = false;
+  bool _draftRestored = false;
+  bool _draftHasUserChanges = false;
+  bool _draftSaveErrorShown = false;
+  Timer? _draftSaveTimer;
   List<String> _shops = [];
 
   bool get _isEditing => widget.debt != null;
 
+  String get _draftKey =>
+      'new_debt_draft_${BusinessAccessService.businessId}_${FirebaseAuth.instance.currentUser?.uid ?? 'unknown'}';
+
   @override
   void initState() {
     super.initState();
+    _nameController.addListener(_scheduleDraftSave);
+    _phoneController.addListener(_scheduleDraftSave);
+    _amountController.addListener(_scheduleDraftSave);
+    _notesController.addListener(_scheduleDraftSave);
     final debt = widget.debt;
     if (debt != null) {
       _nameController.text = debt.debtorName;
@@ -51,11 +67,17 @@ class _AddDebtPageState extends State<AddDebtPage> {
       _dueDate = debt.dueDate;
       _shopNickname = debt.shopNickname;
     }
-    _loadShops();
+    _loadShops().then((_) {
+      if (!_isEditing) _restoreDraft();
+    });
   }
 
   @override
   void dispose() {
+    _draftSaveTimer?.cancel();
+    if (!_isEditing && _draftRestored && _draftHasUserChanges && !_saving) {
+      unawaited(_persistDraft());
+    }
     _nameController.dispose();
     _phoneController.dispose();
     _amountController.dispose();
@@ -110,6 +132,81 @@ class _AddDebtPageState extends State<AddDebtPage> {
     }
   }
 
+  Future<void> _restoreDraft() async {
+    try {
+      final saved = _draftStorage.read<dynamic>(_draftKey);
+      if (saved is Map) {
+        final draft = Map<String, dynamic>.from(saved);
+        _nameController.text = draft['debtorName']?.toString() ?? '';
+        _phoneController.text = draft['phone']?.toString() ?? '';
+        _amountController.text = draft['amount']?.toString() ?? '';
+        _notesController.text = draft['notes']?.toString() ?? '';
+        _direction = DebtDirection.values.firstWhere(
+          (direction) => direction.name == draft['direction'],
+          orElse: () => DebtDirection.customerOwesShop,
+        );
+        const validReasons = {'advance', 'goods_credit', 'service', 'other'};
+        final reason = draft['reason']?.toString();
+        _reason = validReasons.contains(reason) ? reason! : 'advance';
+        final dueDate = draft['dueDate']?.toString();
+        _dueDate = dueDate == null ? null : DateTime.tryParse(dueDate);
+        final savedShop = draft['shopNickname']?.toString() ?? '';
+        if (BusinessAccessService.isOwner.value && _shops.contains(savedShop)) {
+          _shopNickname = savedShop;
+        }
+        if (mounted) {
+          setState(() {});
+          Get.snackbar(
+            'debt_draft_restored_title'.tr,
+            'debt_draft_restored'.tr,
+          );
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Could not restore the debt form draft: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar('error'.tr, 'debt_draft_restore_error'.tr);
+      }
+    } finally {
+      _draftRestored = true;
+    }
+  }
+
+  void _scheduleDraftSave() {
+    if (_isEditing || !_draftRestored || _saving) return;
+    _draftHasUserChanges = true;
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_persistDraft());
+    });
+  }
+
+  Future<void> _persistDraft() async {
+    if (_isEditing || !_draftRestored || !_draftHasUserChanges || _saving) {
+      return;
+    }
+    try {
+      await _draftStorage.write(_draftKey, {
+        'debtorName': _nameController.text,
+        'phone': _phoneController.text,
+        'amount': _amountController.text,
+        'notes': _notesController.text,
+        'direction': _direction.name,
+        'reason': _reason,
+        'shopNickname': _shopNickname,
+        'dueDate': _dueDate?.toIso8601String(),
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Could not save the debt form draft: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted && !_draftSaveErrorShown) {
+        _draftSaveErrorShown = true;
+        Get.snackbar('error'.tr, 'debt_draft_save_error'.tr);
+      }
+    }
+  }
+
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -118,7 +215,10 @@ class _AddDebtPageState extends State<AddDebtPage> {
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 20),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() => _dueDate = picked);
+      _scheduleDraftSave();
+    }
   }
 
   double _parseAmount() =>
@@ -132,6 +232,8 @@ class _AddDebtPageState extends State<AddDebtPage> {
       return;
     }
 
+    _draftSaveTimer?.cancel();
+    await _persistDraft();
     setState(() => _saving = true);
     try {
       final existing = widget.debt;
@@ -151,6 +253,14 @@ class _AddDebtPageState extends State<AddDebtPage> {
         ),
         isEditing: _isEditing,
       );
+      if (!_isEditing) {
+        try {
+          await _draftStorage.remove(_draftKey);
+        } catch (error, stackTrace) {
+          debugPrint('Could not clear the saved debt form draft: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        }
+      }
       if (mounted) Get.back();
     } catch (_) {
       // The controller reports save errors to the user.
@@ -360,6 +470,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
                             onChanged: (value) {
                               if (value != null) {
                                 setState(() => _reason = value);
+                                _scheduleDraftSave();
                               }
                             },
                           );
@@ -438,6 +549,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
                               : (shop) {
                                   if (shop != null) {
                                     setState(() => _shopNickname = shop);
+                                    _scheduleDraftSave();
                                   }
                                 },
                         ),
@@ -604,7 +716,10 @@ class _AddDebtPageState extends State<AddDebtPage> {
       color: selected ? color.withValues(alpha: 0.07) : Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        onTap: () => setState(() => _direction = direction),
+        onTap: () {
+          setState(() => _direction = direction);
+          _scheduleDraftSave();
+        },
         borderRadius: BorderRadius.circular(14),
         child: Container(
           constraints: const BoxConstraints(minHeight: 64),

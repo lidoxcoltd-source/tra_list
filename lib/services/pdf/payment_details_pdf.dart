@@ -49,6 +49,7 @@ class PaymentDetailsPdf {
     final company = data['company'] as Map<String, dynamic>? ?? {};
     final client = data['client'] as Map<String, dynamic>? ?? {};
     final invoice = data['invoice'] as Map<String, dynamic>? ?? {};
+    final items = (data['items'] as List?)?.whereType<Map>().toList() ?? [];
     final total = (data['total'] as num?)?.toDouble() ?? 0.0;
 
     final colors = (company['colors'] as Map?) ?? {};
@@ -63,16 +64,10 @@ class PaymentDetailsPdf {
         : PdfColors.grey800;
     final t = _Theme(brand: brandColor, accent: accentColor);
 
-    pw.ImageProvider? logo;
-    try {
-      final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
-      if (logoBytes != null) {
-        logo = pw.MemoryImage(logoBytes);
-      } else {
-        final b = await rootBundle.load('assets/lidox_logo.png');
-        logo = pw.MemoryImage(b.buffer.asUint8List());
-      }
-    } catch (_) {}
+    final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
+    final pw.ImageProvider? logo = logoBytes == null
+        ? null
+        : pw.MemoryImage(logoBytes);
 
     pw.ImageProvider? socialIcons;
     try {
@@ -144,28 +139,50 @@ class PaymentDetailsPdf {
                     ],
                   ),
                 ),
-                pw.SizedBox(height: 24),
-
-                // Bank Details Section
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(16),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(8),
+                if ((invoice['dueDate']?.toString().trim().isNotEmpty ?? false) ||
+                    (invoice['paymentMethod']?.toString().trim().isNotEmpty ??
+                        false)) ...[
+                  pw.SizedBox(height: 10),
+                  if (invoice['dueDate']?.toString().trim().isNotEmpty ?? false)
+                    _detailRow(t, 'Due Date:', invoice['dueDate']),
+                  if (invoice['paymentMethod']
+                          ?.toString()
+                          .trim()
+                          .isNotEmpty ??
+                      false)
+                    _detailRow(t, 'Payment Method:', invoice['paymentMethod']),
+                ],
+                if (items.isNotEmpty) ...[
+                  pw.SizedBox(height: 24),
+                  pw.Text('WORK DETAILS', style: t.h3Bold),
+                  pw.SizedBox(height: 8),
+                  _workDetailsTable(t, items, money),
+                ],
+                if (_hasPaymentDetails(company)) ...[
+                  pw.SizedBox(height: 24),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(16),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey300),
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('PAYMENT DETAILS', style: t.h3Bold),
+                        pw.Divider(height: 16),
+                        if (_hasValue(company['beneficiary']))
+                          _detailRow(t, 'Beneficiary:', company['beneficiary']),
+                        if (_hasValue(company['bank']))
+                          _detailRow(t, 'Bank Name:', company['bank']),
+                        if (_hasValue(company['account']))
+                          _detailRow(t, 'Account Number:', company['account']),
+                        if (_hasValue(company['swift']))
+                          _detailRow(t, 'SWIFT/BIC Code:', company['swift']),
+                      ],
+                    ),
                   ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Bank Details', style: t.h3Bold),
-                      pw.Divider(height: 16),
-                      _detailRow(t, 'Beneficiary:', company['beneficiary']),
-                      _detailRow(t, 'Bank Name:', company['bank']),
-                      _detailRow(t, 'Account Number:', company['account']),
-                      _detailRow(t, 'SWIFT/BIC Code:', company['swift']),
-                    ],
-                  ),
-                ),
-
+                ],
                 pw.SizedBox(height: 24),
                 pw.Text('Thank you for your business!', style: t.medium),
               ],
@@ -176,6 +193,61 @@ class PaymentDetailsPdf {
     );
 
     return pdf.save();
+  }
+
+  static bool _hasValue(dynamic value) =>
+      value != null && value.toString().trim().isNotEmpty;
+
+  static bool _hasPaymentDetails(Map<String, dynamic> company) =>
+      ['beneficiary', 'bank', 'account', 'swift'].any(
+        (key) => _hasValue(company[key]),
+      );
+
+  static pw.Widget _workDetailsTable(
+    _Theme t,
+    List<Map> items,
+    String Function(num) money,
+  ) {
+    pw.Widget cell(String value, {bool bold = false}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+      child: pw.Text(
+        value,
+        style: bold ? t.mediumBold : t.medium,
+      ),
+    );
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(4),
+        1: const pw.FlexColumnWidth(1),
+        2: const pw.FlexColumnWidth(2),
+      },
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: t.accent),
+          children: [
+            cell('Work / Item', bold: true),
+            cell('Qty', bold: true),
+            cell('Amount', bold: true),
+          ],
+        ),
+        for (final item in items)
+          pw.TableRow(
+            children: [
+              cell(
+                item['description']?.toString().trim().isNotEmpty == true
+                    ? item['description'].toString()
+                    : 'Work item',
+              ),
+              cell((item['qty'] as num?)?.toString() ?? '1'),
+              cell(
+                'TSH ${money((item['amount'] as num?) ?? ((item['qty'] as num? ?? 1) * (item['unit'] as num? ?? 0)))}',
+              ),
+            ],
+          ),
+      ],
+    );
   }
 
   static pw.Widget _detailRow(_Theme t, String label, dynamic value) {

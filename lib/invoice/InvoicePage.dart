@@ -19,6 +19,7 @@ import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/document_terms_service.dart';
+import 'package:tra_list/invoice/document_share_sheet.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
 import 'package:tra_list/stock/stock_models.dart';
 import 'package:tra_list/stock/stock_service.dart';
@@ -35,6 +36,7 @@ class InvoicePage extends StatefulWidget {
 class _InvoicePageState extends State<InvoicePage> {
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
+  bool _includeTerms = false;
 
   // Company profile loaded from Firestore
   Map<String, dynamic> _company = {};
@@ -83,6 +85,7 @@ class _InvoicePageState extends State<InvoicePage> {
         _clientController.text = clientData['name'] ?? '';
         _invoiceNameController.text = invoiceData['name'] ?? '';
         final savedTerms = data['documentTerms'] as Map<String, dynamic>? ?? {};
+        _includeTerms = savedTerms['includeConditions'] == true;
         _termsController.text = savedTerms['conditions']?.toString() ?? '';
         _invoiceNoController.text =
             invoiceData['numberCode'] ?? invoiceData['number'] ?? '';
@@ -339,6 +342,24 @@ class _InvoicePageState extends State<InvoicePage> {
                               onPressed: _busy ? null : _chooseDocTypeAndShare,
                               icon: const Icon(Icons.share_outlined, size: 19),
                             ),
+                            const SizedBox(width: 6),
+                            IconButton.outlined(
+                              tooltip: 'Send link on WhatsApp',
+                              style: IconButton.styleFrom(
+                                foregroundColor: const Color(0xFF168A62),
+                                side: const BorderSide(
+                                  color: Color(0x33168A62),
+                                ),
+                                minimumSize: const Size(42, 42),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                              ),
+                              onPressed: _busy
+                                  ? null
+                                  : _chooseDocTypeAndWhatsApp,
+                              icon: const Icon(Icons.chat_outlined, size: 19),
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton.icon(
@@ -428,6 +449,20 @@ class _InvoicePageState extends State<InvoicePage> {
                           ),
                           onPressed: _busy ? null : _chooseDocTypeAndShare,
                           icon: const Icon(Icons.share_outlined),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.outlined(
+                          tooltip: 'Send link on WhatsApp',
+                          style: IconButton.styleFrom(
+                            foregroundColor: const Color(0xFF168A62),
+                            side: const BorderSide(color: Color(0x33168A62)),
+                            padding: const EdgeInsets.all(14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: _busy ? null : _chooseDocTypeAndWhatsApp,
+                          icon: const Icon(Icons.chat_outlined),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton.icon(
@@ -629,47 +664,59 @@ class _InvoicePageState extends State<InvoicePage> {
                               icon: Icons.gavel_outlined,
                               title: 'Terms & Conditions',
                             ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _termsController,
-                              minLines: 3,
-                              maxLines: 6,
-                              textCapitalization: TextCapitalization.sentences,
-                              decoration: InputDecoration(
-                                hintText:
-                                    'Add terms for this document. Leave empty to use the default terms.',
-                                alignLabelWithHint: true,
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Include terms on document'),
+                              value: _includeTerms,
+                              activeColor: _brandColor,
+                              onChanged: (value) {
+                                setState(() => _includeTerms = value);
+                              },
+                            ),
+                            if (_includeTerms) ...[
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: _termsController,
+                                minLines: 3,
+                                maxLines: 6,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Add terms for this document. Leave empty to use the default terms.',
+                                  alignLabelWithHint: true,
+                                  filled: true,
+                                  fillColor: const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
                                   ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
                                   ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: _brandColor,
-                                    width: 1.6,
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: _brandColor,
+                                      width: 1.6,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'These terms will appear on the generated document.',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
+                              const SizedBox(height: 6),
+                              Text(
+                                'These terms will appear on the generated document.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -1158,10 +1205,13 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   Map<String, dynamic> _buildData() {
-    final conditions = _termsController.text.trim();
+    final conditions = _includeTerms ? _termsController.text.trim() : '';
     final documentTerms = {
       ..._baseDocumentTerms,
-      'conditions': conditions.isNotEmpty
+      'includeConditions': _includeTerms,
+      'conditions': !_includeTerms
+          ? ''
+          : conditions.isNotEmpty
           ? conditions
           : (_baseDocumentTerms['conditions']?.toString().trim().isNotEmpty ??
                 false)
@@ -1234,6 +1284,13 @@ class _InvoicePageState extends State<InvoicePage> {
                 ListTile(
                   leading: Icon(k.$3),
                   title: Text(k.$2),
+                  subtitle: k.$1 == 'payment_details'
+                      ? Text(
+                          Get.locale?.languageCode == 'sw'
+                              ? 'Maelezo ya malipo na kazi'
+                              : 'Payment and work details',
+                        )
+                      : null,
                   onTap: () => onPick(k.$1),
                 ),
             ],
@@ -1251,6 +1308,47 @@ class _InvoicePageState extends State<InvoicePage> {
 
   Future<void> _chooseDocTypeAndShare() =>
       Future.sync(() => _chooseDocType('Share as image', _shareDoc));
+
+  Future<void> _chooseDocTypeAndWhatsApp() => Future.sync(
+    () => _chooseDocType('Send document link on WhatsApp', _sendOnWhatsApp),
+  );
+
+  Future<void> _sendOnWhatsApp(String kind) async {
+    Navigator.pop(context);
+    final data = _buildData();
+    if (!await _applyAdvance(kind, data)) return;
+    setState(() => _busy = true);
+    try {
+      await _trySaveToFirestore(data, kind);
+      final documentId = widget.invoice?.id ?? _savedDocId;
+      if (documentId == null) {
+        throw StateError(
+          'Save this document to your account before sharing it on WhatsApp.',
+        );
+      }
+      final module = kind == 'quotation' ? 'quotations' : 'invoices';
+      if (!BusinessAccessService.can(module, 'create') &&
+          !BusinessAccessService.can(module, 'edit')) {
+        throw StateError('You do not have permission to share this document.');
+      }
+      await showDocumentShareSheet(
+        context: context,
+        businessUid: BusinessAccessService.businessId,
+        documentId: documentId,
+        document: {...data, 'kind': kind},
+      );
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar(
+          'Could not share document',
+          error.toString().replaceFirst('Bad state: ', ''),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   // Asks for the advance amount and adds it to the data. Returns false if cancelled.
   Future<bool> _applyAdvance(String kind, Map<String, dynamic> data) async {
@@ -1435,6 +1533,32 @@ class _InvoicePageState extends State<InvoicePage> {
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 6),
       );
+      if (!mounted) return;
+      final viewDocument = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Document saved'),
+          content: Text(
+            kIsWeb
+                ? 'Your PDF has been downloaded. Would you like to view it now?'
+                : 'Your PDF has been saved. Would you like to view it now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Done'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('View document'),
+            ),
+          ],
+        ),
+      );
+      if (viewDocument == true && mounted) {
+        await _openDocumentPreview(data, kind, fileName);
+      }
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -1446,5 +1570,27 @@ class _InvoicePageState extends State<InvoicePage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openDocumentPreview(
+    Map<String, dynamic> data,
+    String kind,
+    String fileName,
+  ) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(fileName)),
+          body: PdfPreview(
+            build: (_) => _bytesFor(kind, data),
+            canChangeOrientation: false,
+            canChangePageFormat: false,
+            allowPrinting: true,
+            allowSharing: true,
+            pdfFileName: fileName,
+          ),
+        ),
+      ),
+    );
   }
 }

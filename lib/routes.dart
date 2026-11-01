@@ -5,6 +5,7 @@ import 'package:tra_list/HomePage.dart';
 import 'package:tra_list/AddReceiptPage.dart';
 import 'package:tra_list/ReceiptsListPage.dart';
 import 'package:tra_list/invoice/categories_page.dart';
+import 'package:tra_list/invoice/add_transaction_page.dart';
 import 'package:tra_list/stock/stock_dashboard_page.dart';
 import 'package:tra_list/stock/pos_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
@@ -23,11 +24,16 @@ import 'package:tra_list/services/super_admin_hub_page.dart';
 import 'package:tra_list/services/notifications_page.dart';
 import 'package:tra_list/services/download_center_management_page.dart';
 import 'package:tra_list/services/support_center_admin_page.dart';
+import 'package:tra_list/services/legal_admin_page.dart';
+import 'package:tra_list/services/chat_page.dart';
+import 'package:tra_list/legal/legal_page.dart';
+import 'package:tra_list/legal/legal_service.dart';
 import 'package:tra_list/services/support_faq_page.dart';
 import 'package:tra_list/services/analytics_advice_admin_page.dart';
 import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/business_setup_page.dart';
 import 'package:tra_list/services/personal_settings_page.dart';
+import 'package:tra_list/services/app_urls_page.dart';
 import 'package:tra_list/market/market_home_page.dart';
 import 'package:tra_list/market/market_post_page.dart';
 import 'package:tra_list/market/market_profile_page.dart';
@@ -46,6 +52,8 @@ import 'invoice/InvoicePage.dart';
 import 'invoice/InvoicesPage.dart';
 import 'invoice/transactions_page.dart';
 import 'invoice/quotation_page.dart';
+import 'package:tra_list/invoice/document_shares_page.dart';
+import 'package:tra_list/invoice/shared_document_page.dart';
 
 class AuthMiddleware extends GetMiddleware {
   @override
@@ -97,6 +105,19 @@ class BusinessOwnerMiddleware extends GetMiddleware {
   }
 }
 
+class BusinessChatMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (AccountModeService.current != AccountMode.business ||
+        !BusinessAccessService.isReady.value ||
+        !BusinessAccessService.hasBusinessAccess) {
+      Get.snackbar('error'.tr, 'chat_business_required'.tr);
+      return const RouteSettings(name: AppRoutes.home);
+    }
+    return null;
+  }
+}
+
 class PersonalModeMiddleware extends GetMiddleware {
   @override
   RouteSettings? redirect(String? route) {
@@ -122,6 +143,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String register = '/register';
   static const String home = '/';
+  static const String homeSection = '/home/:section';
   static const String addReceipt = '/add-receipt';
   static const String receiptsList = '/receipts';
   static const String sampleReceipt = '/sample-receipt';
@@ -130,7 +152,12 @@ class AppRoutes {
   static const String viewReceipt = '/receipt/:id';
   static const String invoice = '/invoice';
   static const String invoicesList = '/invoices';
+  static const String documentShares = '/document-shares';
+  static const String sharedDocument = '/shared-document/:token';
   static const String transactions = '/transactions';
+  static const String addTransaction = '/AddTransactionPage';
+  static const String chat = '/chat';
+  static const String chatRoom = '/chat/:id';
   static const String categories = '/categories';
   static const String stock = '/stock';
   static const String pos = '/pos';
@@ -155,15 +182,89 @@ class AppRoutes {
   static const String adminMarketReports = '/admin-market-reports';
   static const String support = '/support';
   static const String adminSupport = '/admin-support';
+  static const String privacy = '/privacy';
+  static const String terms = '/terms';
+  static const String adminLegal = '/admin-legal';
   static const String adminAnalyticsAdvice = '/admin-analytics-advice';
   static const String businessSetup = '/business-setup';
   static const String personalSettings = '/personal-settings';
+  static const String appUrls = '/app-urls';
   static const String market = '/market';
   static const String marketProfile = '/market/profile/:uid';
   static const String marketPost = '/market/post/:id';
 
   // Helper method to generate receipt URL
   static String getReceiptRoute(String receiptId) => '/receipt/$receiptId';
+  static String getChatRoomRoute(String conversationId) =>
+      '/chat/$conversationId';
+  static String getHomeSectionRoute(String section) => '/home/$section';
+
+  static String? pendingWebRoute;
+
+  static String? takePendingWebRoute() {
+    final route = pendingWebRoute;
+    pendingWebRoute = null;
+    return route;
+  }
+
+  static String? resolveWebLocation(Uri uri) {
+    final location = uri.fragment.startsWith('/')
+        ? uri.fragment
+        : '${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}';
+    final parsedLocation = Uri.tryParse(location);
+    if (parsedLocation == null) return null;
+
+    final path = parsedLocation.path.replaceFirst(RegExp(r'/+$'), '');
+    final normalizedPath = path.isEmpty ? '/' : path;
+    for (final page in pages) {
+      if (!_matchesRoute(page.name, normalizedPath)) continue;
+      if (page.name == homeSection &&
+          !const {
+            'explore',
+            'reports',
+            'chat',
+          }.contains(normalizedPath.split('/').last)) {
+        return null;
+      }
+      final resolvedPath = page.name.contains('/:')
+          ? normalizedPath
+          : page.name;
+      return parsedLocation.hasQuery
+          ? '$resolvedPath?${parsedLocation.query}'
+          : resolvedPath;
+    }
+    return null;
+  }
+
+  static bool webRouteRequiresAuthentication(String route) {
+    final routePath = Uri.tryParse(route)?.path;
+    if (routePath == null) return false;
+    for (final page in pages) {
+      if (_matchesRoute(page.name, routePath)) {
+        return page.middlewares?.any(
+              (middleware) => middleware is AuthMiddleware,
+            ) ??
+            false;
+      }
+    }
+    return false;
+  }
+
+  static bool _matchesRoute(String template, String path) {
+    final templateSegments = template.split('/');
+    final pathSegments = path.split('/');
+    if (templateSegments.length != pathSegments.length) return false;
+    for (var index = 0; index < templateSegments.length; index++) {
+      final templateSegment = templateSegments[index];
+      if (templateSegment.startsWith(':')) {
+        if (pathSegments[index].isEmpty) return false;
+      } else if (templateSegment.toLowerCase() !=
+          pathSegments[index].toLowerCase()) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   static final pages = <GetPage>[
     GetPage(
@@ -176,6 +277,12 @@ class AppRoutes {
     GetPage(
       name: home,
       page: () => const HomePage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: homeSection,
+      page: () => HomePage(initialSection: Get.parameters['section']),
       middlewares: [AuthMiddleware()],
       transition: Transition.fadeIn,
     ),
@@ -207,6 +314,12 @@ class AppRoutes {
       name: personalSettings,
       page: () => const PersonalSettingsPage(),
       middlewares: [AuthMiddleware(), PersonalModeMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: appUrls,
+      page: () => const AppUrlsPage(),
+      middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
@@ -243,6 +356,11 @@ class AppRoutes {
       transition: Transition.rightToLeft,
     ),
     GetPage(
+      name: sharedDocument,
+      page: () => SharedDocumentPage(token: Get.parameters['token'] ?? ''),
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
       name: invoice,
       page: () => const InvoicePage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
@@ -253,9 +371,33 @@ class AppRoutes {
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
     ),
     GetPage(
+      name: documentShares,
+      page: () =>
+          DocumentSharesPage(businessUid: BusinessAccessService.businessId),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
+    GetPage(
       name: transactions,
       page: () => const TransactionsPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: addTransaction,
+      page: () => const AddTransactionPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: chat,
+      page: () => const ChatPage(),
+      middlewares: [AuthMiddleware(), BusinessChatMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: chatRoom,
+      page: () => ChatRoomPage(conversationId: Get.parameters['id'] ?? ''),
+      middlewares: [AuthMiddleware(), BusinessChatMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(
@@ -390,6 +532,22 @@ class AppRoutes {
     GetPage(
       name: adminSupport,
       page: () => const SupportCenterAdminPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: privacy,
+      page: () => const LegalPage(kind: LegalKind.privacy),
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: terms,
+      page: () => const LegalPage(kind: LegalKind.terms),
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: adminLegal,
+      page: () => const LegalAdminPage(),
       middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),

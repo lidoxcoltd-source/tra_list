@@ -109,8 +109,135 @@ class SubscriptionPlanSettings {
   }
 }
 
+class TrialSettings {
+  const TrialSettings({
+    required this.enabled,
+    required this.durationDays,
+    this.version = 1,
+  });
+
+  static const defaults = TrialSettings(enabled: true, durationDays: 7);
+
+  final bool enabled;
+  final int durationDays;
+  final int version;
+
+  factory TrialSettings.fromMap(Map<String, dynamic>? data) {
+    if (data == null) return defaults;
+    return TrialSettings(
+      enabled: data['enabled'] != false,
+      durationDays:
+          (data['durationDays'] as num?)?.toInt() ?? defaults.durationDays,
+      version: (data['version'] as num?)?.toInt() ?? 1,
+    );
+  }
+
+  // End of the trial for a subscription doc, or null when it is not running.
+  // Global "off" stops every trial, running ones included.
+  static DateTime? runningEnd(
+    Map<String, dynamic> subscription,
+    TrialSettings global,
+    DateTime now,
+  ) {
+    if (!global.enabled) return null;
+    final on = subscription.containsKey('trialActive')
+        ? subscription['trialActive'] == true
+        : subscription['trial'] == true;
+    final raw = subscription['trialStart'];
+    final start = raw is Timestamp ? raw.toDate() : null;
+    if (!on || start == null || start.isAfter(now)) return null;
+    final end = start.add(Duration(days: daysFor(subscription, global)));
+    return end.isAfter(now) ? end : null;
+  }
+
+  // Admin-granted per-business override wins; otherwise the global setting
+  // applies, so admin changes affect every running trial.
+  static int daysFor(Map<String, dynamic> subscription, TrialSettings global) =>
+      (subscription['trialOverrideDays'] as num?)?.toInt() ??
+      global.durationDays;
+}
+
 class SuperAdminSubscriptionService {
   static final _firestore = FirebaseFirestore.instance;
+  static DocumentReference<Map<String, dynamic>> get _trialRef =>
+      _firestore.collection('app_config').doc('trial_settings');
+
+  static Future<TrialSettings> loadTrialSettings() async {
+    try {
+      return TrialSettings.fromMap((await _trialRef.get()).data());
+    } on FirebaseException {
+      return TrialSettings.defaults;
+    }
+  }
+
+  static Future<void> saveTrialSettings({
+    required bool enabled,
+    required int durationDays,
+  }) async {
+    await _requireSuperAdmin();
+    if (durationDays < 1 || durationDays > 365) {
+      throw ArgumentError.value(
+        durationDays,
+        'durationDays',
+        'Must be between 1 and 365 days.',
+      );
+    }
+    await _trialRef.set({
+      'enabled': enabled,
+      'durationDays': durationDays,
+      'version': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser!.uid,
+    }, SetOptions(merge: true));
+  }
+
+  // Owner-initiated: allowed once per business while trials are enabled.
+  static Future<void> startOwnTrial(String businessId) async {
+    final settings = await loadTrialSettings();
+    if (!settings.enabled) throw StateError('trial_disabled');
+    final reference = _firestore.collection('subscriptions').doc(businessId);
+    await _firestore.runTransaction((transaction) async {
+      final data = (await transaction.get(reference)).data() ?? {};
+      if (data['trialUsed'] == true || data['trialStart'] != null) {
+        throw StateError('trial_used');
+      }
+      transaction.set(reference, {
+        'userId': businessId,
+        'trial': true,
+        'trialActive': true,
+        'trialUsed': true,
+        'trialStart': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+  }
+
+  static Future<void> grantTrial(String businessId, {required int days}) async {
+    await _requireSuperAdmin();
+    if (days < 1 || days > 365) {
+      throw ArgumentError.value(days, 'days', 'Must be between 1 and 365.');
+    }
+    await _firestore.collection('subscriptions').doc(businessId).set({
+      'userId': businessId,
+      'trial': true,
+      'trialActive': true,
+      'trialUsed': true,
+      'trialStart': Timestamp.fromDate(DateTime.now()),
+      'trialOverrideDays': days,
+      'managedBy': FirebaseAuth.instance.currentUser!.uid,
+      'managedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> endTrial(String businessId) async {
+    await _requireSuperAdmin();
+    await _firestore.collection('subscriptions').doc(businessId).set({
+      'trial': false,
+      'trialActive': false,
+      'managedBy': FirebaseAuth.instance.currentUser!.uid,
+      'managedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   static DocumentReference<Map<String, dynamic>> get _planRef =>
       _firestore.collection('app_config').doc('subscription_plan');
 
@@ -143,6 +270,7 @@ class SuperAdminSubscriptionService {
           _normalizeRole(profile.data()['role']?.toString()) != 'superadmin',
     );
 
+    final trialGlobal = await loadTrialSettings();
     final businesses = await Future.wait(
       companyProfiles.map((profile) async {
         final businessId = profile.reference.parent.parent!.id;
@@ -154,15 +282,8 @@ class SuperAdminSubscriptionService {
         final expiry = _asDate(data['expiry']) ?? _asDate(data['expiryDate']);
         final now = DateTime.now();
         final isSubscribed = expiry != null && expiry.isAfter(now);
-        final trialStart = _asDate(data['trialStart']);
-        final trialEnabled = data.containsKey('trialActive')
-            ? data['trialActive'] == true
-            : data['trial'] == true;
         final isTrial =
-            trialEnabled &&
-            trialStart != null &&
-            !trialStart.isAfter(now) &&
-            now.difference(trialStart) < const Duration(days: 7);
+            TrialSettings.runningEnd(data, trialGlobal, now) != null;
         final profileData = profile.data();
         final accountAccess = await _firestore
             .collection('accountAccess')

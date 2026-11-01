@@ -1,89 +1,295 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="sw">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
+    <meta name="theme-color" content="#10233f">
+    <meta
+      name="description"
+      content="MJASI POS — sehemu moja ya kusimamia mauzo, bidhaa na biashara yako."
+    >
+    <title>MJASI POS | Usimamizi wa biashara</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #17263d;
+        background: #f3f6fb;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
 
-    <!-- update the version number as needed -->
-    <script defer src="/__/firebase/12.3.0/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/12.3.0/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-database-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/12.3.0/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
-    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+      * {
+        box-sizing: border-box;
+      }
 
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0;
+        background:
+          radial-gradient(ellipse at 12% 10%, rgb(44 91 166 / 28%), transparent 35rem),
+          radial-gradient(ellipse at 88% 90%, rgb(226 178 55 / 14%), transparent 32rem),
+          #f3f6fb;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        min-height: 100vh;
+        min-height: 100dvh;
+        place-items: center;
+        overflow: hidden;
+        padding: 32px 20px;
+        isolation: isolate;
+      }
+
+      .hero::before,
+      .hero::after {
+        position: absolute;
+        z-index: -1;
+        width: 22rem;
+        aspect-ratio: 1;
+        border: 1px solid rgb(255 255 255 / 12%);
+        border-radius: 50%;
+        content: "";
+        pointer-events: none;
+      }
+
+      .hero::before {
+        top: -13rem;
+        right: -7rem;
+        box-shadow: 0 0 0 3rem rgb(255 255 255 / 3%), 0 0 0 6rem rgb(255 255 255 / 2%);
+      }
+
+      .hero::after {
+        bottom: -16rem;
+        left: -9rem;
+        width: 27rem;
+        box-shadow: 0 0 0 3rem rgb(16 35 63 / 3%), 0 0 0 6rem rgb(16 35 63 / 2%);
+      }
+
+      .card {
+        width: min(100%, 680px);
+        padding: clamp(32px, 7vw, 64px);
+        border: 1px solid rgb(255 255 255 / 75%);
+        border-radius: 28px;
+        background: rgb(255 255 255 / 92%);
+        box-shadow: 0 24px 80px rgb(16 35 63 / 12%);
+        text-align: center;
+        backdrop-filter: blur(12px);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 22px;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 12%);
+        border-radius: 22px;
+        background: #10233f;
+        box-shadow: 0 10px 24px rgb(16 35 63 / 20%);
+      }
+
+      .brand-mark svg {
+        width: 36px;
+        height: 36px;
+        color: #f4cb54;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: #2457a6;
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        color: #10233f;
+        font-size: clamp(38px, 8vw, 62px);
+        font-weight: 780;
+        letter-spacing: -.055em;
+        line-height: 1.05;
+      }
+
+      .intro {
+        max-width: 470px;
+        margin: 18px auto 0;
+        color: #64748b;
+        font-size: clamp(15px, 2.6vw, 18px);
+        line-height: 1.7;
+      }
+
+      .features {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin: 28px 0 32px;
+      }
+
+      .feature {
+        padding: 9px 13px;
+        border: 1px solid #e6ebf2;
+        border-radius: 999px;
+        background: #f8fafc;
+        color: #34445c;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .cta {
+        display: inline-flex;
+        min-height: 52px;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 0 24px;
+        border: 0;
+        border-radius: 14px;
+        background: #2457a6;
+        box-shadow: 0 8px 18px rgb(36 87 166 / 20%);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background-color 160ms ease, transform 160ms ease;
+      }
+
+      .cta:hover {
+        transform: translateY(-2px);
+        background: #1c468a;
+      }
+
+      .cta:focus-visible {
+        outline: 3px solid #f4cb54;
+        outline-offset: 4px;
+      }
+
+      .cta svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .footer {
+        margin: 28px 0 0;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      @media (max-width: 480px) {
+        .hero {
+          padding: 20px 16px;
+        }
+
+        .card {
+          border-radius: 22px;
+        }
+
+        .brand-mark {
+          width: 62px;
+          height: 62px;
+          margin-bottom: 18px;
+          border-radius: 19px;
+        }
+      }
+
+      @media (max-height: 700px) {
+        .hero {
+          padding-block: 12px;
+        }
+
+        .card {
+          padding-block: 24px;
+        }
+
+        .brand-mark {
+          width: 54px;
+          height: 54px;
+          margin-bottom: 12px;
+          border-radius: 17px;
+        }
+
+        .brand-mark svg {
+          width: 30px;
+          height: 30px;
+        }
+
+        .intro {
+          margin-top: 10px;
+        }
+
+        .features {
+          gap: 8px;
+          margin-block: 16px 20px;
+        }
+
+        .feature {
+          padding-block: 7px;
+        }
+
+        .footer {
+          margin-top: 16px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: .01ms !important;
+        }
       }
     </style>
   </head>
   <body>
-    <div id="message">
-      <h2>Welcome</h2>
-      <h1>Firebase Hosting Setup Complete</h1>
-      <p>You're seeing this because you've successfully setup Firebase Hosting. Now it's time to go build something extraordinary!</p>
-      <a target="_blank" href="https://firebase.google.com/docs/hosting/">Open Hosting Documentation</a>
-    </div>
-    <p id="load">Firebase SDK Loading&hellip;</p>
-
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        const loadEl = document.querySelector('#load');
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-        // // The Firebase SDK is initialized and available here!
-        //
-        // firebase.auth().onAuthStateChanged(user => { });
-        // firebase.database().ref('/path/to/ref').on('value', snapshot => { });
-        // firebase.firestore().doc('/foo/bar').get().then(() => { });
-        // firebase.functions().httpsCallable('yourFunction')().then(() => { });
-        // firebase.messaging().requestPermission().then(() => { });
-        // firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => { });
-        // firebase.analytics(); // call to activate
-        // firebase.analytics().logEvent('tutorial_completed');
-        // firebase.performance(); // call to activate
-        //
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-
-        try {
-          let app = firebase.app();
-          let features = [
-            'auth', 
-            'database', 
-            'firestore',
-            'functions',
-            'messaging', 
-            'storage', 
-            'analytics', 
-            'remoteConfig',
-            'performance',
-          ].filter(feature => typeof app[feature] === 'function');
-          loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-        } catch (e) {
-          console.error(e);
-          loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
-        }
-      });
-    </script>
+    <main class="hero">
+      <section class="card" aria-labelledby="page-title">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path
+              d="M4 9.5h16l-1.3-5H5.3L4 9.5Zm1 0v9h14v-9M9 18.5v-5h6v5M3.5 9.5v1a2.5 2.5 0 0 0 5 0v-1a2.5 2.5 0 0 0 5 0v-1a2.5 2.5 0 0 0 5 0v1a2.5 2.5 0 0 0 2 2.45"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.7"
+            />
+          </svg>
+        </div>
+        <p class="eyebrow">Sehemu moja. Biashara yako yote.</p>
+        <h1 id="page-title">MJASI POS</h1>
+        <p class="intro">
+          Simamia mauzo, bidhaa, risiti na shughuli za kila siku za biashara
+          yako kwa urahisi.
+        </p>
+        <div class="features" aria-label="Vipengele">
+          <span class="feature">Mauzo</span>
+          <span class="feature">Bidhaa na stoo</span>
+          <span class="feature">Risiti</span>
+          <span class="feature">Ripoti za biashara</span>
+        </div>
+        <a class="cta" href="https://mjasipos.web.app/">
+          Fungua MJASI POS
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 12h14m-6-6 6 6-6 6"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </a>
+        <p class="footer">Zana za kisasa. Biashara yenye mwelekeo.</p>
+      </section>
+    </main>
   </body>
 </html>

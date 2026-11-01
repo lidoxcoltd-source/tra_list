@@ -16,7 +16,7 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
-  static const _duration = Duration(milliseconds: 4200);
+  static const _duration = Duration(milliseconds: 5000);
   static const _navy = MjasiColors.primaryNavy;
   static const _blue = MjasiColors.primaryBlue;
   static const _accent = MjasiColors.secondaryBlue;
@@ -92,6 +92,15 @@ class _SplashPageState extends State<SplashPage>
       body: Stack(
         fit: StackFit.expand,
         children: [
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_blue, _navy],
+              ),
+            ),
+          ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) => Stack(
@@ -101,10 +110,10 @@ class _SplashPageState extends State<SplashPage>
                     right: 12,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .08),
-                        borderRadius: BorderRadius.circular(14),
+                        color: Colors.white.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: .12),
+                          color: Colors.white.withValues(alpha: .18),
                         ),
                       ),
                       child: const LanguageSwitcher(color: Colors.white),
@@ -127,12 +136,12 @@ class _SplashPageState extends State<SplashPage>
                               child: ScaleTransition(
                                 scale: _logoScale,
                                 child: Container(
-                                  width: 116,
-                                  height: 116,
-                                  padding: const EdgeInsets.all(19),
+                                  width: 104,
+                                  height: 104,
+                                  padding: const EdgeInsets.all(17),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(30),
+                                    color: MjasiColors.surface,
+                                    borderRadius: BorderRadius.circular(28),
                                     border: Border.all(
                                       color: Colors.white.withValues(
                                         alpha: .75,
@@ -140,10 +149,11 @@ class _SplashPageState extends State<SplashPage>
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: _blue.withValues(alpha: .24),
-                                        blurRadius: 38,
-                                        spreadRadius: 2,
-                                        offset: const Offset(0, 14),
+                                        color: Colors.black.withValues(
+                                          alpha: .16,
+                                        ),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 12),
                                       ),
                                     ],
                                   ),
@@ -159,62 +169,41 @@ class _SplashPageState extends State<SplashPage>
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 28),
                             FadeTransition(
                               opacity: _textFade,
                               child: SlideTransition(
                                 position: _textSlide,
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      'MJASI POS',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 2.2,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 340,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        _greeting,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 25,
+                                          height: 1.25,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      width: 42,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: _accent,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Text(
-                                      _greeting,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 25,
-                                        height: 1.2,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 340,
-                                      ),
-                                      child: Text(
+                                      const SizedBox(height: 12),
+                                      Text(
                                         'splash_tagline'.tr,
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: Colors.white.withValues(
-                                            alpha: .72,
+                                            alpha: .78,
                                           ),
                                           fontSize: 14,
-                                          height: 1.55,
+                                          height: 1.5,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -240,7 +229,7 @@ class _SplashPageState extends State<SplashPage>
                                 value: _controller.value,
                                 minHeight: 3,
                                 backgroundColor: Colors.white.withValues(
-                                  alpha: .14,
+                                  alpha: .2,
                                 ),
                                 valueColor: const AlwaysStoppedAnimation(
                                   _accent,
@@ -252,10 +241,9 @@ class _SplashPageState extends State<SplashPage>
                           Text(
                             'splash_loading'.tr,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: .58),
+                              color: Colors.white.withValues(alpha: .68),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              letterSpacing: .3,
                             ),
                           ),
                         ],

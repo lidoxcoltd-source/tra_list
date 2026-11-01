@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -36,52 +38,89 @@ class _DownloadCenterManagementPageState
       DownloadCenterService.loadStats();
 
   final Map<String, double?> _uploadProgress = {};
+  final Map<String, String> _uploadedLinks = {};
 
   Future<void> _uploadFile(String key) async {
-    final extensions = key == 'apk' ? ['apk'] : ['zip', 'exe', 'msix', 'msi'];
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: extensions,
-      withData: true,
-    );
-    final file = picked?.files.single;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
-
-    final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-    final ref = FirebaseStorage.instance.ref('downloads/${key}_$safeName');
-    setState(() {
-      _uploadProgress[key] = 0;
-      _error = null;
-    });
+    StreamSubscription<TaskSnapshot>? progressSubscription;
     try {
+      final extensions = key == 'apk' ? ['apk'] : ['zip', 'exe', 'msix', 'msi'];
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: extensions,
+        withData: true,
+      );
+      final file = picked?.files.single;
+      if (file == null) return;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('The selected file could not be read.');
+      }
+
+      final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final ref = FirebaseStorage.instance.ref('downloads/${key}_$safeName');
+      if (!mounted) return;
+      setState(() {
+        _uploadProgress[key] = 0;
+        _error = null;
+        _uploadedLinks.remove(key);
+      });
       final task = ref.putData(
         bytes,
         SettableMetadata(contentType: 'application/octet-stream'),
       );
-      task.snapshotEvents.listen((s) {
-        if (!mounted || s.totalBytes == 0) return;
-        setState(
-          () => _uploadProgress[key] = s.bytesTransferred / s.totalBytes,
-        );
-      });
+      progressSubscription = task.snapshotEvents.listen(
+        (snapshot) {
+          if (!mounted || snapshot.totalBytes == 0) return;
+          setState(
+            () => _uploadProgress[key] =
+                snapshot.bytesTransferred / snapshot.totalBytes,
+          );
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('Download file upload progress failed: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        },
+      );
       await task;
       final url = await ref.getDownloadURL();
       if (!mounted) return;
       setState(() {
         _urls[key]!.text = url;
         _enabled[key] = true;
+        _uploadedLinks[key] = url;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${file.name} uploaded. Press Save to publish it.'),
+          content: Text(
+            '${file.name} uploaded. Copy the link below, then save to publish it.',
+          ),
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('Could not upload download file: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
       setState(() => _error = 'Upload failed: $error');
     } finally {
+      await progressSubscription?.cancel();
       if (mounted) setState(() => _uploadProgress.remove(key));
+    }
+  }
+
+  Future<void> _copyUploadedLink(String key) async {
+    final link = _uploadedLinks[key];
+    if (link == null) return;
+    try {
+      await Clipboard.setData(ClipboardData(text: link));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Download link copied.')));
+    } catch (error, stackTrace) {
+      debugPrint('Could not copy uploaded download link: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      setState(() => _error = 'Could not copy the download link: $error');
     }
   }
 
@@ -308,6 +347,37 @@ class _DownloadCenterManagementPageState
                                   padding: const EdgeInsets.only(top: 8),
                                   child: LinearProgressIndicator(
                                     value: _uploadProgress[d.key],
+                                  ),
+                                ),
+                              if (_uploadedLinks[d.key] case final link?)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: SelectableText(
+                                          link,
+                                          maxLines: 2,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Copy download link',
+                                        onPressed: () =>
+                                            _copyUploadedLink(d.key),
+                                        icon: const Icon(Icons.copy_rounded),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (_uploadedLinks.containsKey(d.key))
+                                const Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Save downloads page to publish this link.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
                                   ),
                                 ),
                             ],

@@ -82,6 +82,13 @@ const _groups = <_AdminGroup>[
       Color(0xFF0F766E),
     ),
     _AdminItem(
+      'legal_admin_title',
+      'legal_admin_desc',
+      Icons.policy_rounded,
+      AppRoutes.adminLegal,
+      Color(0xFF475569),
+    ),
+    _AdminItem(
       'admin_manage_announcements',
       'hub_desc_announcements',
       Icons.campaign_rounded,

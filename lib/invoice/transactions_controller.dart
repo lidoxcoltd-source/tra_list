@@ -78,7 +78,13 @@ class TransactionsController extends GetxController {
     final now = DateTime.now();
     startDate.value = DateTime(now.year, now.month, now.day);
     endDate.value = startDate.value!.add(const Duration(days: 1));
-    if (!BusinessAccessService.isOwner.value) {
+    final arguments = Get.arguments;
+    final requestedShop = arguments is Map
+        ? arguments['shopNickname']?.toString().trim() ?? ''
+        : '';
+    if (BusinessAccessService.isOwner.value && requestedShop.isNotEmpty) {
+      selectedShopNickname.value = requestedShop;
+    } else if (!BusinessAccessService.isOwner.value) {
       selectedShopNickname.value = BusinessAccessService.shopNickname.value
           .trim();
     }

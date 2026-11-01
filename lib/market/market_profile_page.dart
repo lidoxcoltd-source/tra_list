@@ -664,8 +664,15 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
                                 crossAxisSpacing: 2,
                               ),
                           itemCount: posts.length,
-                          itemBuilder: (context, index) =>
-                              _ProfilePostTile(post: posts[index]),
+                          itemBuilder: (context, index) => _ProfilePostTile(
+                            key: ValueKey(posts[index].id),
+                            post: posts[index],
+                            onDeleted: () => setState(() {
+                              _posts = MarketService.searchAuthorPosts(
+                                widget.uid,
+                              );
+                            }),
+                          ),
                         ),
                       );
                     },
@@ -1174,12 +1181,78 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
 }
 
 class _ProfilePostTile extends StatelessWidget {
-  const _ProfilePostTile({required this.post});
+  const _ProfilePostTile({super.key, required this.post, this.onDeleted});
 
   final MarketPost post;
+  final VoidCallback? onDeleted;
+
+  Future<void> _delete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('market_delete_post'.tr),
+        content: Text('market_delete_post_confirm'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('delete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await MarketService.deletePost(post);
+      onDeleted?.call();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
 
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) {
+    final canDelete = MarketService.canDeletePost(post);
+    return GestureDetector(
+      onLongPress: canDelete ? () => _delete(context) : null,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _content(),
+          if (canDelete)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _delete(context),
+                  child: const Padding(
+                    padding: EdgeInsets.all(5),
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _content() => Stack(
     fit: StackFit.expand,
     children: [
       if (post.isTextOnly)

@@ -15,6 +15,7 @@ import 'explore_page.dart';
 import 'market_profile_page.dart';
 import 'market_palette.dart';
 import 'market_reels_page.dart';
+import 'market_upload_progress.dart';
 
 enum _MarketDestination { home, market, search, profile }
 
@@ -30,6 +31,7 @@ class _MarketHomePageState extends State<MarketHomePage> {
   int _feedKey = 0;
   late final Stream<List<AppNotification>> _activity;
   late final Stream<List<AppNotification>> _announcements;
+  int? _lastCompletedUploadId;
 
   @override
   void initState() {
@@ -143,8 +145,98 @@ class _MarketHomePageState extends State<MarketHomePage> {
   }
 
   Future<void> _openComposer() async {
-    final published = await openMarketComposer(context);
-    if (published == true && mounted) setState(() => _feedKey++);
+    await openMarketComposer(context);
+  }
+
+  Widget _uploadProgressBanner() {
+    return ValueListenableBuilder<MarketUploadProgressState?>(
+      valueListenable: MarketUploadProgress.state,
+      builder: (context, progress, _) {
+        if (progress == null) return const SizedBox.shrink();
+        if (progress.status == MarketUploadStatus.completed &&
+            _lastCompletedUploadId != progress.id) {
+          _lastCompletedUploadId = progress.id;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _feedKey++);
+          });
+        }
+        final active =
+            progress.status == MarketUploadStatus.uploading ||
+            progress.status == MarketUploadStatus.publishing;
+        final failed = progress.status == MarketUploadStatus.failed;
+        final message = switch (progress.status) {
+          MarketUploadStatus.uploading =>
+            '${'market_uploading'.tr} ${(progress.progress * 100).round()}%',
+          MarketUploadStatus.publishing => 'market_saving_post'.tr,
+          MarketUploadStatus.completed => 'market_published'.tr,
+          MarketUploadStatus.failed =>
+            '${'market_publish_failed'.tr} ${progress.error ?? ''}',
+        };
+        return Material(
+          color: MarketPalette.surfaceRaised,
+          borderRadius: BorderRadius.circular(14),
+          elevation: 8,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    if (active)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(
+                        failed
+                            ? Icons.error_outline_rounded
+                            : Icons.check_circle_outline_rounded,
+                        color: failed ? MarketPalette.red : MarketPalette.mint,
+                        size: 20,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        message,
+                        maxLines: failed ? 3 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MarketPalette.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (!active)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'close'.tr,
+                        onPressed: () =>
+                            MarketUploadProgress.dismiss(progress.id),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                  ],
+                ),
+                if (active) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progress.status == MarketUploadStatus.publishing
+                        ? null
+                        : progress.progress,
+                    minHeight: 4,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _select(_MarketDestination destination) {
@@ -162,7 +254,6 @@ class _MarketHomePageState extends State<MarketHomePage> {
       initialTab: MarketExploreTab.posts,
       showFeedModeTabs: true,
       showControls: false,
-      hideFeedHeader: _appBarHidden,
     ),
     _MarketDestination.market => const MarketReelsTab(),
     _MarketDestination.search => const MarketExplorePage(
@@ -327,20 +418,32 @@ class _MarketHomePageState extends State<MarketHomePage> {
             }
             return false;
           },
-          child: SafeArea(
-            top: false,
-            bottom: false,
-            child: AnimatedPadding(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeInOutCubic,
-              padding: EdgeInsets.only(
-                top: reels
-                    ? 0
-                    : MediaQuery.paddingOf(context).top +
-                          (_appBarHidden ? 0 : kToolbarHeight),
+          child: Stack(
+            children: [
+              SafeArea(
+                top: false,
+                bottom: false,
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeInOutCubic,
+                  padding: EdgeInsets.only(
+                    top: reels
+                        ? 0
+                        : MediaQuery.paddingOf(context).top +
+                              (_appBarHidden ? 0 : kToolbarHeight),
+                  ),
+                  child: _buildContent(),
+                ),
               ),
-              child: _buildContent(),
-            ),
+              Positioned(
+                top:
+                    MediaQuery.paddingOf(context).top +
+                    (_appBarHidden ? 8 : kToolbarHeight + 8),
+                left: 16,
+                right: 16,
+                child: _uploadProgressBanner(),
+              ),
+            ],
           ),
         ),
         bottomNavigationBar: _buildBottomNavigation(),

@@ -16,6 +16,28 @@ service firebase.storage {
         && !firestore.exists(membershipPath(request.auth.uid));
     }
 
+    function isChatBusinessOwner(businessUid) {
+      let uid = request.auth == null ? '' : request.auth.uid;
+      let legacyPath = membershipPath(uid);
+      let modernPath = businessMembershipPath(businessUid, uid);
+      return request.auth != null
+        && (
+          isBusinessOwner(businessUid)
+          || (
+            firestore.exists(legacyPath)
+            && firestore.get(legacyPath).data.businessUid == businessUid
+            && firestore.get(legacyPath).data.role == 'owner'
+            && firestore.get(legacyPath).data.active == true
+          )
+          || (
+            firestore.exists(modernPath)
+            && firestore.get(modernPath).data.businessUid == businessUid
+            && firestore.get(modernPath).data.role == 'owner'
+            && firestore.get(modernPath).data.active == true
+          )
+        );
+    }
+
     function hasActiveMembership(businessUid) {
       return request.auth != null
         && (
@@ -49,6 +71,30 @@ service firebase.storage {
             .get('permissions', {})
             .get(module, {})
             .get(action, false) == true
+        );
+    }
+
+    function isChatMember(businessUid, conversationId) {
+      let conversationPath =
+        /databases/(default)/documents/users/$(businessUid)/chats/$(conversationId);
+      return request.auth != null
+        && firestore.exists(conversationPath)
+        && request.auth.uid
+          in firestore.get(conversationPath).data.memberUids
+        && (
+          isChatBusinessOwner(businessUid)
+          || hasActiveMembership(businessUid)
+        );
+    }
+
+    function canReadChat(businessUid, conversationId) {
+      return request.auth != null
+        && (
+          isChatBusinessOwner(businessUid)
+          || isChatMember(businessUid, conversationId)
+        )
+        && firestore.exists(
+          /databases/(default)/documents/users/$(businessUid)/chats/$(conversationId)
         );
     }
 
@@ -203,6 +249,81 @@ service firebase.storage {
         );
     }
 
+    function canManageSharedDocument(token) {
+      let sharedPath =
+        /databases/(default)/documents/sharedDocuments/$(token);
+      return request.auth != null
+        && firestore.exists(sharedPath)
+        && firestore.get(sharedPath).data.get('active', false) == true
+        && firestore.get(sharedPath).data.get('businessUid', '') is string
+        && firestore.get(sharedPath).data.get('module', '') in [
+          'invoices',
+          'quotations'
+        ]
+        && firestore.exists(
+          /databases/(default)/documents/users/$(firestore.get(sharedPath).data.businessUid)/invoices/$(firestore.get(sharedPath).data.sourceDocumentId)
+        )
+        && firestore.get(sharedPath).data.module
+          == (
+            firestore.get(
+              /databases/(default)/documents/users/$(firestore.get(sharedPath).data.businessUid)/invoices/$(firestore.get(sharedPath).data.sourceDocumentId)
+            ).data.get('kind', 'invoice') == 'quotation'
+              ? 'quotations'
+              : 'invoices'
+          )
+        && (
+          hasPermission(
+            firestore.get(sharedPath).data.businessUid,
+            firestore.get(sharedPath).data.module,
+            'create'
+          )
+          || hasPermission(
+            firestore.get(sharedPath).data.businessUid,
+            firestore.get(sharedPath).data.module,
+            'edit'
+          )
+        );
+    }
+
+    function canRevokeSharedDocument(token) {
+      let sharedPath =
+        /databases/(default)/documents/sharedDocuments/$(token);
+      return request.auth != null
+        && firestore.exists(sharedPath)
+        && firestore.get(sharedPath).data.get('active', false) == true
+        && firestore.get(sharedPath).data.get('businessUid', '') is string
+        && firestore.get(sharedPath).data.get('module', '') in [
+          'invoices',
+          'quotations'
+        ]
+        && (
+          hasPermission(
+            firestore.get(sharedPath).data.businessUid,
+            firestore.get(sharedPath).data.module,
+            'create'
+          )
+          || hasPermission(
+            firestore.get(sharedPath).data.businessUid,
+            firestore.get(sharedPath).data.module,
+            'edit'
+          )
+        );
+    }
+
+    match /sharedDocuments/{token}/document.pdf {
+      allow read: if firestore.exists(
+          /databases/(default)/documents/sharedDocuments/$(token)
+        )
+        && firestore.get(
+          /databases/(default)/documents/sharedDocuments/$(token)
+        ).data.get('active', false) == true;
+      allow create: if canManageSharedDocument(token)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+      allow delete: if canRevokeSharedDocument(token);
+      allow update: if false;
+    }
+
     match /users/{businessUid}/products/{fileName} {
       allow read: if hasPermission(businessUid, 'stock', 'view')
         || hasPermission(businessUid, 'invoices', 'create');
@@ -211,6 +332,25 @@ service firebase.storage {
         && (request.method == 'delete'
           || (request.resource.size < 5 * 1024 * 1024
             && request.resource.contentType.matches('image/.*')));
+    }
+
+    match /chatAttachments/{businessUid}/{conversationId}/{fileName} {
+      allow read: if canReadChat(businessUid, conversationId);
+      allow create: if isChatMember(businessUid, conversationId)
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches(
+          '(image/.*|audio/.*|video/.*|application/.*|text/.*)'
+        );
+      allow update, delete: if false;
+    }
+
+    match /userProfiles/{userUid}/profile/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userUid;
+      allow create: if request.auth != null
+        && request.auth.uid == userUid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
     }
 
     match /users/{businessUid}/{filePath=**} {

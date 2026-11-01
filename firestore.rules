@@ -229,6 +229,34 @@ service cloud.firestore {
         && membershipData(businessUid, request.auth.uid).get('active', false) == true;
     }
 
+    function hasActiveMembershipFor(businessUid, employeeUid) {
+      return isAccountEnabled(employeeUid)
+        && isAccountEnabled(businessUid)
+        && hasMembershipFor(businessUid, employeeUid)
+        && membershipData(businessUid, employeeUid).get('active', false) == true;
+    }
+
+    function chatConversationPath(businessUid, conversationId) {
+      return /databases/$(database)/documents/users/$(businessUid)/chats/$(conversationId);
+    }
+
+    function isChatMember(businessUid, conversationId) {
+      return signedIn()
+        && exists(chatConversationPath(businessUid, conversationId))
+        && request.auth.uid
+          in get(chatConversationPath(businessUid, conversationId)).data.memberUids
+        && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid));
+    }
+
+    function canReadChat(businessUid, conversationId) {
+      return signedIn()
+        && exists(chatConversationPath(businessUid, conversationId))
+        && (
+          isBusinessOwner(businessUid)
+          || isChatMember(businessUid, conversationId)
+        );
+    }
+
     function hasPermission(businessUid, module, action) {
       return isBusinessOwner(businessUid)
         || (
@@ -422,6 +450,36 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
+    match /userProfiles/{userUid} {
+      allow get: if signedIn() && request.auth.uid == userUid;
+      allow list, delete: if false;
+      allow create, update: if signedIn()
+        && request.auth.uid == userUid
+        && request.resource.data.keys().hasOnly([
+          'displayName',
+          'photoUrl',
+          'secondaryPhone',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'displayName',
+          'photoUrl',
+          'secondaryPhone',
+          'updatedAt'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoUrl.size() <= 2048
+        && (
+          request.resource.data.photoUrl == ''
+          || request.resource.data.photoUrl.matches('https://[^ ]+')
+        )
+        && request.resource.data.secondaryPhone is string
+        && request.resource.data.secondaryPhone.size() <= 32
+        && request.resource.data.updatedAt == request.time;
+    }
+
     match /personalUsers/{userUid} {
       allow get: if isPersonalDevice(userUid);
       allow list, delete: if false;
@@ -492,6 +550,9 @@ service cloud.firestore {
         && request.resource.data.shopNickname.size() > 0
         && request.resource.data.email is string
         && request.resource.data.phone is string
+        && request.resource.data.get('dailyExpenseLimit', 0) is number
+        && request.resource.data.get('dailyExpenseLimit', 0) >= 0
+        && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
         && request.resource.data.keys().hasOnly([
           'employeeUid',
           'businessUid',
@@ -503,6 +564,7 @@ service cloud.firestore {
           'phone',
           'active',
           'permissions',
+          'dailyExpenseLimit',
           'createdBy',
           'createdAt',
           'updatedAt'
@@ -522,6 +584,7 @@ service cloud.firestore {
             'active',
             'removed',
             'shopNickname',
+            'dailyExpenseLimit',
             'updatedAt'
           ])
         && request.resource.data.name is string
@@ -529,6 +592,9 @@ service cloud.firestore {
         && request.resource.data.phone is string
         && request.resource.data.shopNickname is string
         && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.get('dailyExpenseLimit', 0) is number
+        && request.resource.data.get('dailyExpenseLimit', 0) >= 0
+        && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
         && request.resource.data.get('active', false) is bool
         && request.resource.data.get('removed', false) is bool
         && (
@@ -539,6 +605,32 @@ service cloud.firestore {
         && employeeUid != request.auth.uid
         && isBusinessOwner(request.auth.uid)
         && resource.data.businessUid == request.auth.uid;
+    }
+
+    match /chatPresence/{businessUid}/members/{employeeUid} {
+      allow get, list: if signedIn()
+        && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid));
+      allow create, update: if signedIn()
+        && request.auth.uid == employeeUid
+        && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid))
+        && request.resource.data.keys().hasOnly(['isOnline', 'lastActiveAt'])
+        && request.resource.data.keys().hasAll(['isOnline', 'lastActiveAt'])
+        && request.resource.data.isOnline is bool
+        && request.resource.data.lastActiveAt == request.time;
+      allow delete: if false;
+    }
+
+    match /chatReads/{businessUid}/members/{employeeUid} {
+      allow get: if signedIn()
+        && request.auth.uid == employeeUid
+        && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid));
+      allow create, update: if signedIn()
+        && request.auth.uid == employeeUid
+        && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid))
+        && request.resource.data.keys().hasOnly(['lastViewedAt'])
+        && request.resource.data.keys().hasAll(['lastViewedAt'])
+        && request.resource.data.lastViewedAt == request.time;
+      allow list, delete: if false;
     }
 
     match /businessMemberships/{businessUid}/members/{employeeUid} {
@@ -571,6 +663,7 @@ service cloud.firestore {
             'active',
             'removed',
             'shopNickname',
+            'dailyExpenseLimit',
             'updatedAt'
           ])
         && request.resource.data.name is string
@@ -578,6 +671,9 @@ service cloud.firestore {
         && request.resource.data.phone is string
         && request.resource.data.shopNickname is string
         && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.get('dailyExpenseLimit', 0) is number
+        && request.resource.data.get('dailyExpenseLimit', 0) >= 0
+        && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
         && request.resource.data.get('active', false) is bool
         && request.resource.data.get('removed', false) is bool
         && (
@@ -606,10 +702,171 @@ service cloud.firestore {
       allow delete: if isBusinessOwner(businessUid);
     }
 
+    match /users/{businessUid}/chats/{conversationId} {
+      allow get: if canReadChat(businessUid, conversationId)
+        || (
+          !exists(chatConversationPath(businessUid, conversationId))
+          && (isBusinessOwner(businessUid) || hasActiveMembership(businessUid))
+        );
+      allow list: if isBusinessOwner(businessUid)
+        || (
+          hasActiveMembership(businessUid)
+          && request.auth.uid in resource.data.memberUids
+        );
+      allow create: if (
+          request.resource.data.keys().hasAll([
+            'type', 'title', 'memberUids', 'memberSources', 'participantNames',
+            'createdBy', 'createdAt', 'updatedAt', 'lastMessage',
+            'lastSenderUid'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'type', 'title', 'memberUids', 'memberSources', 'participantNames',
+            'createdBy', 'createdAt', 'updatedAt', 'lastMessage',
+            'lastSenderUid'
+          ])
+          && request.resource.data.memberUids is list
+          && request.resource.data.memberUids.size() >= 1
+          && request.resource.data.memberUids.size() <= 100
+          && request.resource.data.memberUids.hasAll([request.auth.uid])
+          && request.resource.data.memberSources is map
+          && request.resource.data.memberSources.size()
+            == request.resource.data.memberUids.size()
+          && request.resource.data.participantNames is map
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastMessage is string
+          && request.resource.data.lastSenderUid == ''
+          && (
+            (
+              request.resource.data.type == 'group'
+              && isBusinessOwner(businessUid)
+              && request.resource.data.title is string
+              && request.resource.data.memberSources[businessUid] == 'owner'
+            )
+            || (
+              request.resource.data.type == 'direct'
+              && request.resource.data.memberUids.size() == 2
+              && request.resource.data.memberUids[0]
+                != request.resource.data.memberUids[1]
+              && (
+                (
+                  isBusinessOwner(businessUid)
+                  && request.resource.data.memberSources[request.auth.uid]
+                    == 'owner'
+                  && hasActiveMembershipFor(
+                    businessUid,
+                    request.resource.data.memberUids[0] == request.auth.uid
+                      ? request.resource.data.memberUids[1]
+                      : request.resource.data.memberUids[0]
+                  )
+                  && request.resource.data.memberSources[
+                    request.resource.data.memberUids[0] == request.auth.uid
+                      ? request.resource.data.memberUids[1]
+                      : request.resource.data.memberUids[0]
+                  ] in ['modern', 'legacy']
+                )
+                || (
+                  hasActiveMembership(businessUid)
+                  && request.auth.uid != businessUid
+                  && request.resource.data.memberUids.hasAll([businessUid])
+                  && request.resource.data.memberSources[businessUid] == 'owner'
+                  && request.resource.data.memberSources[request.auth.uid]
+                    in ['modern', 'legacy']
+                )
+                || (
+                  hasActiveMembership(businessUid)
+                  && request.auth.uid != businessUid
+                  && request.resource.data.memberUids.size() == 2
+                  && request.resource.data.memberUids[0] != businessUid
+                  && request.resource.data.memberUids[1] != businessUid
+                  && hasActiveMembershipFor(
+                    businessUid,
+                    request.resource.data.memberUids[0] == request.auth.uid
+                      ? request.resource.data.memberUids[1]
+                      : request.resource.data.memberUids[0]
+                  )
+                  && request.resource.data.memberSources[request.auth.uid]
+                    in ['modern', 'legacy']
+                  && request.resource.data.memberSources[
+                    request.resource.data.memberUids[0] == request.auth.uid
+                      ? request.resource.data.memberUids[1]
+                      : request.resource.data.memberUids[0]
+                  ] in ['modern', 'legacy']
+                )
+              )
+            )
+          )
+        );
+      allow update: if isChatMember(businessUid, conversationId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.title == resource.data.title
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'lastMessage', 'lastSenderUid', 'updatedAt'
+            ])
+            && request.resource.data.lastSenderUid == request.auth.uid
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() <= 3000
+            && request.resource.data.updatedAt == request.time
+          )
+          || (
+            resource.data.type == 'group'
+            && isBusinessOwner(businessUid)
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'memberUids', 'memberSources', 'participantNames', 'updatedAt'
+              ])
+            && request.resource.data.memberUids is list
+            && request.resource.data.memberUids.size() >= 1
+            && request.resource.data.memberUids.size() <= 100
+            && businessUid in request.resource.data.memberUids
+            && request.resource.data.memberSources is map
+            && request.resource.data.memberSources.size()
+              == request.resource.data.memberUids.size()
+            && request.resource.data.memberSources[businessUid] == 'owner'
+            && request.resource.data.participantNames is map
+            && request.resource.data.updatedAt == request.time
+          )
+        );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if canReadChat(businessUid, conversationId);
+        allow create: if isChatMember(businessUid, conversationId)
+          && request.resource.data.keys().hasAll([
+            'senderUid', 'senderName', 'text', 'attachments', 'createdAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'senderUid', 'senderName', 'text', 'attachments', 'createdAt'
+          ])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 100
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 3000
+          && request.resource.data.attachments is list
+          && request.resource.data.attachments.size() <= 5
+          && (
+            request.resource.data.text.size() > 0
+            || request.resource.data.attachments.size() > 0
+          )
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
     match /users/{businessUid}/transactions/{transactionId} {
       allow read: if (
           hasPermission(businessUid, 'transactions', 'view')
           || hasPermission(businessUid, 'analytics', 'view')
+          || (
+            hasPermission(businessUid, 'transactions', 'create')
+            && resource.data.uid == request.auth.uid
+          )
         )
         && canAccessTransactionShop(businessUid, resource.data);
       allow create: if hasPermission(businessUid, 'transactions', 'create')
@@ -664,6 +921,185 @@ service cloud.firestore {
       allow delete: if hasPermission(businessUid, 'profile', 'delete');
     }
 
+    function canManageSharedDocument(businessUid, documentId, module) {
+      let sourcePath = /databases/$(database)/documents/users/$(businessUid)/invoices/$(documentId);
+      return exists(sourcePath)
+        && module == invoiceModule(get(sourcePath).data)
+        && (
+          canAccessDocument(businessUid, get(sourcePath).data, 'create')
+          || canAccessDocument(businessUid, get(sourcePath).data, 'edit')
+        );
+    }
+
+    function canRevokeSharedDocument(data) {
+      return signedIn()
+        && data.get('businessUid', '') is string
+        && data.get('module', '') in ['invoices', 'quotations']
+        && (
+          hasPermission(data.businessUid, data.module, 'create')
+          || hasPermission(data.businessUid, data.module, 'edit')
+        );
+    }
+
+    function canCreateShareEvent(businessUid, documentId, module, token) {
+      let sharedPath = /databases/$(database)/documents/sharedDocuments/$(token);
+      return exists(sharedPath)
+        && get(sharedPath).data.get('active', false) == true
+        && get(sharedPath).data.get('businessUid', '') == businessUid
+        && get(sharedPath).data.get('sourceDocumentId', '') == documentId
+        && get(sharedPath).data.get('module', '') == module
+        && (
+          canManageSharedDocument(businessUid, documentId, module)
+          || hasPermission(businessUid, module, 'create')
+          || hasPermission(businessUid, module, 'edit')
+        );
+    }
+
+    match /sharedDocuments/{token} {
+      allow get: if !exists(
+          /databases/$(database)/documents/sharedDocuments/$(token)
+        )
+        || resource.data.get('active', false) == true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'businessUid',
+          'sourceDocumentId',
+          'module',
+          'kind',
+          'document',
+          'active',
+          'expiresAt',
+          'downloadUrl',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'businessUid',
+          'sourceDocumentId',
+          'module',
+          'kind',
+          'document',
+          'active',
+          'expiresAt',
+          'downloadUrl',
+          'createdAt'
+        ])
+        && request.resource.data.businessUid is string
+        && request.resource.data.sourceDocumentId is string
+        && request.resource.data.module in ['invoices', 'quotations']
+        && request.resource.data.kind is string
+        && request.resource.data.document is map
+        && request.resource.data.active == true
+        && request.resource.data.expiresAt == null
+        && request.resource.data.downloadUrl == ''
+        && request.resource.data.createdAt == request.time
+        && canManageSharedDocument(
+          request.resource.data.businessUid,
+          request.resource.data.sourceDocumentId,
+          request.resource.data.module
+        );
+      allow update: if signedIn()
+        && resource.data.get('active', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['downloadUrl'])
+        && request.resource.data.downloadUrl is string
+        && request.resource.data.downloadUrl.matches('https://[^ ]+')
+        && request.resource.data.businessUid == resource.data.businessUid
+        && request.resource.data.sourceDocumentId == resource.data.sourceDocumentId
+        && request.resource.data.module == resource.data.module
+        && canManageSharedDocument(
+          resource.data.businessUid,
+          resource.data.sourceDocumentId,
+          resource.data.module
+        );
+      allow delete: if canRevokeSharedDocument(resource.data);
+    }
+
+    match /users/{businessUid}/documentShares/{shareId} {
+      allow get, list: if signedIn()
+        && resource.data.get('module', '') in ['invoices', 'quotations']
+        && hasPermission(businessUid, resource.data.module, 'view');
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'businessUid',
+          'shareToken',
+          'sourceDocumentId',
+          'module',
+          'kind',
+          'documentNumber',
+          'clientName',
+          'total',
+          'recipientName',
+          'recipientPhone',
+          'channel',
+          'status',
+          'linkRevoked',
+          'sharedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'businessUid',
+          'shareToken',
+          'sourceDocumentId',
+          'module',
+          'kind',
+          'documentNumber',
+          'clientName',
+          'total',
+          'recipientName',
+          'recipientPhone',
+          'channel',
+          'status',
+          'linkRevoked',
+          'sharedAt'
+        ])
+        && request.resource.data.businessUid == businessUid
+        && request.resource.data.shareToken is string
+        && request.resource.data.sourceDocumentId is string
+        && request.resource.data.module in ['invoices', 'quotations']
+        && request.resource.data.documentNumber is string
+        && request.resource.data.clientName is string
+        && request.resource.data.total is number
+        && request.resource.data.recipientName is string
+        && request.resource.data.recipientPhone.matches('^[0-9]{8,15}$')
+        && request.resource.data.channel == 'whatsapp'
+        && request.resource.data.status == 'link_ready'
+        && request.resource.data.linkRevoked == false
+        && request.resource.data.sharedAt == request.time
+        && canCreateShareEvent(
+          businessUid,
+          request.resource.data.sourceDocumentId,
+          request.resource.data.module,
+          request.resource.data.shareToken
+        );
+      allow update: if signedIn()
+        && resource.data.get('businessUid', '') == businessUid
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status'])
+            && resource.data.status == 'link_ready'
+            && request.resource.data.status == 'whatsapp_opened'
+            && canCreateShareEvent(
+              businessUid,
+              resource.data.sourceDocumentId,
+              resource.data.module,
+              resource.data.shareToken
+            )
+          )
+          || (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['linkRevoked'])
+            && request.resource.data.linkRevoked == true
+            && !exists(/databases/$(database)/documents/sharedDocuments/$(resource.data.shareToken))
+            && (
+              hasPermission(businessUid, resource.data.module, 'create')
+              || hasPermission(businessUid, resource.data.module, 'edit')
+            )
+          )
+        );
+      allow delete: if false;
+    }
+
     match /users/{businessUid}/invoices/{documentId} {
       allow read: if canAccessDocument(businessUid, resource.data, 'view');
       allow create: if canAccessDocument(
@@ -675,6 +1111,32 @@ service cloud.firestore {
           == invoiceModule(request.resource.data)
         && canAccessDocument(businessUid, resource.data, 'edit');
       allow delete: if canAccessDocument(businessUid, resource.data, 'delete');
+    }
+
+    match /users/{businessUid}/posLists/{listId} {
+      allow read: if isBusinessOwner(businessUid)
+        || (
+          hasPermission(businessUid, 'invoices', 'create')
+          && resource.data.createdBy == request.auth.uid
+        );
+      allow create: if hasPermission(businessUid, 'invoices', 'create')
+        && request.resource.data.keys().hasOnly([
+          'listNumber', 'businessId', 'createdBy', 'createdByName',
+          'customerName', 'dateText', 'createdAt', 'items', 'total'
+        ])
+        && request.resource.data.keys().hasAll([
+          'listNumber', 'businessId', 'createdBy', 'createdAt', 'items',
+          'total'
+        ])
+        && request.resource.data.businessId == businessUid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 500
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0;
+      allow update, delete: if false;
     }
 
     function canReadProducts(businessUid) {
@@ -905,8 +1367,73 @@ service cloud.firestore {
       allow get: if configId == 'version_policy'
         || configId == 'download_center'
         || configId == 'subscription_plan'
+        || configId == 'trial_settings'
+        || configId == 'legal_privacy'
+        || configId == 'legal_terms'
+        || configId == 'legal_contact'
+        || configId == 'app_urls'
         || configId == 'support_center';
       allow list: if false;
+      allow create, update: if isSuperAdmin()
+        && configId == 'legal_contact'
+        && request.resource.data.keys().hasOnly([
+          'companyName', 'email', 'phone', 'address', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'companyName', 'email', 'phone', 'address', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.companyName is string
+        && request.resource.data.email is string
+        && request.resource.data.phone is string
+        && request.resource.data.address is string
+        && request.resource.data.companyName.size() <= 120
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.phone.size() <= 40
+        && request.resource.data.address.size() <= 250
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow create, update: if isSuperAdmin()
+        && configId == 'app_urls'
+        && request.resource.data.keys().hasOnly([
+          'websiteUrl', 'privacyPolicyUrl', 'termsOfServiceUrl',
+          'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'websiteUrl', 'privacyPolicyUrl', 'termsOfServiceUrl',
+          'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.websiteUrl is string
+        && request.resource.data.privacyPolicyUrl is string
+        && request.resource.data.termsOfServiceUrl is string
+        && request.resource.data.websiteUrl.size() <= 500
+        && request.resource.data.privacyPolicyUrl.size() <= 500
+        && request.resource.data.termsOfServiceUrl.size() <= 500
+        && request.resource.data.websiteUrl.matches('^https://.+')
+        && request.resource.data.privacyPolicyUrl.matches('^https://.+')
+        && request.resource.data.termsOfServiceUrl.matches('^https://.+')
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow create, update: if isSuperAdmin()
+        && (configId == 'legal_privacy' || configId == 'legal_terms')
+        && request.resource.data.keys().hasOnly([
+          'titleEn', 'titleSw', 'bodyEn', 'bodySw', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'titleEn', 'titleSw', 'bodyEn', 'bodySw', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.titleEn is string
+        && request.resource.data.titleSw is string
+        && request.resource.data.bodyEn is string
+        && request.resource.data.bodySw is string
+        && request.resource.data.titleEn.size() <= 150
+        && request.resource.data.titleSw.size() <= 150
+        && request.resource.data.bodyEn.size() <= 40000
+        && request.resource.data.bodySw.size() <= 40000
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow create, update: if isSuperAdmin()
+        && configId == 'trial_settings'
+        && request.resource.data.enabled is bool
+        && request.resource.data.durationDays is int
+        && request.resource.data.durationDays >= 1
+        && request.resource.data.durationDays <= 365;
       allow create, update: if isSuperAdmin()
         && configId == 'download_center'
         && validDownloadCenter(request.resource.data);
@@ -1107,8 +1634,45 @@ service cloud.firestore {
         || hasActiveMembership(businessUid)
         || isSuperAdmin();
       allow list: if isSuperAdmin();
-      allow create, update, delete: if isBusinessOwner(businessUid)
-        || isSuperAdmin();
+
+      // Owners may not touch trial fields except to start their single trial
+      // (length comes from app_config/trial_settings) or to switch it off.
+      function trialStartAllowed() {
+        return (!exists(/databases/$(database)/documents/app_config/trial_settings)
+            || get(/databases/$(database)/documents/app_config/trial_settings).data.enabled == true)
+          && request.resource.data.trial == true
+          && request.resource.data.trialActive == true
+          && request.resource.data.trialUsed == true
+          && request.resource.data.trialStart == request.time
+          && !request.resource.data.keys().hasAny(['trialOverrideDays']);
+      }
+      function trialUntouched() {
+        return request.resource.data.get('trialUsed', false) == false
+          && request.resource.data.get('trial', false) == false
+          && request.resource.data.get('trialActive', false) == false
+          && !request.resource.data.keys().hasAny(['trialStart', 'trialOverrideDays']);
+      }
+
+      allow create: if isSuperAdmin()
+        || (isBusinessOwner(businessUid)
+          && (trialUntouched() || trialStartAllowed()));
+      allow update: if isSuperAdmin()
+        || (isBusinessOwner(businessUid)
+          && (
+            (!request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(['trialStart', 'trialUsed', 'trialOverrideDays'])
+              && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['trial', 'trialActive'])
+                || (request.resource.data.get('trial', false) == false
+                  && request.resource.data.get('trialActive', false) == false)))
+            || (resource.data.get('trialStart', null) == null
+              && resource.data.get('trialUsed', false) != true
+              && !resource.data.keys().hasAny(['trialOverrideDays'])
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['userId', 'trial', 'trialActive', 'trialUsed', 'trialStart'])
+              && trialStartAllowed())
+          ));
+      allow delete: if isSuperAdmin();
     }
 
     // MJASI MARKET: public content. Any signed-in account can read it, but

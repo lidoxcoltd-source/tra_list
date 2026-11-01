@@ -276,6 +276,7 @@ class AdminAnalyticsService {
     );
 
     final now = DateTime.now();
+    final trialGlobal = await SuperAdminSubscriptionService.loadTrialSettings();
     final records = await Future.wait(
       companies.map((profile) async {
         final id = profile.reference.parent.parent!.id;
@@ -284,10 +285,6 @@ class AdminAnalyticsService {
           _firestore.collection('accountAccess').doc(id).get(),
         ]);
         final sub = results[0].data() ?? const <String, dynamic>{};
-        final trialStart = _asDate(sub['trialStart']);
-        final trialEnabled = sub.containsKey('trialActive')
-            ? sub['trialActive'] == true
-            : sub['trial'] == true;
         final data = profile.data();
         return BusinessRecord(
           businessId: id,
@@ -298,11 +295,7 @@ class AdminAnalyticsService {
           expiry: _asDate(sub['expiry']) ?? _asDate(sub['expiryDate']),
           planAmount: (sub['planAmount'] as num?)?.toDouble() ?? 0,
           planDays: (sub['planDurationDays'] as num?)?.toInt() ?? 0,
-          trialActive:
-              trialEnabled &&
-              trialStart != null &&
-              !trialStart.isAfter(now) &&
-              now.difference(trialStart) < const Duration(days: 7),
+          trialActive: TrialSettings.runningEnd(sub, trialGlobal, now) != null,
           disabled: results[1].data()?['disabled'] == true,
         );
       }),

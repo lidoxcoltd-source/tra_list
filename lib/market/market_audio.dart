@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 import 'market_audio_trim_page.dart';
+import 'market_media_route_observer.dart';
 import 'market_palette.dart';
 import 'market_models.dart';
 
@@ -120,6 +121,7 @@ class MarketAudioPlayer {
   String? get currentUrl => _url;
   bool _wanted = false;
   bool _gestureHooked = false;
+  int _playRequest = 0;
 
   // Browsers block autoplay; retry on the first tap/click if playback never started.
   void _hookGesture() {
@@ -145,15 +147,20 @@ class MarketAudioPlayer {
 
   Future<void> play(String url) async {
     _hookGesture();
+    final request = ++_playRequest;
     _wanted = true;
     try {
       if (_url != url) {
-        await _player.setUrl(url);
-        await _player.setLoopMode(LoopMode.off);
         _url = url;
+        await _player.setUrl(url);
+        if (request != _playRequest) return;
+        await _player.setLoopMode(LoopMode.off);
+        if (request != _playRequest) return;
       }
       await _player.setVolume(muted.value ? 0 : 1);
+      if (request != _playRequest) return;
       await _player.seek(Duration.zero);
+      if (request != _playRequest) return;
       _cap?.cancel();
       _cap = Timer(
         const Duration(seconds: marketAudioMaxSeconds),
@@ -161,12 +168,13 @@ class MarketAudioPlayer {
       );
       unawaited(_startPlayback());
     } catch (e) {
-      _url = null;
+      if (request == _playRequest) _url = null;
       debugPrint('Market audio load failed: $e');
     }
   }
 
   Future<void> pause() async {
+    _playRequest++;
     _wanted = false;
     try {
       await _player.pause();
@@ -180,6 +188,7 @@ class MarketAudioPlayer {
   }
 
   Future<void> stop() async {
+    _playRequest++;
     _wanted = false;
     _cap?.cancel();
     _url = null;
@@ -253,11 +262,41 @@ class MarketPostAudio extends StatefulWidget {
   State<MarketPostAudio> createState() => _MarketPostAudioState();
 }
 
-class _MarketPostAudioState extends State<MarketPostAudio> {
+class _MarketPostAudioState extends State<MarketPostAudio> with RouteAware {
+  bool _visible = false;
+  ModalRoute<dynamic>? _route;
+
+  void _stopIfPlaying() {
+    final player = MarketAudioPlayer.instance;
+    if (player.currentUrl == widget.post.audioUrl) {
+      unawaited(player.stop());
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    if (_route != null) marketMediaRouteObserver.unsubscribe(this);
+    _route = route;
+    if (route != null) marketMediaRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _stopIfPlaying();
+
+  @override
+  void didPopNext() {
+    if (_visible && widget.post.audioUrl.isNotEmpty) {
+      unawaited(MarketAudioPlayer.instance.play(widget.post.audioUrl));
+    }
+  }
+
   @override
   void dispose() {
-    final player = MarketAudioPlayer.instance;
-    if (player.currentUrl == widget.post.audioUrl) unawaited(player.stop());
+    marketMediaRouteObserver.unsubscribe(this);
+    _stopIfPlaying();
     super.dispose();
   }
 
@@ -269,7 +308,8 @@ class _MarketPostAudioState extends State<MarketPostAudio> {
     return VisibilityDetector(
       key: Key('market-audio-${post.id}'),
       onVisibilityChanged: (info) {
-        if (info.visibleFraction >= 0.6) {
+        _visible = info.visibleFraction >= 0.6;
+        if (_visible) {
           if (player.currentUrl != post.audioUrl) {
             unawaited(player.play(post.audioUrl));
           } else {

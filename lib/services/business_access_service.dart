@@ -17,6 +17,7 @@ class BusinessAccessOption {
     required this.isLegacyMembership,
     required this.permissions,
     required this.shopNickname,
+    this.dailyExpenseLimit = 0,
   });
 
   final String businessId;
@@ -27,6 +28,7 @@ class BusinessAccessOption {
   final bool isLegacyMembership;
   final Map<String, dynamic> permissions;
   final String shopNickname;
+  final double dailyExpenseLimit;
 }
 
 class BusinessAccessService {
@@ -61,6 +63,7 @@ class BusinessAccessService {
   static final permissions = <String, dynamic>{}.obs;
   static final businessName = ''.obs;
   static final shopNickname = ''.obs;
+  static final dailyExpenseLimit = 0.0.obs;
   static final availableBusinesses = <BusinessAccessOption>[].obs;
   static final _storage = GetStorage();
   static String? initializationError;
@@ -180,6 +183,7 @@ class BusinessAccessService {
       data['permissions'] as Map? ?? const {},
     ),
     shopNickname: data['shopNickname']?.toString().trim() ?? '',
+    dailyExpenseLimit: (data['dailyExpenseLimit'] as num?)?.toDouble() ?? 0,
   );
 
   static Future<void> selectBusiness(String id) async {
@@ -208,6 +212,7 @@ class BusinessAccessService {
     permissions.assignAll(option.permissions);
     businessName.value = option.businessName;
     shopNickname.value = option.shopNickname;
+    dailyExpenseLimit.value = option.dailyExpenseLimit;
   }
 
   static Future<void> ensureCurrentAccountEnabled() async {
@@ -259,11 +264,12 @@ class BusinessAccessService {
     if (isOwner.value) return true;
     // Every active staff member can open their own assigned tasks.
     if (route == '/tasks') return isActive.value;
-    if (route == '/invoices') {
+    if (route == '/invoices' || route == '/document-shares') {
       return can('invoices', 'view') || can('quotations', 'view');
     }
     final permission = switch (route) {
       '/transactions' => ('transactions', 'view'),
+      '/AddTransactionPage' => ('transactions', 'create'),
       '/invoice' => ('invoices', 'create'),
       '/add-receipt' => ('receipts', 'create'),
       '/receipts' => ('receipts', 'view'),
@@ -295,6 +301,7 @@ class BusinessAccessService {
     permissions.clear();
     businessName.value = '';
     shopNickname.value = '';
+    dailyExpenseLimit.value = 0;
     availableBusinesses.clear();
   }
 }

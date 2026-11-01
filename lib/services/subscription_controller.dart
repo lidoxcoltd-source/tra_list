@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tra_list/payment/payment_controller.dart'; // You must implement or adapt this controller for your payment logic
 import 'business_access_service.dart';
+import 'super_admin_subscription_service.dart';
 
 class BusinessSubscriptionStatus {
   const BusinessSubscriptionStatus({
@@ -92,19 +93,13 @@ class SubscriptionController extends GetxController {
     // The payment flow writes `expiry`; older in-app flows wrote
     // `expiryDate`. Accept both so a valid business plan remains shared.
     final expiry = _asDate(data['expiry']) ?? _asDate(data['expiryDate']);
-    final trialStart = _asDate(data['trialStart']);
+    final global = await SuperAdminSubscriptionService.loadTrialSettings();
+    final trialEnd = TrialSettings.runningEnd(data, global, now);
     final subscribed = expiry != null && expiry.isAfter(now);
-    final trialEnabled = data.containsKey('trialActive')
-        ? data['trialActive'] == true
-        : data['trial'] == true;
-    final trial =
-        trialEnabled &&
-        trialStart != null &&
-        !trialStart.isAfter(now) &&
-        now.difference(trialStart) < const Duration(days: 7);
+    final trial = trialEnd != null;
     final validUntilCandidates = <DateTime>[
       if (subscribed) expiry,
-      if (trial) trialStart.add(const Duration(days: 7)),
+      if (trialEnd != null) trialEnd,
     ];
     final validUntil = validUntilCandidates.isEmpty
         ? null

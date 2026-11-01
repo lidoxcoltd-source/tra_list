@@ -45,5 +45,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record voice messages to send in your business team chat.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to share with your business team in chat.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select photos to share with your business team in chat.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Choose a customer contact when sharing an invoice or business document.</string>
 </dict>
 </plist>

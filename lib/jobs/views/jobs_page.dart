@@ -226,82 +226,123 @@ class _JobsPageState extends State<JobsPage> {
   }
 
   Widget _buildSearchAndFilters() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _controller.searchController,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search_rounded),
-            hintText: 'debt_search_hint'.tr,
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE5EAEC)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE5EAEC)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Obx(
-            () => Row(
+    return TextField(
+      controller: _controller.searchController,
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.search_rounded),
+        hintText: 'debt_search_hint'.tr,
+        suffixIcon: Obx(() {
+          final hasFilters =
+              _controller.filter.value != DebtFilter.all ||
+              _controller.reasonFilter.value.isNotEmpty;
+          return IconButton(
+            tooltip: 'debt_filters'.tr,
+            onPressed: _showFilters,
+            icon: Stack(
+              clipBehavior: Clip.none,
               children: [
-                for (final filter in DebtFilter.values)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(_filterLabel(filter)),
-                      selected: _controller.filter.value == filter,
-                      onSelected: (_) => _controller.filter.value = filter,
+                const Icon(Icons.tune_rounded),
+                if (hasFilters)
+                  Positioned(
+                    top: -1,
+                    right: -1,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1565C0),
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
               ],
             ),
-          ),
+          );
+        }),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE5EAEC)),
         ),
-        const SizedBox(height: 8),
-        Obx(
-          () => DropdownButtonFormField<String>(
-            initialValue: _controller.reasonFilter.value,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: 'debt_reason_filter'.tr,
-              prefixIcon: const Icon(Icons.filter_alt_outlined),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE5EAEC)),
-              ),
-            ),
-            items: [
-              DropdownMenuItem(
-                value: '',
-                child: Text('debt_reason_filter_all'.tr),
-              ),
-              for (final reason in const [
-                'advance',
-                'goods_credit',
-                'service',
-                'other',
-              ])
-                DropdownMenuItem(
-                  value: reason,
-                  child: Text('debt_reason_$reason'.tr),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE5EAEC)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilters() async {
+    await Get.bottomSheet<void>(
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Obx(
+            () => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'debt_filters'.tr,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-            ],
-            onChanged: (reason) {
-              if (reason != null) _controller.reasonFilter.value = reason;
-            },
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final filter in DebtFilter.values)
+                      ChoiceChip(
+                        label: Text(_filterLabel(filter)),
+                        selected: _controller.filter.value == filter,
+                        onSelected: (_) => _controller.filter.value = filter,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _controller.reasonFilter.value,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'debt_reason_filter'.tr,
+                    prefixIcon: const Icon(Icons.filter_alt_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: '',
+                      child: Text('debt_reason_filter_all'.tr),
+                    ),
+                    for (final reason in const [
+                      'advance',
+                      'goods_credit',
+                      'service',
+                      'other',
+                    ])
+                      DropdownMenuItem(
+                        value: reason,
+                        child: Text('debt_reason_$reason'.tr),
+                      ),
+                  ],
+                  onChanged: (reason) {
+                    if (reason != null) {
+                      _controller.reasonFilter.value = reason;
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ),
-      ],
+      ),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/chat_presence_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'push_service.dart';
@@ -25,6 +26,8 @@ class AppVersionGate extends StatefulWidget {
 class _AppVersionGateState extends State<AppVersionGate>
     with WidgetsBindingObserver {
   StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<bool>? _businessReadySubscription;
+  StreamSubscription<String>? _businessIdSubscription;
   PackageInfo? _packageInfo;
   AppVersionPolicy? _policy;
   PlatformVersionPolicy? _platformPolicy;
@@ -35,6 +38,13 @@ class _AppVersionGateState extends State<AppVersionGate>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _businessReadySubscription = BusinessAccessService.isReady.listen(
+      (_) => ChatPresenceService.refresh(),
+    );
+    _businessIdSubscription = BusinessAccessService.businessUid.listen(
+      (_) => ChatPresenceService.refresh(),
+    );
+    ChatPresenceService.refresh();
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
       _checkVersion,
       onError: (Object error, StackTrace stackTrace) {
@@ -48,18 +58,25 @@ class _AppVersionGateState extends State<AppVersionGate>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
+    _businessReadySubscription?.cancel();
+    _businessIdSubscription?.cancel();
+    ChatPresenceService.setForeground(false);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ChatPresenceService.setForeground(true);
       _checkVersion(FirebaseAuth.instance.currentUser);
+    } else {
+      ChatPresenceService.setForeground(false);
     }
   }
 
   Future<void> _checkVersion(User? user) async {
     final generation = ++_checkGeneration;
+    ChatPresenceService.refresh();
     if (user != null) {
       AppActivityService.ping();
       PushService.register();
@@ -184,13 +201,22 @@ class _AppVersionGateState extends State<AppVersionGate>
   Widget build(BuildContext context) {
     // Keep the app mounted so its navigation state survives the check.
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Positioned.fill(child: widget.child),
-        if (_blocked)
-          const Positioned.fill(
-            child: ModalBarrier(color: Colors.transparent, dismissible: false),
+        widget.child,
+        IgnorePointer(
+          ignoring: !_blocked,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ModalBarrier(color: Colors.transparent, dismissible: false),
+              Offstage(
+                offstage: !_blocked,
+                child: _buildUpdateRequired(context),
+              ),
+            ],
           ),
-        if (_blocked) Positioned.fill(child: _buildUpdateRequired(context)),
+        ),
       ],
     );
   }

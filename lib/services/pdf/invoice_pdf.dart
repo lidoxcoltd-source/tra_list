@@ -82,22 +82,10 @@ class InvoicePdf {
         (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
     final total = (data['total'] as num?)?.toDouble() ?? 0.0;
 
-    pw.ImageProvider? logo;
-    try {
-      final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
-      if (logoBytes != null) {
-        logo = pw.MemoryImage(logoBytes);
-      } else {
-        final bytes = await rootBundle.load('assets/lidox_logo.png');
-        logo = pw.MemoryImage(bytes.buffer.asUint8List());
-      }
-    } catch (e) {
-      print(
-        'Failed to load network image for PDF, falling back to local asset: $e',
-      );
-      final bytes = await rootBundle.load('assets/lidox_logo.png');
-      logo = pw.MemoryImage(bytes.buffer.asUint8List());
-    }
+    final logoBytes = await CompanyLogoService.resolveLogoBytes(company);
+    final pw.ImageProvider? logo = logoBytes == null
+        ? null
+        : pw.MemoryImage(logoBytes);
 
     pw.ImageProvider? socialIcons;
     try {
