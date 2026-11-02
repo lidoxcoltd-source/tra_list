@@ -19,6 +19,7 @@ import 'stock_models.dart';
 import 'pos_list_document.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
+import 'bar_orders_page.dart';
 
 class _CartLine {
   _CartLine(this.product, this.qty);
@@ -42,13 +43,16 @@ class _PosPageState extends State<PosPage> {
   final _codeCtl = TextEditingController();
   final _codeFocus = FocusNode();
   final _customer = TextEditingController();
+  final _table = TextEditingController();
   final _cart = <_CartLine>[];
   List<Product> _products = [];
   bool _loaded = false;
+  String? _loadError;
   bool _initialProductAdded = false;
   bool _cameraOn = false;
   bool _saving = false;
   bool _listBusy = false;
+  bool _barOrderMode = false;
   String _payment = 'cash';
   String _lastCode = '';
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -75,18 +79,44 @@ class _PosPageState extends State<PosPage> {
   @override
   void initState() {
     super.initState();
-    _service.watchProducts().listen((list) {
-      if (!mounted) return;
-      setState(() {
-        _products = list;
-        _loaded = true;
-        for (final l in _cart) {
-          final fresh = list.where((p) => p.id == l.product.id).firstOrNull;
-          if (fresh != null) l.product = fresh;
-        }
-      });
-      _addInitialProduct(list);
-    });
+    _service.watchProducts().listen(
+      (list) {
+        if (!mounted) return;
+        setState(() {
+          _products = list;
+          _loaded = true;
+          _loadError = null;
+          for (final l in _cart) {
+            final fresh = list.where((p) => p.id == l.product.id).firstOrNull;
+            if (fresh != null) l.product = fresh;
+          }
+        });
+        _addInitialProduct(list);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Could not load POS products: $error');
+        debugPrint(
+          'POS access state: ready=${BusinessAccessService.isReady.value}, '
+          'active=${BusinessAccessService.isActive.value}, '
+          'barMode=${BusinessAccessService.barModeEnabled.value}, '
+          'barWaiter=${BusinessAccessService.isBarWaiter}, '
+          'bartender=${BusinessAccessService.isBarBartender}, '
+          'invoiceCreate=${BusinessAccessService.can('invoices', 'create')}, '
+          'stockView=${BusinessAccessService.can('stock', 'view')}, '
+          'stockCreate=${BusinessAccessService.can('stock', 'create')}, '
+          'stockEdit=${BusinessAccessService.can('stock', 'edit')}',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+        if (!mounted) return;
+        setState(() {
+          _loaded = true;
+          _loadError =
+              error is FirebaseException && error.code == 'permission-denied'
+              ? 'stk_err_permission'.tr
+              : stockErrorText(error);
+        });
+      },
+    );
   }
 
   void _addInitialProduct(List<Product> products) {
@@ -108,6 +138,7 @@ class _PosPageState extends State<PosPage> {
     _codeCtl.dispose();
     _codeFocus.dispose();
     _customer.dispose();
+    _table.dispose();
     super.dispose();
   }
 
@@ -197,13 +228,18 @@ class _PosPageState extends State<PosPage> {
   }
 
   bool _withinStock(Product p, double qty) {
-    if (p.tracked && !p.allowNegative && qty > p.quantity) {
+    final reservationLimitsSale =
+        p.tracked &&
+        (p.reservedQuantity > 0
+            ? qty > p.availableQuantity
+            : !p.allowNegative && qty > p.quantity);
+    if (reservationLimitsSale) {
       HapticFeedback.heavyImpact();
       stockToast(
         'stk_error'.tr,
         fmtText('stk_err_insufficient', {
           'name': p.name,
-          'available': formatQty(p.quantity),
+          'available': formatQty(p.availableQuantity),
           'unit': unitLabel(p.unit),
         }),
         error: true,
@@ -302,6 +338,10 @@ class _PosPageState extends State<PosPage> {
           'kind': 'invoice',
           'id': _saleRef.id,
           'uid': user.uid,
+          'cashierUid': user.uid,
+          'cashierName': (user.displayName ?? '').trim().isNotEmpty
+              ? user.displayName!.trim()
+              : (user.email ?? ''),
           'source': 'pos',
           'salePayment': _payment,
           'createdAt': FieldValue.serverTimestamp(),
@@ -322,6 +362,40 @@ class _PosPageState extends State<PosPage> {
       _reset();
       await _showDone(number, total, receipt);
     } catch (e) {
+      if (!mounted) return;
+      stockToast(
+        'stk_error'.tr,
+        e is FirebaseException && e.code == 'permission-denied'
+            ? 'stk_err_permission'.tr
+            : stockErrorText(e),
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _submitBarOrder() async {
+    if (_saving || _listBusy || _cart.isEmpty) return;
+    if (_table.text.trim().isEmpty) {
+      stockToast('stk_error'.tr, 'bar_table_required'.tr, error: true);
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await _service.createBarOrder(
+        tableNumber: _table.text,
+        customerName: _customer.text,
+        lines: [
+          for (final line in _cart)
+            SaleLine(productId: line.product.id!, quantity: line.qty),
+        ],
+      );
+      if (!mounted) return;
+      _reset();
+      stockToast('bar_order_sent'.tr, 'bar_order_sent_help'.tr);
+    } catch (e) {
+      if (!mounted) return;
       stockToast(
         'stk_error'.tr,
         e is FirebaseException && e.code == 'permission-denied'
@@ -758,6 +832,7 @@ class _PosPageState extends State<PosPage> {
     setState(() {
       _cart.clear();
       _customer.clear();
+      _table.clear();
       _payment = 'cash';
       _saleRef = _newRef();
     });
@@ -893,42 +968,63 @@ class _PosPageState extends State<PosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.of(context).size.width >= 900;
-    final scanPane = _scanPane();
-    final cartPane = _cartPane();
-    return StockScaffold(
-      title: 'pos_title'.tr,
-      maxWidth: 1200,
-      actions: [
-        IconButton(
-          tooltip: 'pos_list_history'.tr,
-          onPressed: _showListHistory,
-          icon: const Icon(Icons.history),
-        ),
-        if (_cart.isNotEmpty)
-          IconButton(
-            tooltip: 'pos_clear'.tr,
-            icon: const Icon(Icons.delete_sweep_outlined),
-            onPressed: _saving || _listBusy ? null : _reset,
-          ),
-      ],
-      body: !_loaded
-          ? const Center(child: CircularProgressIndicator())
-          : wide
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 420, child: scanPane),
-                Expanded(child: cartPane),
-              ],
-            )
-          : Column(
-              children: [
-                scanPane,
-                Expanded(child: cartPane),
-              ],
+    return Obx(() {
+      final wide = MediaQuery.of(context).size.width >= 900;
+      final scanPane = _scanPane();
+      final cartPane = _cartPane();
+      return StockScaffold(
+        title: BusinessAccessService.isBarBartender
+            ? 'bar_bartender_title'.tr
+            : 'pos_title'.tr,
+        maxWidth: 1200,
+        actions: [
+          if (BusinessAccessService.barModeEnabled.value)
+            IconButton(
+              tooltip: 'bar_orders'.tr,
+              onPressed: () => Get.to(() => const BarOrdersPage()),
+              icon: const Icon(Icons.room_service_outlined),
             ),
-    );
+          if (!BusinessAccessService.isBarBartender)
+            IconButton(
+              tooltip: 'pos_list_history'.tr,
+              onPressed: _showListHistory,
+              icon: const Icon(Icons.history),
+            ),
+          if (_cart.isNotEmpty)
+            IconButton(
+              tooltip: 'pos_clear'.tr,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: _saving || _listBusy ? null : _reset,
+            ),
+        ],
+        body: !_loaded
+            ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _loadError!,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 420, child: scanPane),
+                  Expanded(child: cartPane),
+                ],
+              )
+            : Column(
+                children: [
+                  scanPane,
+                  Expanded(child: cartPane),
+                ],
+              ),
+      );
+    });
   }
 
   Widget _scanPane() {
@@ -940,6 +1036,17 @@ class _PosPageState extends State<PosPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (BusinessAccessService.isBarBartender) ...[
+              Text(
+                'bar_bartender_help'.tr,
+                style: const TextStyle(
+                  color: kStockNavy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (!kIsWeb && _cameraOn && _scanner != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
@@ -1172,6 +1279,9 @@ class _PosPageState extends State<PosPage> {
   }
 
   Widget _checkoutBar() {
+    final barModeEnabled = BusinessAccessService.barModeEnabled.value;
+    final isBarBartender = BusinessAccessService.isBarBartender;
+    final isOrderMode = _barOrderMode && barModeEnabled && !isBarBartender;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -1183,11 +1293,45 @@ class _PosPageState extends State<PosPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (barModeEnabled && !isBarBartender)
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: false,
+                    icon: const Icon(Icons.point_of_sale_outlined),
+                    label: Text('bar_direct_sale'.tr),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    icon: const Icon(Icons.room_service_outlined),
+                    label: Text('bar_send_order'.tr),
+                  ),
+                ],
+                selected: {_barOrderMode},
+                onSelectionChanged: _saving || _listBusy
+                    ? null
+                    : (selection) =>
+                          setState(() => _barOrderMode = selection.first),
+              ),
+            if (isOrderMode) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _table,
+                maxLength: 80,
+                decoration: stockInput(
+                  'bar_table'.tr,
+                  icon: Icons.table_restaurant_outlined,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _customer,
+                    maxLength: 120,
                     decoration: stockInput(
                       'pos_customer'.tr,
                       icon: Icons.person_outline,
@@ -1197,36 +1341,44 @@ class _PosPageState extends State<PosPage> {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<String>(
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(value: 'cash', label: Text('pos_cash'.tr)),
-                  ButtonSegment(value: 'mobile', label: Text('pos_mobile'.tr)),
-                  ButtonSegment(value: 'card', label: Text('pos_card'.tr)),
-                ],
-                selected: {_payment},
-                onSelectionChanged: (s) => setState(() => _payment = s.first),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _cart.isEmpty || _listBusy ? null : _generateList,
-                icon: _listBusy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.receipt_long_outlined),
-                label: Text(
-                  _listBusy ? 'pos_list_saving'.tr : 'pos_generate_list'.tr,
+            if (!isOrderMode) ...[
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(value: 'cash', label: Text('pos_cash'.tr)),
+                    ButtonSegment(
+                      value: 'mobile',
+                      label: Text('pos_mobile'.tr),
+                    ),
+                    ButtonSegment(value: 'card', label: Text('pos_card'.tr)),
+                  ],
+                  selected: {_payment},
+                  onSelectionChanged: (s) => setState(() => _payment = s.first),
                 ),
               ),
-            ),
+              const SizedBox(height: 10),
+              if (!isBarBartender)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _cart.isEmpty || _listBusy
+                        ? null
+                        : _generateList,
+                    icon: _listBusy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.receipt_long_outlined),
+                    label: Text(
+                      _listBusy ? 'pos_list_saving'.tr : 'pos_generate_list'.tr,
+                    ),
+                  ),
+                ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -1258,7 +1410,7 @@ class _PosPageState extends State<PosPage> {
                     style: FilledButton.styleFrom(backgroundColor: kStockOk),
                     onPressed: _saving || _listBusy || _cart.isEmpty
                         ? null
-                        : _complete,
+                        : (isOrderMode ? _submitBarOrder : _complete),
                     icon: _saving
                         ? const SizedBox(
                             width: 18,
@@ -1269,7 +1421,9 @@ class _PosPageState extends State<PosPage> {
                             ),
                           )
                         : const Icon(Icons.check),
-                    label: Text('pos_complete'.tr),
+                    label: Text(
+                      isOrderMode ? 'bar_send_order'.tr : 'pos_complete'.tr,
+                    ),
                   ),
                 ),
               ],

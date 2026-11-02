@@ -14,7 +14,7 @@ const kStockOk = MjasiColors.success;
 const kStockWarn = MjasiColors.warning;
 const kStockBad = MjasiColors.error;
 
-const double _stockRadius = 12;
+const double _stockRadius = 14;
 const double _stockPagePadding = 16;
 
 String fmtText(String key, Map<String, String> values) {
@@ -218,6 +218,8 @@ class StockCard extends StatelessWidget {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(_stockRadius),
+      elevation: onTap == null ? 0.5 : 1,
+      shadowColor: kStockNavy.withValues(alpha: .08),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(_stockRadius),

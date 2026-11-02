@@ -8,12 +8,14 @@ import 'stock_models.dart';
 import 'stock_operations_pages.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
+import 'bar_orders_page.dart';
 
 class StockDashboardPage extends StatelessWidget {
   const StockDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Obx(() {
+    if (BusinessAccessService.isBarBartender) return const PosPage();
     final service = StockService.current();
     final canCreate = BusinessAccessService.can('stock', 'create');
     final canEdit = BusinessAccessService.can('stock', 'edit');
@@ -79,7 +81,7 @@ class StockDashboardPage extends StatelessWidget {
                     Get.to(() => const ProductsPage(initialFilter: 'out')),
               ),
             ];
-            final quickActions =
+            final salesActions =
                 <
                   ({
                     String label,
@@ -95,6 +97,24 @@ class StockDashboardPage extends StatelessWidget {
                       onTap: () => Get.to(() => const PosPage()),
                       primary: true,
                     ),
+                  if (BusinessAccessService.barModeEnabled.value &&
+                      BusinessAccessService.can('invoices', 'create'))
+                    (
+                      label: 'bar_orders'.tr,
+                      icon: Icons.room_service_outlined,
+                      onTap: () => Get.to(() => const BarOrdersPage()),
+                      primary: false,
+                    ),
+                ];
+            final inventoryActions =
+                <
+                  ({
+                    String label,
+                    IconData icon,
+                    VoidCallback onTap,
+                    bool primary,
+                  })
+                >[
                   (
                     label: 'stk_products'.tr,
                     icon: Icons.inventory_2_outlined,
@@ -126,46 +146,54 @@ class StockDashboardPage extends StatelessWidget {
 
             return LayoutBuilder(
               builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 720 ? 5 : 3;
-                final gap = 8.0;
-                final contentWidth = constraints.maxWidth - 24;
-                final tileWidth =
-                    (contentWidth - gap * (columns - 1)) / columns;
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [kStockNavy, kStockBlue],
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                           ),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kStockNavy.withValues(alpha: .14),
+                              blurRadius: 16,
+                              offset: const Offset(0, 7),
+                            ),
+                          ],
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.inventory_2_outlined,
-                              color: Colors.white,
-                              size: 22,
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .14),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.white,
+                                size: 22,
+                              ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'stk_total_products'.tr,
-                                maxLines: 1,
+                                '${'stk_total_products'.tr}\n${'stk_catalog_title'.tr}',
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .82),
+                                  fontSize: 11,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -173,16 +201,16 @@ class StockDashboardPage extends StatelessWidget {
                               '${all.length}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 23,
+                                fontSize: 30,
                                 height: 1,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 10),
                             IconButton(
                               constraints: const BoxConstraints.tightFor(
-                                width: 34,
-                                height: 34,
+                                width: 38,
+                                height: 38,
                               ),
                               padding: EdgeInsets.zero,
                               tooltip: 'stk_products'.tr,
@@ -190,6 +218,9 @@ class StockDashboardPage extends StatelessWidget {
                                 foregroundColor: Colors.white,
                                 backgroundColor: Colors.white.withValues(
                                   alpha: .14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               onPressed: () =>
@@ -202,7 +233,7 @@ class StockDashboardPage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           for (var i = 0; i < stats.length; i++) ...[
@@ -211,40 +242,25 @@ class StockDashboardPage extends StatelessWidget {
                           ],
                         ],
                       ),
+                      if (salesActions.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _StockActionGroup(
+                          title: 'stk_sales_group'.tr,
+                          icon: Icons.point_of_sale_outlined,
+                          actions: salesActions,
+                          columns: 2,
+                        ),
+                      ],
+                      if (inventoryActions.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _StockActionGroup(
+                          title: 'stk_inventory_group'.tr,
+                          icon: Icons.tune_rounded,
+                          actions: inventoryActions,
+                          columns: constraints.maxWidth >= 720 ? 4 : 2,
+                        ),
+                      ],
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'home_quick_access'.tr,
-                              style: const TextStyle(
-                                color: MjasiColors.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Icon(Icons.bolt_rounded, size: 17, color: kStockWarn),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: gap,
-                        runSpacing: 6,
-                        children: [
-                          for (final action in quickActions)
-                            SizedBox(
-                              width: tileWidth,
-                              child: _StockQuickAction(
-                                label: action.label,
-                                icon: action.icon,
-                                primary: action.primary,
-                                onTap: action.onTap,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -404,7 +420,7 @@ class StockDashboardPage extends StatelessWidget {
         ),
       ),
     );
-  }
+  });
 }
 
 class StockHistoryPage extends StatefulWidget {
@@ -431,16 +447,16 @@ class _StockQuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = primary ? Colors.white : kStockNavy;
     return Material(
-      color: primary ? kStockBlue : Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      color: primary ? kStockBlue : MjasiColors.background,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 46),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: primary ? kStockBlue : MjasiColors.border,
             ),
@@ -452,12 +468,12 @@ class _StockQuickAction extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 10.5,
-                    height: 1.15,
+                    fontSize: 11,
+                    height: 1.1,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -468,6 +484,69 @@ class _StockQuickAction extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StockActionGroup extends StatelessWidget {
+  const _StockActionGroup({
+    required this.title,
+    required this.icon,
+    required this.actions,
+    required this.columns,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<({String label, IconData icon, VoidCallback onTap, bool primary})>
+  actions;
+  final int columns;
+
+  @override
+  Widget build(BuildContext context) => StockCard(
+    padding: const EdgeInsets.all(10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 17, color: kStockBlue),
+            const SizedBox(width: 7),
+            Text(
+              title,
+              style: const TextStyle(
+                color: MjasiColors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 7.0;
+            final itemWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final action in actions)
+                  SizedBox(
+                    width: itemWidth,
+                    child: _StockQuickAction(
+                      label: action.label,
+                      icon: action.icon,
+                      primary: action.primary,
+                      onTap: action.onTap,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 }
 
 class _StockHistoryPageState extends State<StockHistoryPage> {

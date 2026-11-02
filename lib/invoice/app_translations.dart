@@ -456,6 +456,24 @@ class AppTranslations extends Translations {
       'admin_users_empty': 'No business user profiles were found.',
       'admin_users_search_empty': 'No users match your search.',
       'staff_title': 'Staff & permissions',
+      'bar_mode_title': 'Bar Mode',
+      'bar_mode_off_help':
+          'Off by default. Turn it on for a bar to enable bartender tools.',
+      'bar_mode_active_help':
+          'Bartenders can sell drinks and serve orders, but cannot record income or expenses.',
+      'bar_mode_enabled': 'Bar Mode enabled',
+      'bar_mode_disabled': 'Bar Mode disabled',
+      'bar_mode_load_error': 'Could not load Bar Mode settings',
+      'bar_mode_loading': 'Loading Bar Mode settings…',
+      'bar_mode_save_error': 'Could not save Bar Mode settings',
+      'bar_staff_role': 'Bar role',
+      'bar_role_staff': 'Staff',
+      'bar_role_waiter': 'Bar waiter',
+      'bar_role_bartender': 'Bartender',
+      'bar_role_assigned': 'Bartender role assigned',
+      'bar_role_removed': 'Bartender role removed',
+      'bar_role_waiter_assigned': 'Bar waiter role assigned',
+      'bar_role_bartender_assigned': 'Bartender role assigned',
       'staff_subtitle': 'Control who can access your business data.',
       'staff_management_hint':
           'Review access, update staff details and manage permissions.',
@@ -2157,6 +2175,25 @@ class AppTranslations extends Translations {
       'admin_users_search_empty':
           'Hakuna mtumiaji aliyepatikana kwa utafutaji huu.',
       'staff_title': 'Wafanyakazi na ruhusa zao',
+      'bar_mode_title': 'Hali ya Baa',
+      'bar_mode_off_help':
+          'Huzimwa awali. Iwashe kwa biashara ya baa ili kutumia wahudumu wa baa.',
+      'bar_mode_active_help':
+          'Wahudumu wa baa wanaweza kuuza vinywaji na kuhudumia oda, lakini hawawezi kurekodi mapato au matumizi.',
+      'bar_mode_enabled': 'Hali ya Baa imewashwa',
+      'bar_mode_disabled': 'Hali ya Baa imezimwa',
+      'bar_mode_load_error': 'Imeshindwa kupakia mipangilio ya baa',
+      'bar_mode_loading': 'Inapakia mipangilio ya baa…',
+      'bar_mode_save_error': 'Imeshindwa kuhifadhi mipangilio ya baa',
+      'bar_staff_role': 'Jukumu la baa',
+      'bar_role_staff': 'Mfanyakazi',
+      'bar_role_waiter': 'Mhudumu wa wateja',
+      'bar_role_bartender': 'Mhudumu wa baa',
+      'bar_role_assigned': 'Jukumu la mhudumu wa baa limewekwa',
+      'bar_role_removed': 'Jukumu la mhudumu wa baa limeondolewa',
+      'bar_role_waiter_assigned': 'Jukumu la mhudumu limewekwa',
+      'bar_role_bartender_assigned':
+          'Jukumu la mhudumu wa baa limewekwa',
       'staff_subtitle': 'Chagua nani anayeweza kuona taarifa za biashara yako.',
       'staff_management_hint':
           'Angalia na hariri taarifa za wafanyakazi na ruhusa zao.',

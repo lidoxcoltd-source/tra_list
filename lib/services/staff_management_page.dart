@@ -13,6 +13,101 @@ import 'package:tra_list/routes.dart';
 import 'package:tra_list/tasks/task_editor_page.dart';
 import 'chat_service.dart';
 
+class _BarModeSettingsCard extends StatefulWidget {
+  const _BarModeSettingsCard();
+
+  @override
+  State<_BarModeSettingsCard> createState() => _BarModeSettingsCardState();
+}
+
+class _BarModeSettingsCardState extends State<_BarModeSettingsCard> {
+  bool _saving = false;
+
+  DocumentReference<Map<String, dynamic>> get _settingsRef => FirebaseFirestore
+      .instance
+      .collection('users')
+      .doc(BusinessAccessService.businessId)
+      .collection('barSettings')
+      .doc('config');
+
+  Future<void> _setEnabled(bool enabled) async {
+    setState(() => _saving = true);
+    try {
+      await StaffService.setBarModeEnabled(enabled);
+      if (mounted) {
+        Get.snackbar(
+          'success'.tr,
+          enabled ? 'bar_mode_enabled'.tr : 'bar_mode_disabled'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Could not update Bar Mode: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        Get.snackbar('error'.tr, '${'bar_mode_save_error'.tr}: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!BusinessAccessService.isOwner.value) return const SizedBox.shrink();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _settingsRef.snapshots(),
+      builder: (context, snapshot) {
+        final enabled = snapshot.data?.data()?['enabled'] == true;
+        return Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(MjasiRadius.md),
+            side: BorderSide(
+              color: StaffManagementPage._brand.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Column(
+            children: [
+              SwitchListTile.adaptive(
+                value: enabled,
+                onChanged: _saving || snapshot.hasError || !snapshot.hasData
+                    ? null
+                    : _setEnabled,
+                secondary: const Icon(
+                  Icons.local_bar_outlined,
+                  color: StaffManagementPage._brand,
+                ),
+                title: Text(
+                  'bar_mode_title'.tr,
+                  style: const TextStyle(
+                    color: StaffManagementPage._ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  snapshot.hasError
+                      ? '${'bar_mode_load_error'.tr}: ${snapshot.error}'
+                      : !snapshot.hasData
+                      ? 'bar_mode_loading'.tr
+                      : enabled
+                      ? 'bar_mode_active_help'.tr
+                      : 'bar_mode_off_help'.tr,
+                  style: const TextStyle(
+                    color: StaffManagementPage._muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class StaffManagementPage extends StatelessWidget {
   const StaffManagementPage({super.key});
 
@@ -85,14 +180,21 @@ class StaffManagementPage extends StatelessWidget {
                   )
                   .length;
               if (staff.isEmpty) {
-                return _messageState(
-                  icon: Icons.groups_2_outlined,
-                  message: 'staff_empty'.tr,
-                  action: FilledButton.icon(
-                    onPressed: () => _showStaffDialog(context),
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
-                    label: Text('staff_add'.tr),
-                  ),
+                return ListView(
+                  padding: const EdgeInsets.all(MjasiSpacing.md),
+                  children: [
+                    const _BarModeSettingsCard(),
+                    const SizedBox(height: MjasiSpacing.md),
+                    _messageState(
+                      icon: Icons.groups_2_outlined,
+                      message: 'staff_empty'.tr,
+                      action: FilledButton.icon(
+                        onPressed: () => _showStaffDialog(context),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: Text('staff_add'.tr),
+                      ),
+                    ),
+                  ],
                 );
               }
 
@@ -104,66 +206,11 @@ class StaffManagementPage extends StatelessWidget {
                   88,
                 ),
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(MjasiSpacing.lg),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          MjasiColors.primaryNavy,
-                          MjasiColors.primaryBlue,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(MjasiRadius.md),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(MjasiRadius.md),
-                          ),
-                          child: const Icon(
-                            Icons.groups_2_rounded,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(width: MjasiSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'staff_subtitle'.tr,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'staff_management_hint'.tr,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: MjasiSpacing.md),
+                  const _BarModeSettingsCard(),
+                  const SizedBox(height: MjasiSpacing.sm),
                   Wrap(
-                    spacing: MjasiSpacing.xs,
-                    runSpacing: MjasiSpacing.xs,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _staffStat(
                         label: 'staff_total'.tr,
@@ -177,12 +224,13 @@ class StaffManagementPage extends StatelessWidget {
                         color: MjasiColors.success,
                         icon: Icons.check_circle_outline_rounded,
                       ),
-                      _staffStat(
-                        label: 'staff_disabled'.tr,
-                        count: disabledCount,
-                        color: MjasiColors.warning,
-                        icon: Icons.pause_circle_outline_rounded,
-                      ),
+                      if (disabledCount > 0)
+                        _staffStat(
+                          label: 'staff_disabled'.tr,
+                          count: disabledCount,
+                          color: MjasiColors.warning,
+                          icon: Icons.pause_circle_outline_rounded,
+                        ),
                       if (removedCount > 0)
                         _staffStat(
                           label: 'staff_removed'.tr,
@@ -192,18 +240,13 @@ class StaffManagementPage extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: MjasiSpacing.md),
+                  const SizedBox(height: MjasiSpacing.sm),
                   const _TransactionThresholdSettings(),
                   const SizedBox(height: MjasiSpacing.md),
                   _StaffInsights(
                     staff: staff,
-                    cardBuilder: (member, perf, rank) => _staffCard(
-                      context,
-                      member.data,
-                      member.id,
-                      perf: perf,
-                      rank: rank,
-                    ),
+                    cardBuilder: (member, perf) =>
+                        _staffCard(context, member.data, member.id, perf: perf),
                   ),
                 ],
               );
@@ -228,10 +271,7 @@ class StaffManagementPage extends StatelessWidget {
     required IconData icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: MjasiSpacing.md,
-        vertical: MjasiSpacing.sm,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(MjasiRadius.sm),
@@ -240,18 +280,18 @@ class StaffManagementPage extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: MjasiSpacing.sm),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
           Text(
             '$count',
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
-              fontSize: 14,
+              fontSize: 12,
             ),
           ),
-          const SizedBox(width: MjasiSpacing.xs),
-          Text(label, style: const TextStyle(color: _muted, fontSize: 11)),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(color: _muted, fontSize: 10)),
         ],
       ),
     );
@@ -287,7 +327,6 @@ class StaffManagementPage extends StatelessWidget {
     Map<String, dynamic> data,
     String employeeUid, {
     _Perf? perf,
-    int? rank,
   }) {
     final active = data['active'] == true;
     final removed = data['removed'] == true;
@@ -314,83 +353,73 @@ class StaffManagementPage extends StatelessWidget {
     }
 
     return Card(
-      margin: const EdgeInsets.only(bottom: MjasiSpacing.sm),
+      margin: const EdgeInsets.only(bottom: 4),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(MjasiRadius.md),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: active
-              ? MjasiColors.primaryBlue.withValues(alpha: 0.18)
+              ? MjasiColors.primaryBlue.withValues(alpha: 0.16)
               : MjasiColors.border,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(MjasiSpacing.md),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 CircleAvatar(
-                  radius: 23,
+                  radius: 16,
                   backgroundColor: active
-                      ? MjasiColors.primaryBlue.withValues(alpha: 0.15)
+                      ? MjasiColors.lightBlue
                       : MjasiColors.border,
-                  child: CircleAvatar(
-                    radius: 19,
-                    backgroundColor: active
-                        ? MjasiColors.lightBlue
-                        : MjasiColors.background,
-                    child: Text(
-                      name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-                      style: const TextStyle(
-                        color: _brand,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  child: Text(
+                    name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+                    style: const TextStyle(
+                      color: _brand,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                const SizedBox(width: MjasiSpacing.md),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Expanded(
+                          Flexible(
                             child: Text(
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _ink,
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                          if (rank != null) ...[
-                            const SizedBox(width: MjasiSpacing.xs),
-                            _rankBadge(rank),
-                          ],
-                          const SizedBox(width: MjasiSpacing.xs),
+                          const SizedBox(width: 5),
                           _statusBadge(active: active, removed: removed),
                         ],
                       ),
-                      const SizedBox(height: 3),
                       Text(
                         email.isEmpty ? 'staff_email_not_added'.tr : email,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _muted, fontSize: 11.5),
+                        style: const TextStyle(color: _muted, fontSize: 10),
                       ),
                     ],
                   ),
                 ),
                 PopupMenuButton<String>(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 42),
-                  iconSize: 20,
+                  constraints: const BoxConstraints(minWidth: 36),
+                  iconSize: 18,
                   tooltip: 'staff_edit'.tr,
                   onSelected: (value) {
                     if (value == 'permissions') {
@@ -403,6 +432,21 @@ class StaffManagementPage extends StatelessWidget {
                       _changeStaffPassword(context, employeeUid);
                     } else if (value == 'remove') {
                       _confirmRemoveStaff(context, employeeUid, name);
+                    } else if (value == 'limit') {
+                      _editDailyExpenseLimit(
+                        context,
+                        employeeUid,
+                        dailyExpenseLimit,
+                      );
+                    } else if (value == 'chat') {
+                      openChat();
+                    } else if (value == 'task') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              TaskEditorPage(initialAssigneeUid: employeeUid),
+                        ),
+                      );
                     } else {
                       _changeActive(employeeUid, !active);
                     }
@@ -412,6 +456,21 @@ class StaffManagementPage extends StatelessWidget {
                       value: 'permissions',
                       child: Text('staff_edit'.tr),
                     ),
+                    PopupMenuItem(
+                      value: 'limit',
+                      child: Text(
+                        dailyExpenseLimit > 0
+                            ? 'staff_change_limit'.tr
+                            : 'staff_set_limit'.tr,
+                      ),
+                    ),
+                    if (active)
+                      PopupMenuItem(
+                        value: 'chat',
+                        child: Text('chat_start_private'.tr),
+                      ),
+                    if (active && BusinessAccessService.isOwner.value)
+                      PopupMenuItem(value: 'task', child: Text('tk_new'.tr)),
                     PopupMenuItem(
                       value: 'active',
                       child: Text(
@@ -436,206 +495,86 @@ class StaffManagementPage extends StatelessWidget {
               ],
             ),
             if (shopNickname.isNotEmpty || phone.isNotEmpty) ...[
-              const SizedBox(height: MjasiSpacing.sm),
-              Wrap(
-                spacing: MjasiSpacing.md,
-                runSpacing: MjasiSpacing.xs,
-                children: [
-                  if (shopNickname.isNotEmpty)
-                    _detailLabel(Icons.storefront_outlined, shopNickname),
-                  if (phone.isNotEmpty)
-                    _detailLabel(Icons.phone_outlined, phone),
-                ],
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (shopNickname.isNotEmpty) shopNickname,
+                  if (phone.isNotEmpty) phone,
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _muted, fontSize: 10),
               ),
             ],
-            const SizedBox(height: MjasiSpacing.sm),
             Row(
               children: [
-                Expanded(
-                  child: _perfChip(
-                    Icons.warning_amber_rounded,
-                    dailyExpenseLimit > 0
-                        ? '${'staff_daily_expense_limit_short'.tr}: TZS ${_money(dailyExpenseLimit)}'
-                        : 'staff_daily_expense_limit_not_set'.tr,
-                    MjasiColors.warning,
-                    MjasiColors.warningBackground,
+                Obx(() {
+                  if (!BusinessAccessService.barModeEnabled.value) {
+                    return const SizedBox.shrink();
+                  }
+                  final currentRole = data['barRole'] == 'bartender'
+                      ? 'bartender'
+                      : 'waiter';
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.local_bar_outlined,
+                        size: 14,
+                        color: MjasiColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 2),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: currentRole,
+                          isDense: true,
+                          iconSize: 14,
+                          style: const TextStyle(
+                            color: _ink,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'waiter',
+                              child: Text('bar_role_waiter'.tr),
+                            ),
+                            DropdownMenuItem(
+                              value: 'bartender',
+                              child: Text('bar_role_bartender'.tr),
+                            ),
+                          ],
+                          onChanged: (role) {
+                            if (role != null && role != currentRole) {
+                              _changeBarRole(employeeUid, role);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+                const Spacer(),
+                if (perf != null)
+                  Flexible(
+                    child: Text(
+                      '${'income'.tr}: ${_money(perf.income)} · '
+                      '${'expenses'.tr}: ${_money(perf.expense)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(color: _muted, fontSize: 10),
+                    ),
                   ),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: dailyExpenseLimit > 0
-                      ? 'staff_change_limit'.tr
-                      : 'staff_set_limit'.tr,
-                  onPressed: () => _editDailyExpenseLimit(
-                    context,
-                    employeeUid,
-                    dailyExpenseLimit,
-                  ),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  color: _muted,
-                ),
               ],
             ),
-            if (active) ...[
-              const SizedBox(height: MjasiSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: openChat,
-                      icon: const Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        size: 16,
-                      ),
-                      label: Text(
-                        'chat_start_private'.tr,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 38),
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                    ),
-                  ),
-                  if (BusinessAccessService.isOwner.value) ...[
-                    const SizedBox(width: MjasiSpacing.sm),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                TaskEditorPage(initialAssigneeUid: employeeUid),
-                          ),
-                        ),
-                        icon: const Icon(Icons.add_task_rounded, size: 16),
-                        label: Text(
-                          'tk_new'.tr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 38),
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          foregroundColor: MjasiColors.primaryBlue,
-                          backgroundColor: MjasiColors.lightBlue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-            if (perf != null) ...[
-              const Divider(height: MjasiSpacing.md),
-              Wrap(
-                spacing: MjasiSpacing.xs,
-                runSpacing: MjasiSpacing.xs,
-                children: [
-                  _perfChip(
-                    Icons.south_west_rounded,
-                    _money(perf.income),
-                    MjasiColors.success,
-                    MjasiColors.successBackground,
-                  ),
-                  _perfChip(
-                    Icons.north_east_rounded,
-                    _money(perf.expense),
-                    MjasiColors.error,
-                    MjasiColors.errorBackground,
-                  ),
-                  _perfChip(
-                    Icons.receipt_long_outlined,
-                    '${perf.count}',
-                    _brand,
-                    MjasiColors.lightBlue,
-                  ),
-                ],
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _detailLabel(IconData icon, String text) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 240),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: _muted),
-          const SizedBox(width: MjasiSpacing.xs),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _muted, fontSize: 11.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   static String _money(double v) => NumberFormat('#,##0').format(v);
-
-  static Widget _perfChip(IconData icon, String text, Color fg, Color bg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: fg),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: fg,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Color _rankColor(int rank) => switch (rank) {
-    1 => const Color(0xFFD4A017),
-    2 => const Color(0xFF8A99A3),
-    3 => const Color(0xFFB87333),
-    _ => const Color(0xFF9AA8AF),
-  };
-
-  static Widget _rankBadge(int rank) {
-    final color = _rankColor(rank);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '#$rank',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
 
   Widget _statusBadge({required bool active, required bool removed}) {
     final color = removed
@@ -649,7 +588,7 @@ class StaffManagementPage extends StatelessWidget {
         ? const Color(0xFFEAF5EF)
         : const Color(0xFFFAEEEE);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20),
@@ -662,7 +601,7 @@ class StaffManagementPage extends StatelessWidget {
             : 'staff_disabled'.tr,
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -679,6 +618,23 @@ class StaffManagementPage extends StatelessWidget {
       );
     } catch (error, stackTrace) {
       debugPrint('Could not update staff status: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      Get.snackbar('error'.tr, '${'staff_update_error'.tr}: $error');
+    }
+  }
+
+  Future<void> _changeBarRole(String employeeUid, String role) async {
+    try {
+      await StaffService.setBarRole(employeeUid: employeeUid, role: role);
+      Get.snackbar(
+        'success'.tr,
+        role == 'bartender'
+            ? 'bar_role_bartender_assigned'.tr
+            : 'bar_role_waiter_assigned'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not update staff Bar Mode role: $error');
       debugPrintStack(stackTrace: stackTrace);
       Get.snackbar('error'.tr, '${'staff_update_error'.tr}: $error');
     }
@@ -1171,7 +1127,7 @@ class _StaffInsights extends StatefulWidget {
   const _StaffInsights({required this.staff, required this.cardBuilder});
 
   final List<StaffMember> staff;
-  final Widget Function(StaffMember member, _Perf perf, int? rank) cardBuilder;
+  final Widget Function(StaffMember member, _Perf perf) cardBuilder;
 
   @override
   State<_StaffInsights> createState() => _StaffInsightsState();
@@ -1266,8 +1222,6 @@ class _StaffInsightsState extends State<_StaffInsights> {
         final ib = _perf[b.id]?.income ?? 0;
         return ib.compareTo(ia);
       });
-    final ranked = members.where((m) => m.data['removed'] != true).toList();
-    final ownerPerf = _perf[BusinessAccessService.businessId];
     final teamIncome = _perf.values.fold<double>(0, (s, p) => s + p.income);
     final teamExpense = _perf.values.fold<double>(0, (s, p) => s + p.expense);
 
@@ -1301,30 +1255,15 @@ class _StaffInsightsState extends State<_StaffInsights> {
             ],
           ),
         ),
-        const SizedBox(height: MjasiSpacing.sm),
-        Container(
-          padding: const EdgeInsets.all(MjasiSpacing.md),
-          decoration: BoxDecoration(
-            color: MjasiColors.surface,
-            borderRadius: BorderRadius.circular(MjasiRadius.md),
-            border: Border.all(color: MjasiColors.border),
-          ),
-          child: Row(
-            children: [
-              _teamStat('income'.tr, teamIncome, MjasiColors.success),
-              _teamStat('expenses'.tr, teamExpense, MjasiColors.error),
-              _teamStat('net'.tr, teamIncome - teamExpense, _brand),
-            ],
-          ),
+        const SizedBox(height: MjasiSpacing.xs),
+        Row(
+          children: [
+            _teamStat('income'.tr, teamIncome, MjasiColors.success),
+            _teamStat('expenses'.tr, teamExpense, MjasiColors.error),
+            _teamStat('net'.tr, teamIncome - teamExpense, _brand),
+          ],
         ),
-        if (ownerPerf != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            '${'hs_owner'.tr}: ${StaffManagementPage._money(ownerPerf.income)} · ${ownerPerf.count}',
-            style: const TextStyle(color: _muted, fontSize: 12),
-          ),
-        ],
-        const SizedBox(height: MjasiSpacing.md),
+        const SizedBox(height: MjasiSpacing.sm),
         if (_loading)
           const Padding(
             padding: EdgeInsets.all(24),
@@ -1340,58 +1279,8 @@ class _StaffInsightsState extends State<_StaffInsights> {
             ),
           )
         else ...[
-          if (ranked.where((m) => (_perf[m.id]?.income ?? 0) > 0).isNotEmpty)
-            _podium(ranked),
-          Padding(
-            padding: const EdgeInsets.only(
-              top: MjasiSpacing.xs,
-              bottom: MjasiSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.groups_2_rounded,
-                  size: 18,
-                  color: MjasiColors.primaryBlue,
-                ),
-                const SizedBox(width: MjasiSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'staff_title'.tr,
-                    style: const TextStyle(
-                      color: MjasiColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: MjasiSpacing.sm,
-                    vertical: MjasiSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MjasiColors.lightBlue,
-                    borderRadius: BorderRadius.circular(MjasiRadius.pill),
-                  ),
-                  child: Text(
-                    '${members.length}',
-                    style: const TextStyle(
-                      color: MjasiColors.primaryBlue,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           for (final m in members)
-            widget.cardBuilder(
-              m,
-              _perf[m.id] ?? _Perf(),
-              m.data['removed'] == true ? null : ranked.indexOf(m) + 1,
-            ),
+            widget.cardBuilder(m, _perf[m.id] ?? _Perf()),
         ],
       ],
     );
@@ -1410,107 +1299,17 @@ class _StaffInsightsState extends State<_StaffInsights> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: MjasiSpacing.xs),
+          const SizedBox(height: 2),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               StaffManagementPage._money(value),
               style: TextStyle(
                 color: color,
-                fontSize: 16,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _podium(List<StaffMember> ranked) {
-    final top = ranked
-        .where((m) => (_perf[m.id]?.income ?? 0) > 0)
-        .take(3)
-        .toList();
-    return Container(
-      margin: const EdgeInsets.only(bottom: MjasiSpacing.md),
-      padding: const EdgeInsets.all(MjasiSpacing.md),
-      decoration: BoxDecoration(
-        color: MjasiColors.surface,
-        borderRadius: BorderRadius.circular(MjasiRadius.md),
-        border: Border.all(color: MjasiColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.emoji_events_rounded,
-                color: Color(0xFFD4A017),
-                size: 20,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'staff_top'.tr,
-                style: const TextStyle(
-                  color: _ink,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (var i = 0; i < top.length; i++)
-                Expanded(
-                  child: Container(
-                    margin: EdgeInsets.only(right: i == top.length - 1 ? 0 : 8),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 10,
-                      horizontal: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: StaffManagementPage._rankColor(
-                        i + 1,
-                      ).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        StaffManagementPage._rankBadge(i + 1),
-                        const SizedBox(height: 6),
-                        Text(
-                          top[i].data['name']?.toString() ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _ink,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            StaffManagementPage._money(
-                              _perf[top[i].id]!.income,
-                            ),
-                            style: const TextStyle(
-                              color: MjasiColors.success,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
           ),
         ],
       ),

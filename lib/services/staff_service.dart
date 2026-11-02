@@ -235,6 +235,7 @@ class StaffService {
         'phone': phone.trim(),
         'active': true,
         'permissions': permissions,
+        'barRole': 'staff',
         'dailyExpenseLimit': dailyExpenseLimit,
         'createdBy': FirebaseAuth.instance.currentUser!.uid,
         'createdAt': FieldValue.serverTimestamp(),
@@ -294,6 +295,39 @@ class StaffService {
     });
   }
 
+  static Future<void> setBarModeEnabled(bool enabled) async {
+    if (!BusinessAccessService.isOwner.value) {
+      throw StateError('Only the business owner can change Bar Mode.');
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw StateError('Sign in before changing Bar Mode.');
+    await _firestore
+        .collection('users')
+        .doc(BusinessAccessService.businessId)
+        .collection('barSettings')
+        .doc('config')
+        .set({
+          'enabled': enabled,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': uid,
+        });
+    BusinessAccessService.updateBarModeEnabled(enabled);
+  }
+
+  static Future<void> setBarRole({
+    required String employeeUid,
+    required String role,
+  }) async {
+    if (role != 'staff' && role != 'waiter' && role != 'bartender') {
+      throw ArgumentError.value(role, 'role', 'Unsupported bar role.');
+    }
+    final staffDocument = await _getManagedStaffDocument(employeeUid);
+    await staffDocument.update({
+      'barRole': role,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   static Future<void> updateStaffPassword({
     required String employeeUid,
     required String password,
@@ -337,22 +371,22 @@ class StaffService {
       throw StateError('A business owner cannot modify their own membership.');
     }
     final businessUid = BusinessAccessService.businessId;
-    final legacyDocument = _memberships.doc(employeeUid);
-    final legacyMembership = await legacyDocument.get();
-    if (legacyMembership.data()?['businessUid'] == businessUid) {
-      return legacyDocument;
-    }
     final accountDocument = _firestore
         .collection('businessMemberships')
         .doc(businessUid)
         .collection('members')
         .doc(employeeUid);
     final accountMembership = await accountDocument.get();
-    if (accountMembership.data()?['businessUid'] != businessUid ||
-        accountMembership.data()?['role'] == 'owner') {
-      throw StateError('This staff account does not belong to this business.');
+    if (accountMembership.data()?['businessUid'] == businessUid &&
+        accountMembership.data()?['role'] != 'owner') {
+      return accountDocument;
     }
-    return accountDocument;
+    final legacyDocument = _memberships.doc(employeeUid);
+    final legacyMembership = await legacyDocument.get();
+    if (legacyMembership.data()?['businessUid'] == businessUid) {
+      return legacyDocument;
+    }
+    throw StateError('This staff account does not belong to this business.');
   }
 
   static void _validateDailyExpenseLimit(double amount) {

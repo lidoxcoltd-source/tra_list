@@ -1672,7 +1672,7 @@ class _HomePageState extends State<HomePage> {
           }
         },
       ),
-      if (BusinessAccessService.can('invoices', 'create'))
+      if (BusinessAccessService.canUseBarPos)
         (
           label: 'pos_title'.tr,
           icon: Icons.point_of_sale_rounded,
@@ -2297,7 +2297,7 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.remove_circle_outline_rounded,
           onTap: () => _openTransactionForm(TransactionType.expense),
         ),
-      if (BusinessAccessService.can('invoices', 'create'))
+      if (BusinessAccessService.canUseBarPos)
         (
           label: 'pos_title'.tr,
           icon: Icons.point_of_sale_rounded,
@@ -2994,7 +2994,7 @@ class _HomePageState extends State<HomePage> {
                   'home_analytics'.tr,
                   Icons.analytics_outlined,
                 ),
-              if (BusinessAccessService.can('invoices', 'create'))
+              if (BusinessAccessService.canUseBarPos)
                 _menuItem('pos', 'pos_title'.tr, Icons.qr_code_scanner),
               if (BusinessAccessService.can('stock', 'view'))
                 _menuItem('stock', 'stk_title'.tr, Icons.inventory_2_outlined),
@@ -4596,7 +4596,7 @@ class _HomePageState extends State<HomePage> {
           Icons.analytics_outlined,
           () => _openRestrictedRoute(AppRoutes.analytics),
         ),
-      if (BusinessAccessService.can('invoices', 'create'))
+      if (BusinessAccessService.canUseBarPos)
         _quickAction(
           'pos_title'.tr,
           Icons.qr_code_scanner,

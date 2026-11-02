@@ -54,9 +54,13 @@ class StockService {
     required this.uid,
     this.userName = '',
     bool Function(String action)? can,
+    bool Function(String module, String action)? canModule,
     this.notify = true,
   }) : _db = db ?? FirebaseFirestore.instance,
-       _can = can ?? ((a) => BusinessAccessService.can('stock', a));
+       _can = can ?? ((a) => BusinessAccessService.can('stock', a)),
+       _canModule =
+           canModule ??
+           ((module, action) => BusinessAccessService.can(module, action));
 
   factory StockService.current() {
     final user = FirebaseAuth.instance.currentUser;
@@ -74,6 +78,7 @@ class StockService {
   final String uid;
   final String userName;
   final bool Function(String action) _can;
+  final bool Function(String module, String action) _canModule;
   final bool notify;
 
   DocumentReference<Map<String, dynamic>> get _business =>
@@ -84,6 +89,8 @@ class StockService {
       _business.collection('stockMovements');
   CollectionReference<Map<String, dynamic>> get purchases =>
       _business.collection('purchases');
+  CollectionReference<Map<String, dynamic>> get barOrders =>
+      _business.collection('barOrders');
   CollectionReference<Map<String, dynamic>> get _codes =>
       _business.collection('productCodes');
   CollectionReference<Map<String, dynamic>> get _barcodes =>
@@ -258,6 +265,7 @@ class StockService {
         ...product.detailsMap(),
         'businessId': businessId,
         'quantity': qty,
+        'reservedQuantity': 0.0,
         'costPrice': cost,
         'stockState': state.name,
         'createdBy': uid,
@@ -298,6 +306,11 @@ class StockService {
     await _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       if (!snap.exists) throw StockException('stk_err_product_missing');
+      final reserved =
+          (snap.data()!['reservedQuantity'] as num?)?.toDouble() ?? 0;
+      if (reserved > 0 && !product.tracked) {
+        throw StockException('stk_err_reserved_tracking');
+      }
       final oldKey = snap.data()!['skuKey']?.toString() ?? '';
       final oldBar = snap.data()!['barcodeKey']?.toString() ?? '';
       await _checkCodes(tx, skuKey: newKey, barKey: newBar, ownId: id);
@@ -519,6 +532,7 @@ class StockService {
     required Map<String, dynamic> saleData,
     required List<SaleLine> lines,
   }) async {
+    _requireInvoiceCreate();
     final merged = <String, double>{};
     for (final l in lines) {
       if (l.quantity <= 0) throw StockException('stk_err_qty');
@@ -549,6 +563,358 @@ class StockService {
     await _notifyAlerts(alerts);
     return alerts;
   }
+
+  Stream<List<Map<String, dynamic>>> watchBarOrders() =>
+      barOrders.snapshots().map((snapshot) {
+        final orders = snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList();
+        orders.sort((a, b) {
+          final aAt = a['createdAt'];
+          final bAt = b['createdAt'];
+          final aMillis = aAt is Timestamp ? aAt.millisecondsSinceEpoch : 0;
+          final bMillis = bAt is Timestamp ? bAt.millisecondsSinceEpoch : 0;
+          return bMillis.compareTo(aMillis);
+        });
+        return orders;
+      });
+
+  Future<String> createBarOrder({
+    required List<SaleLine> lines,
+    String tableNumber = '',
+    String customerName = '',
+  }) async {
+    _requireInvoiceCreate();
+    if (lines.isEmpty) throw StockException('stk_err_no_lines');
+    if (tableNumber.trim().isEmpty) {
+      throw StockException('bar_table_required');
+    }
+    final merged = _mergeSaleLines(lines);
+    if (merged.length > 100) {
+      throw StockException('stk_err_order_line_limit');
+    }
+    final orderRef = barOrders.doc();
+    await _db.runTransaction((tx) async {
+      final snaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+      for (final productId in merged.keys) {
+        snaps[productId] = await tx.get(products.doc(productId));
+      }
+
+      final items = <Map<String, dynamic>>[];
+      var total = 0.0;
+      for (final entry in merged.entries) {
+        final snap = snaps[entry.key]!;
+        if (!snap.exists) throw StockException('stk_err_product_missing');
+        final data = snap.data()!;
+        if (data['active'] == false) {
+          throw StockException('stk_err_product_missing');
+        }
+        final tracked = data['tracked'] != false;
+        final quantity = entry.value;
+        final onHand = (data['quantity'] as num?)?.toDouble() ?? 0;
+        final reserved = (data['reservedQuantity'] as num?)?.toDouble() ?? 0;
+        if (tracked && quantity > onHand - reserved) {
+          throw StockException('stk_err_insufficient', {
+            'name': data['name']?.toString() ?? '',
+            'available': formatQty(
+              (onHand - reserved).clamp(0, double.infinity),
+            ),
+            'unit': data['unit']?.toString() ?? '',
+          });
+        }
+        final unitPrice = (data['sellPrice'] as num?)?.toDouble() ?? 0;
+        final amount = roundMoney(quantity * unitPrice);
+        total = roundMoney(total + amount);
+        items.add({
+          'productId': entry.key,
+          'name': data['name']?.toString() ?? '',
+          'quantity': quantity,
+          'unit': data['unit']?.toString() ?? 'piece',
+          'unitPrice': unitPrice,
+          'amount': amount,
+          'tracked': tracked,
+        });
+        if (tracked) {
+          tx.update(products.doc(entry.key), {
+            'reservedQuantity': roundQty(reserved + quantity),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      tx.set(orderRef, {
+        'businessId': businessId,
+        'tableNumber': tableNumber.trim(),
+        'customerName': customerName.trim(),
+        'items': items,
+        'total': total,
+        'status': 'pending',
+        'createdBy': uid,
+        'createdByName': userName,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+    return orderRef.id;
+  }
+
+  Future<void> serveBarOrder(String orderId) async {
+    _requireInvoiceCreate();
+    final orderRef = barOrders.doc(orderId);
+    final alerts = await _db.runTransaction<List<StockAlert>>((tx) async {
+      final orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) throw StockException('stk_err_order_missing');
+      final order = orderSnap.data()!;
+      if (order['status'] != 'pending') {
+        throw StockException('stk_err_order_not_pending');
+      }
+      final items = _barOrderItems(order);
+      final productSnaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+      for (final item in items) {
+        final productId = item['productId'].toString();
+        if (item['tracked'] == true && !productSnaps.containsKey(productId)) {
+          productSnaps[productId] = await tx.get(products.doc(productId));
+        }
+      }
+
+      final movementWrites =
+          <
+            MapEntry<
+              DocumentReference<Map<String, dynamic>>,
+              Map<String, dynamic>
+            >
+          >[];
+      final alerts = <StockAlert>[];
+      for (final item in items) {
+        if (item['tracked'] != true) continue;
+        final productId = item['productId'].toString();
+        final snap = productSnaps[productId]!;
+        if (!snap.exists) throw StockException('stk_err_product_missing');
+        final data = snap.data()!;
+        final quantity = (item['quantity'] as num).toDouble();
+        final onHand = (data['quantity'] as num?)?.toDouble() ?? 0;
+        final reserved = (data['reservedQuantity'] as num?)?.toDouble() ?? 0;
+        if (onHand < quantity || reserved < quantity) {
+          throw StockException('stk_err_order_reservation');
+        }
+        final nextQuantity = roundQty(onHand - quantity);
+        final nextReserved = roundQty(reserved - quantity);
+        final threshold = (data['lowStockThreshold'] as num?)?.toDouble() ?? 0;
+        final previousState =
+            data['stockState']?.toString() ??
+            stockStateFor(onHand, threshold).name;
+        final nextState = stockStateFor(nextQuantity, threshold);
+        tx.update(products.doc(productId), {
+          'quantity': nextQuantity,
+          'reservedQuantity': nextReserved,
+          'stockState': nextState.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        if (previousState != nextState.name && nextState != StockState.ok) {
+          alerts.add(
+            StockAlert(
+              data['name']?.toString() ?? '',
+              nextState,
+              nextQuantity,
+              data['unit']?.toString() ?? '',
+            ),
+          );
+        }
+        movementWrites.add(
+          MapEntry(
+            movements.doc('bar_${orderId}_$productId'),
+            _movementData(
+              productId: productId,
+              productName: data['name']?.toString() ?? '',
+              type: MovementType.sale,
+              change: -quantity,
+              previous: onHand,
+              resulting: nextQuantity,
+              unitCost: (data['costPrice'] as num?)?.toDouble() ?? 0,
+              refType: 'barOrder',
+              refId: orderId,
+            ),
+          ),
+        );
+      }
+      for (final write in movementWrites) {
+        tx.set(write.key, write.value);
+      }
+      tx.update(orderRef, {
+        'status': 'served',
+        'servedBy': uid,
+        'servedByName': userName,
+        'servedAt': FieldValue.serverTimestamp(),
+      });
+      return alerts;
+    });
+    await _notifyAlerts(alerts);
+  }
+
+  Future<void> cancelBarOrder(String orderId) async {
+    _requireInvoiceCreate();
+    final orderRef = barOrders.doc(orderId);
+    await _db.runTransaction((tx) async {
+      final orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) throw StockException('stk_err_order_missing');
+      final order = orderSnap.data()!;
+      if (order['status'] != 'pending') {
+        throw StockException('stk_err_order_not_pending');
+      }
+      final items = _barOrderItems(
+        order,
+      ).where((item) => item['tracked'] == true).toList();
+      final snaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+      final release = <String, double>{};
+      for (final item in items) {
+        final productId = item['productId'].toString();
+        release[productId] =
+            (release[productId] ?? 0) + (item['quantity'] as num).toDouble();
+        if (!snaps.containsKey(productId)) {
+          snaps[productId] = await tx.get(products.doc(productId));
+        }
+      }
+      for (final entry in release.entries) {
+        final snap = snaps[entry.key]!;
+        if (!snap.exists) throw StockException('stk_err_product_missing');
+        final reserved =
+            (snap.data()!['reservedQuantity'] as num?)?.toDouble() ?? 0;
+        if (reserved < entry.value) {
+          throw StockException('stk_err_order_reservation');
+        }
+        tx.update(products.doc(entry.key), {
+          'reservedQuantity': roundQty(reserved - entry.value),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      tx.update(orderRef, {
+        'status': 'cancelled',
+        'cancelledBy': uid,
+        'cancelledByName': userName,
+        'cancelledAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<Map<String, dynamic>> settleBarOrders({
+    required List<String> orderIds,
+    required String invoiceNumber,
+    required String paymentMethod,
+    required Map<String, dynamic> company,
+  }) async {
+    _requireInvoiceCreate();
+    if (orderIds.isEmpty) throw StockException('stk_err_no_lines');
+    final uniqueIds = orderIds.toSet().toList();
+    final invoiceRef = _business.collection('invoices').doc();
+    late Map<String, dynamic> receipt;
+    await _db.runTransaction((tx) async {
+      final orderSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
+      for (final orderId in uniqueIds) {
+        orderSnaps.add(await tx.get(barOrders.doc(orderId)));
+      }
+      final orders = <Map<String, dynamic>>[];
+      for (final snap in orderSnaps) {
+        if (!snap.exists) throw StockException('stk_err_order_missing');
+        final data = snap.data()!;
+        if (data['status'] != 'served') {
+          throw StockException('stk_err_order_not_served');
+        }
+        orders.add({'id': snap.id, ...data});
+      }
+      final tableNumber = orders.first['tableNumber']?.toString() ?? '';
+      if (orders.any(
+        (order) => (order['tableNumber']?.toString() ?? '') != tableNumber,
+      )) {
+        throw StockException('stk_err_order_table_mismatch');
+      }
+      final receiptItems = <Map<String, dynamic>>[];
+      var total = 0.0;
+      for (final order in orders) {
+        for (final item in _barOrderItems(order)) {
+          final quantity = (item['quantity'] as num).toDouble();
+          final unitPrice = (item['unitPrice'] as num?)?.toDouble() ?? 0;
+          final amount = roundMoney(quantity * unitPrice);
+          receiptItems.add({
+            'description': item['name']?.toString() ?? '',
+            'qty': quantity == quantity.roundToDouble()
+                ? quantity.toInt()
+                : quantity,
+            'unit': unitPrice,
+            'amount': amount,
+            'productId': item['productId'],
+          });
+          total = roundMoney(total + amount);
+        }
+      }
+      final now = DateTime.now();
+      final date = '${now.day}/${now.month}/${now.year}';
+      receipt = {
+        'company': company,
+        'client': {'name': orders.first['customerName']?.toString() ?? ''},
+        'invoice': {
+          'number': invoiceNumber,
+          'issueDate': date,
+          'dueDate': date,
+          'paymentMethod': paymentMethod,
+        },
+        'items': receiptItems,
+        'total': total,
+      };
+      tx.set(invoiceRef, {
+        ...receipt,
+        'kind': 'invoice',
+        'id': invoiceRef.id,
+        'uid': uid,
+        'source': 'bar_order',
+        'tableNumber': tableNumber,
+        'orderIds': uniqueIds,
+        'salePayment': paymentMethod,
+        'cashierUid': uid,
+        'cashierName': userName,
+        'stockLines': const [],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      for (final order in orders) {
+        tx.update(barOrders.doc(order['id'].toString()), {
+          'status': 'paid',
+          'invoiceId': invoiceRef.id,
+          'paidBy': uid,
+          'paidByName': userName,
+          'paidAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+    return {
+      ...receipt,
+      'id': invoiceRef.id,
+      'invoice': {
+        ...Map<String, dynamic>.from(receipt['invoice'] as Map),
+        'id': invoiceNumber,
+      },
+    };
+  }
+
+  void _requireInvoiceCreate() {
+    if (!_canModule('invoices', 'create') &&
+        !BusinessAccessService.isBarWaiter) {
+      throw StockException('stk_err_permission');
+    }
+  }
+
+  Map<String, double> _mergeSaleLines(List<SaleLine> lines) {
+    final merged = <String, double>{};
+    for (final line in lines) {
+      if (line.quantity <= 0) throw StockException('stk_err_qty');
+      merged[line.productId] = roundQty(
+        (merged[line.productId] ?? 0) + line.quantity,
+      );
+    }
+    return merged;
+  }
+
+  List<Map<String, dynamic>> _barOrderItems(Map<String, dynamic> order) =>
+      (order['items'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
 
   /// Puts the stock of a cancelled / deleted sale back exactly once. Each
   /// reversal is linked to the original sale movement.
@@ -644,14 +1010,22 @@ class StockService {
       }
 
       final prev = p['quantity'] as double;
+      final reserved = (p['reservedQuantity'] as num?)?.toDouble() ?? 0;
       final delta = r.type.sign == 0
           ? roundQty(r.targetQuantity! - prev)
           : roundQty(r.type.sign * r.quantity.abs());
       final next = roundQty(prev + delta);
+      if (delta < 0 && next < reserved) {
+        throw StockException('stk_err_reserved_stock', {
+          'name': name,
+          'reserved': formatQty(reserved),
+          'unit': p['unit']?.toString() ?? '',
+        });
+      }
       if (delta < 0 && next < 0 && p['allowNegative'] != true) {
         throw StockException('stk_err_insufficient', {
           'name': name,
-          'available': formatQty(prev),
+          'available': formatQty((prev - reserved).clamp(0, double.infinity)),
           'unit': p['unit']?.toString() ?? '',
         });
       }

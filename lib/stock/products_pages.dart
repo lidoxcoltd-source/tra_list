@@ -347,6 +347,16 @@ class _ProductTile extends StatelessWidget {
                   fontSize: 10,
                 ),
               ),
+              if (p.reservedQuantity > 0) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '${'bar_reserved'.tr}: ${formatQty(p.reservedQuantity)}',
+                  style: const TextStyle(
+                    color: MjasiColors.textSecondary,
+                    fontSize: 9,
+                  ),
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 'TZS ${formatMoney(p.sellPrice)}',
@@ -1087,6 +1097,15 @@ class _ProductMetrics extends StatelessWidget {
           caption: product.tracked ? unitLabel(product.unit) : null,
           color: product.isOut ? kStockBad : kStockBlue,
         ),
+        if (product.reservedQuantity > 0)
+          _ProductMetric(
+            width: width,
+            icon: Icons.lock_outline,
+            label: 'bar_available'.tr,
+            value: formatQty(product.availableQuantity),
+            caption: unitLabel(product.unit),
+            color: kStockWarn,
+          ),
         _ProductMetric(
           width: width,
           icon: Icons.sell_outlined,

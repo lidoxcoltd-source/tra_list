@@ -117,6 +117,7 @@ class Product {
     this.costPrice = 0,
     this.sellPrice = 0,
     this.quantity = 0,
+    this.reservedQuantity = 0,
     this.lowStockThreshold = 0,
     this.tracked = true,
     this.allowNegative = false,
@@ -140,6 +141,7 @@ class Product {
   final double costPrice;
   final double sellPrice;
   final double quantity;
+  final double reservedQuantity;
   final double lowStockThreshold;
 
   /// Services / non-stock items are untracked and never change inventory.
@@ -154,6 +156,8 @@ class Product {
 
   double get stockCostValue => tracked ? quantity * costPrice : 0;
   double get stockSellValue => tracked ? quantity * sellPrice : 0;
+  double get availableQuantity =>
+      tracked ? (quantity - reservedQuantity).clamp(0, double.infinity).toDouble() : 0;
   bool get isLow => tracked && stockState == StockState.low;
   bool get isOut => tracked && stockState == StockState.out;
 
@@ -172,6 +176,7 @@ class Product {
       costPrice: (d['costPrice'] as num?)?.toDouble() ?? 0,
       sellPrice: (d['sellPrice'] as num?)?.toDouble() ?? 0,
       quantity: qty,
+      reservedQuantity: (d['reservedQuantity'] as num?)?.toDouble() ?? 0,
       lowStockThreshold: threshold,
       tracked: d['tracked'] != false,
       allowNegative: d['allowNegative'] == true,

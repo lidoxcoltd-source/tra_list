@@ -14,6 +14,7 @@ StockService svc(
   uid: 'u1',
   userName: 'Tester',
   can: can ?? (_) => true,
+  canModule: (_, _) => true,
   notify: false,
 );
 
@@ -300,6 +301,111 @@ void main() {
       s = svc(db);
       a = await addProduct(s, sku: 'A', qty: 10, cost: 100, threshold: 3);
       b = await addProduct(s, sku: 'B', qty: 5, cost: 50, threshold: 1);
+    });
+
+    group('bar orders', () {
+      late FakeFirebaseFirestore db;
+      late StockService s;
+      late String productId;
+
+      setUp(() async {
+        db = FakeFirebaseFirestore();
+        s = svc(db);
+        productId = await addProduct(s, qty: 10);
+      });
+
+      test(
+        'reserves stock, serves once, then settles without another deduction',
+        () async {
+          final orderId = await s.createBarOrder(
+            tableNumber: 'T1',
+            customerName: 'Guest',
+            lines: [SaleLine(productId: productId, quantity: 2)],
+          );
+          var productData = await product(db, productId);
+          expect(productData['quantity'], 10);
+          expect(productData['reservedQuantity'], 2);
+
+          final saleRef = db
+              .collection('users')
+              .doc('biz1')
+              .collection('invoices')
+              .doc('direct-sale');
+          await expectLater(
+            s.finalizeSale(
+              saleRef: saleRef,
+              saleData: const {},
+              lines: [SaleLine(productId: productId, quantity: 9)],
+            ),
+            throwsA(
+              isA<StockException>().having(
+                (error) => error.messageKey,
+                'messageKey',
+                'stk_err_reserved_stock',
+              ),
+            ),
+          );
+
+          await s.serveBarOrder(orderId);
+          productData = await product(db, productId);
+          expect(productData['quantity'], 8);
+          expect(productData['reservedQuantity'], 0);
+          await expectLater(
+            s.serveBarOrder(orderId),
+            throwsA(
+              isA<StockException>().having(
+                (error) => error.messageKey,
+                'messageKey',
+                'stk_err_order_not_pending',
+              ),
+            ),
+          );
+
+          final receipt = await s.settleBarOrders(
+            orderIds: [orderId],
+            invoiceNumber: 'BAR-001',
+            paymentMethod: 'cash',
+            company: const {},
+          );
+          expect(receipt['total'], 300);
+          expect((await product(db, productId))['quantity'], 8);
+          final order = await db
+              .collection('users')
+              .doc('biz1')
+              .collection('barOrders')
+              .doc(orderId)
+              .get();
+          expect(order.data()?['status'], 'paid');
+          expect(order.data()?['paidBy'], 'u1');
+        },
+      );
+
+      test(
+        'cancelling releases reserved stock without a sale movement',
+        () async {
+          final before = await movementCount(db);
+          final orderId = await s.createBarOrder(
+            tableNumber: 'T2',
+            lines: [SaleLine(productId: productId, quantity: 4)],
+          );
+          expect((await product(db, productId))['reservedQuantity'], 4);
+
+          await s.cancelBarOrder(orderId);
+          expect((await product(db, productId))['quantity'], 10);
+          expect((await product(db, productId))['reservedQuantity'], 0);
+          expect(await movementCount(db), before);
+          await expectLater(
+            s.cancelBarOrder(orderId),
+            throwsA(
+              isA<StockException>().having(
+                (error) => error.messageKey,
+                'messageKey',
+                'stk_err_order_not_pending',
+              ),
+            ),
+          );
+        },
+      );
     });
 
     DocumentReference<Map<String, dynamic>> sale(String id) =>

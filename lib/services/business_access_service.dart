@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -17,6 +20,7 @@ class BusinessAccessOption {
     required this.isLegacyMembership,
     required this.permissions,
     required this.shopNickname,
+    this.barRole = '',
     this.dailyExpenseLimit = 0,
   });
 
@@ -28,6 +32,7 @@ class BusinessAccessOption {
   final bool isLegacyMembership;
   final Map<String, dynamic> permissions;
   final String shopNickname;
+  final String barRole;
   final double dailyExpenseLimit;
 }
 
@@ -64,9 +69,16 @@ class BusinessAccessService {
   static final businessName = ''.obs;
   static final shopNickname = ''.obs;
   static final dailyExpenseLimit = 0.0.obs;
+  static final barModeEnabled = false.obs;
+  static final barRole = ''.obs;
   static final availableBusinesses = <BusinessAccessOption>[].obs;
   static final _storage = GetStorage();
   static String? initializationError;
+  static StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _barSettingsSubscription;
+  static StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _membershipSubscription;
+  static int _accessGeneration = 0;
 
   static CollectionReference<Map<String, dynamic>> get _memberships =>
       FirebaseFirestore.instance.collection('employeeMemberships');
@@ -133,9 +145,14 @@ class BusinessAccessService {
       for (final membership in modernMemberships.docs) {
         final data = membership.data();
         final businessId = data['businessUid']?.toString() ?? '';
-        if (businessId.isNotEmpty &&
-            businesses.every((option) => option.businessId != businessId)) {
+        if (businessId.isEmpty) continue;
+        final existingIndex = businesses.indexWhere(
+          (option) => option.businessId == businessId,
+        );
+        if (existingIndex < 0) {
           businesses.add(_optionFromMembership(data));
+        } else if (businesses[existingIndex].isLegacyMembership) {
+          businesses[existingIndex] = _optionFromMembership(data);
         }
       }
     } on FirebaseException catch (error) {
@@ -166,6 +183,7 @@ class BusinessAccessService {
       return;
     }
     _applySelection(selected);
+    await _loadBarMode(selected);
     isReady.value = true;
   }
 
@@ -183,6 +201,7 @@ class BusinessAccessService {
       data['permissions'] as Map? ?? const {},
     ),
     shopNickname: data['shopNickname']?.toString().trim() ?? '',
+    barRole: data['barRole']?.toString() ?? '',
     dailyExpenseLimit: (data['dailyExpenseLimit'] as num?)?.toDouble() ?? 0,
   );
 
@@ -201,6 +220,109 @@ class BusinessAccessService {
     if (uid == null) throw StateError('Sign in to choose a business.');
     await _storage.write('business_selection_$uid', id);
     _applySelection(selected);
+    await _loadBarMode(selected);
+  }
+
+  static bool get isBartender => barRole.value == 'bartender';
+  static bool get isBarBartender => barModeEnabled.value && isBartender;
+  static bool get isBarWaiter =>
+      barModeEnabled.value &&
+      hasMembership.value &&
+      isActive.value &&
+      !isOwner.value &&
+      !isBartender;
+  static bool get canUseBarPos =>
+      isOwner.value || isBarWaiter || can('invoices', 'create');
+
+  static Future<void> _loadBarMode(BusinessAccessOption option) async {
+    _cancelAccessSubscriptions();
+    final generation = _accessGeneration;
+    final id = businessUid.value;
+    if (id.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final settingsRef = firestore
+        .collection('users')
+        .doc(id)
+        .collection('barSettings')
+        .doc('config');
+    final settings = await settingsRef.get();
+    if (generation != _accessGeneration) return;
+    barModeEnabled.value = settings.data()?['enabled'] == true;
+    _barSettingsSubscription = settingsRef.snapshots().listen(
+      (snapshot) {
+        if (generation != _accessGeneration) return;
+        barModeEnabled.value = snapshot.data()?['enabled'] == true;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (generation != _accessGeneration) return;
+        debugPrint('Could not load Bar Mode settings: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        initializationError = 'Could not load Bar Mode settings: $error';
+        barModeEnabled.value = true;
+      },
+    );
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (!option.isMembership || uid == null) return;
+    final membershipRef = option.isLegacyMembership
+        ? _memberships.doc(uid)
+        : firestore
+              .collection('businessMemberships')
+              .doc(id)
+              .collection('members')
+              .doc(uid);
+    final membership = await membershipRef.get();
+    if (generation != _accessGeneration) return;
+    if (!membership.exists) {
+      throw StateError('The selected business membership no longer exists.');
+    }
+    _applyLiveMembership(membership.data()!);
+    _membershipSubscription = membershipRef.snapshots().listen(
+      (snapshot) {
+        if (generation != _accessGeneration) return;
+        final data = snapshot.data();
+        if (data == null || data['active'] != true) {
+          isActive.value = false;
+          permissions.clear();
+          barRole.value = '';
+          return;
+        }
+        _applyLiveMembership(data);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (generation != _accessGeneration) return;
+        debugPrint('Could not load staff access updates: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        initializationError = 'Could not load staff access updates: $error';
+        isActive.value = false;
+        permissions.clear();
+        barRole.value = '';
+      },
+    );
+  }
+
+  static void _applyLiveMembership(Map<String, dynamic> data) {
+    isActive.value = data['active'] == true;
+    permissions.assignAll(
+      Map<String, dynamic>.from(data['permissions'] as Map? ?? const {}),
+    );
+    barRole.value = data['barRole']?.toString() ?? '';
+  }
+
+  static void _cancelAccessSubscriptions() {
+    _accessGeneration++;
+    final settingsSubscription = _barSettingsSubscription;
+    final membershipSubscription = _membershipSubscription;
+    _barSettingsSubscription = null;
+    _membershipSubscription = null;
+    if (settingsSubscription != null) unawaited(settingsSubscription.cancel());
+    if (membershipSubscription != null) {
+      unawaited(membershipSubscription.cancel());
+    }
+  }
+
+  static void updateBarModeEnabled(bool enabled) {
+    barModeEnabled.value = enabled;
   }
 
   static void _applySelection(BusinessAccessOption option) {
@@ -213,6 +335,7 @@ class BusinessAccessService {
     businessName.value = option.businessName;
     shopNickname.value = option.shopNickname;
     dailyExpenseLimit.value = option.dailyExpenseLimit;
+    barRole.value = option.barRole;
   }
 
   static Future<void> ensureCurrentAccountEnabled() async {
@@ -232,6 +355,11 @@ class BusinessAccessService {
   static bool can(String module, String action) {
     if (!isReady.value || !isActive.value) return false;
     if (isOwner.value) return true;
+    if (isBarBartender) {
+      if (module == 'transactions' || module == 'stock') return false;
+      if (module == 'invoices') return action == 'create';
+      return false;
+    }
     final modulePermissions = Map<String, dynamic>.from(
       permissions[module] as Map? ?? const {},
     );
@@ -246,7 +374,8 @@ class BusinessAccessService {
   }
 
   static bool canReadBusinessProfile() {
-    return can('profile', 'view') ||
+    return isBarWaiter ||
+        can('profile', 'view') ||
         can('invoices', 'create') ||
         can('quotations', 'create') ||
         can('receipts', 'create') ||
@@ -262,6 +391,11 @@ class BusinessAccessService {
 
   static bool canAccessRoute(String route) {
     if (isOwner.value) return true;
+    if (isBarBartender) {
+      if (route == '/tasks') return isActive.value;
+      return route == '/pos' && can('invoices', 'create');
+    }
+    if (route == '/pos') return canUseBarPos;
     // Every active staff member can open their own assigned tasks.
     if (route == '/tasks') return isActive.value;
     if (route == '/invoices' || route == '/document-shares') {
@@ -291,6 +425,7 @@ class BusinessAccessService {
   };
 
   static void clear() {
+    _cancelAccessSubscriptions();
     initializationError = null;
     businessUid.value = '';
     isOwner.value = false;
@@ -302,6 +437,8 @@ class BusinessAccessService {
     businessName.value = '';
     shopNickname.value = '';
     dailyExpenseLimit.value = 0;
+    barModeEnabled.value = false;
+    barRole.value = '';
     availableBusinesses.clear();
   }
 }
