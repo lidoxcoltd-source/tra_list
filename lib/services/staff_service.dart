@@ -181,6 +181,7 @@ class StaffService {
     required String password,
     required Map<String, Map<String, bool>> permissions,
     required double dailyExpenseLimit,
+    String barRole = 'waiter',
   }) async {
     _validateDailyExpenseLimit(dailyExpenseLimit);
     if (!BusinessAccessService.isOwner.value) {
@@ -235,7 +236,7 @@ class StaffService {
         'phone': phone.trim(),
         'active': true,
         'permissions': permissions,
-        'barRole': 'staff',
+        'barRole': barRole,
         'dailyExpenseLimit': dailyExpenseLimit,
         'createdBy': FirebaseAuth.instance.currentUser!.uid,
         'createdAt': FieldValue.serverTimestamp(),
@@ -269,10 +270,11 @@ class StaffService {
     required String shopNickname,
     required Map<String, Map<String, bool>> permissions,
     required double dailyExpenseLimit,
+    String? barRole,
   }) async {
     _validateDailyExpenseLimit(dailyExpenseLimit);
     final staffDocument = await _getManagedStaffDocument(employeeUid);
-    await staffDocument.update({
+    final updates = <String, dynamic>{
       'name': name.trim(),
       'email': email.trim(),
       'phone': phone.trim(),
@@ -280,7 +282,11 @@ class StaffService {
       'permissions': permissions,
       'dailyExpenseLimit': dailyExpenseLimit,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    if (barRole != null) {
+      updates['barRole'] = barRole;
+    }
+    await staffDocument.update(updates);
   }
 
   static Future<void> updateDailyExpenseLimit({

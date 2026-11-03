@@ -1015,7 +1015,6 @@ class AppTranslations extends Translations {
       'market_buy_on_app': 'Buy on App',
       'market_product_details': 'Details',
       'market_in_stock': 'In stock',
-      'market_out_of_stock': 'Out of stock',
       'market_buy_coming_soon':
           'Coming Soon. In-app checkout is not available yet.',
       'market_contact_whatsapp': 'Contact on WhatsApp',
@@ -2586,7 +2585,7 @@ class AppTranslations extends Translations {
       'market_status_refreshed': 'Status imewekwa upya.',
       'market_mark_out_of_stock': 'Weka "Imeisha stock"',
       'market_mark_in_stock': 'Weka "Ipo stock"',
-      'market_out_of_stock': 'Imeisha stock',
+      'market_out_of_stock': 'Imeisha stoo',
       'market_insights': 'Takwimu',
       'market_insights_posts': 'Post',
       'market_insights_likes': 'Likes',
@@ -2746,7 +2745,6 @@ class AppTranslations extends Translations {
       'market_buy_on_app': 'Nunua kupitia app',
       'market_product_details': 'Maelezo',
       'market_in_stock': 'Ipo stoo',
-      'market_out_of_stock': 'Imeisha stoo',
       'market_buy_coming_soon':
           'Inakuja hivi karibuni. Malipo ndani ya app bado hayapo.',
       'market_contact_whatsapp': 'Wasiliana WhatsApp',

@@ -1695,6 +1695,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   final _passwordController = TextEditingController();
   late final Future<Map<String, dynamic>> _businessProfile;
   late final Map<String, Map<String, bool>> _permissions;
+  late String _barRole;
   bool _saving = false;
 
   bool get _isEditing => widget.employeeUid != null;
@@ -1702,6 +1703,9 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   @override
   void initState() {
     super.initState();
+    _barRole = widget.memberData?['barRole'] == 'bartender'
+        ? 'bartender'
+        : 'waiter';
     _nameController = TextEditingController(
       text: widget.memberData?['name']?.toString() ?? '',
     );
@@ -1909,6 +1913,49 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                         : 'staff_password_minimum'.tr,
                   ),
                 ],
+                Obx(() {
+                  if (!BusinessAccessService.barModeEnabled.value) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 10),
+                      Text(
+                        'bar_mode_title'.tr,
+                        style: const TextStyle(
+                          color: StaffManagementPage._ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _barRole,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.local_bar_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'waiter',
+                            child: Text('bar_role_waiter'.tr),
+                          ),
+                          DropdownMenuItem(
+                            value: 'bartender',
+                            child: Text('bar_role_bartender'.tr),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _barRole = value);
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }),
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -2051,6 +2098,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           shopNickname: _shopNicknameController.text,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
+          barRole: BusinessAccessService.barModeEnabled.value ? _barRole : null,
         );
       } else {
         await StaffService.createStaff(
@@ -2061,6 +2109,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           password: _passwordController.text,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
+          barRole: BusinessAccessService.barModeEnabled.value ? _barRole : 'waiter',
         );
       }
       if (mounted) Get.back<bool>(result: true);

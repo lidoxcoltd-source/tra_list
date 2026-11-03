@@ -1242,6 +1242,7 @@ service cloud.firestore {
         || hasPermission(businessUid, 'stock', 'create')
         || hasPermission(businessUid, 'stock', 'edit')
         || isActiveBarWaiter(businessUid)
+        || isActiveBartender(businessUid)
         || hasPermission(businessUid, 'invoices', 'create')
         || hasPermission(businessUid, 'invoices', 'edit')
         || hasPermission(businessUid, 'quotations', 'create');
@@ -1250,6 +1251,7 @@ service cloud.firestore {
     function canMoveSaleStock(businessUid) {
       return hasPermission(businessUid, 'invoices', 'create')
         || isActiveBarWaiter(businessUid)
+        || isActiveBartender(businessUid)
         || hasPermission(businessUid, 'invoices', 'delete');
     }
 

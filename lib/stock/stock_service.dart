@@ -1015,7 +1015,7 @@ class StockService {
           ? roundQty(r.targetQuantity! - prev)
           : roundQty(r.type.sign * r.quantity.abs());
       final next = roundQty(prev + delta);
-      if (delta < 0 && next < reserved) {
+      if (delta < 0 && reserved > 0 && next < reserved) {
         throw StockException('stk_err_reserved_stock', {
           'name': name,
           'reserved': formatQty(reserved),
