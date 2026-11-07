@@ -1448,6 +1448,16 @@ class _ProfilePageState extends State<ProfilePage> {
             'secondaryPhone': secondaryPhoneC.text.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+      final membershipRef = FirebaseFirestore.instance
+          .collection('employeeMemberships')
+          .doc(user.uid);
+      final membership = await membershipRef.get();
+      if (membership.exists) {
+        await membershipRef.update({
+          'photoUrl': photoUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
       if (!mounted) return;
       setState(() {
         logoUrl = photoUrl;

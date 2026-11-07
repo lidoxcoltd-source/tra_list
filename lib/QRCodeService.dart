@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:get/get.dart';
+import 'UrlHelper.dart';
 
 class QRCodeService {
   /// Generate QR code widget for a receipt URL
@@ -53,13 +54,7 @@ class QRCodeService {
 
   /// Get full receipt URL with proper Flutter web hash routing
   static String _getReceiptUrl(String receiptId) {
-    final baseUrl = Uri.base.toString();
-    final cleanBaseUrl = baseUrl.endsWith('/')
-        ? baseUrl.substring(0, baseUrl.length - 1)
-        : baseUrl;
-
-    // Flutter web uses hash routing, so we need to include the #
-    return '$cleanBaseUrl/#/receipt/$receiptId';
+    return UrlHelper.getReceiptUrl(receiptId);
   }
 
   /// Get current receipt URL from route parameters

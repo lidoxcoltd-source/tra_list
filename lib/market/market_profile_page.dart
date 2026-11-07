@@ -10,7 +10,6 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../theme/app_theme.dart';
 import '../services/business_access_service.dart';
 import '../services/account_mode_service.dart';
 import '../services/pages/ProfilePage.dart';
@@ -44,6 +43,9 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
   bool _followBusy = false;
   bool _uploadingDocument = false;
   bool _updatingProfilePhoto = false;
+  bool _backfillingThumbnails = false;
+  int _thumbnailBackfillDone = 0;
+  int _thumbnailBackfillTotal = 0;
   int? _followersCountOverride;
   final Map<String, Future<Uint8List>> _documentBytes = {};
   final Map<String, Future<Uint8List?>> _documentThumbnails = {};
@@ -80,6 +82,58 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
       );
     } catch (error) {
       if (mounted) _message('$error');
+    }
+  }
+
+  Future<void> _backfillVideoThumbnails() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('market_thumbnail_backfill_title'.tr),
+        content: Text('market_thumbnail_backfill_confirm'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text('market_thumbnail_backfill_start'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _backfillingThumbnails = true;
+      _thumbnailBackfillDone = 0;
+      _thumbnailBackfillTotal = 0;
+    });
+    try {
+      final result = await MarketService.backfillVideoThumbnails(
+        widget.uid,
+        onProgress: (completed, total) {
+          if (mounted) {
+            setState(() {
+              _thumbnailBackfillDone = completed;
+              _thumbnailBackfillTotal = total;
+            });
+          }
+        },
+      );
+      if (!mounted) return;
+      setState(() => _posts = MarketService.searchAuthorPosts(widget.uid));
+      _message(
+        'market_thumbnail_backfill_result'.trParams({
+          'updated': '${result.updated}',
+          'failed': '${result.failed}',
+        }),
+      );
+    } catch (error) {
+      if (mounted) _message('$error');
+    } finally {
+      if (mounted) setState(() => _backfillingThumbnails = false);
     }
   }
 
@@ -954,7 +1008,7 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
                                       await MarketService.toggleFollow(
                                         profile.uid,
                                       );
-                                  if (!mounted) return;
+                                  if (!context.mounted) return;
                                   setState(() {
                                     _followingOverride = isFollowing;
                                     final count =
@@ -1032,6 +1086,33 @@ class _MarketProfilePageState extends State<MarketProfilePage> {
                 ],
               ],
             ),
+          if (ownProfile) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _backfillingThumbnails
+                    ? null
+                    : _backfillVideoThumbnails,
+                icon: _backfillingThumbnails
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.video_library_outlined),
+                label: Text(
+                  _backfillingThumbnails && _thumbnailBackfillTotal > 0
+                      ? 'market_thumbnail_backfill_progress'.trParams({
+                          'done': '$_thumbnailBackfillDone',
+                          'total': '$_thumbnailBackfillTotal',
+                        })
+                      : _backfillingThumbnails
+                      ? 'market_thumbnail_backfill_scanning'.tr
+                      : 'market_thumbnail_backfill_button'.tr,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

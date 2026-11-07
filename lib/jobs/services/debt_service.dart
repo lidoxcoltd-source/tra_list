@@ -110,33 +110,27 @@ class DebtService {
     }
     if (amount <= 0) throw ArgumentError('Payment must be greater than zero.');
 
-    final reference = _collection().doc(debtId);
+    final reference = _db
+        .collection('users')
+        .doc(BusinessAccessService.businessId)
+        .collection('debts')
+        .doc(debtId);
     final paymentReference = reference.collection('payments').doc();
     final userId = FirebaseAuth.instance.currentUser!.uid;
-    await _db.runTransaction((transaction) async {
-      final snapshot = await transaction.get(reference);
-      if (!snapshot.exists) throw StateError('This debt no longer exists.');
-      final debt = snapshot.data()!;
-      if (!BusinessAccessService.isOwner.value &&
-          debt.shopNickname != assignedShop) {
-        throw StateError('This debt belongs to another shop.');
-      }
-      if (amount > debt.balance) {
-        throw ArgumentError('Payment cannot exceed the remaining balance.');
-      }
-      transaction.update(reference, {
-        'amountPaid': debt.amountPaid + amount,
-        'lastPaymentId': paymentReference.id,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      transaction.set(paymentReference, {
-        'amount': amount,
-        'paidAt': Timestamp.fromDate(paidAt),
-        'method': method,
-        'notes': notes.trim(),
-        'recordedBy': userId,
-      });
+    final batch = _db.batch();
+    batch.update(reference, {
+      'amountPaid': FieldValue.increment(amount),
+      'lastPaymentId': paymentReference.id,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
+    batch.set(paymentReference, {
+      'amount': amount,
+      'paidAt': Timestamp.fromDate(paidAt),
+      'method': method,
+      'notes': notes.trim(),
+      'recordedBy': userId,
+    });
+    await batch.commit();
     await NotificationService.notifyOwner(
       action: 'debt',
       summary: 'recorded a debt payment of TSH ${amount.toStringAsFixed(0)}',

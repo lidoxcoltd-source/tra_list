@@ -9,6 +9,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_auth
   firebase_core
   firebase_storage
+  flutter_pos_printer_platform_image_3
+  flutter_webrtc
   printing
   record_windows
   share_plus

@@ -6,12 +6,14 @@ class BusinessBranch {
   const BusinessBranch({
     required this.id,
     required this.name,
+    this.location = '',
     required this.active,
     this.barModeEnabled = false,
   });
 
   final String id;
   final String name;
+  final String location;
   final bool active;
   final bool barModeEnabled;
 
@@ -22,6 +24,7 @@ class BusinessBranch {
     return BusinessBranch(
       id: document.id,
       name: data['name']?.toString() ?? '',
+      location: data['location']?.toString() ?? '',
       active: data['active'] != false,
       barModeEnabled: data['barModeEnabled'] == true,
     );
@@ -47,11 +50,18 @@ class BranchService {
     return snapshot.docs.map(BusinessBranch.fromDoc).toList();
   }
 
-  static Future<String> createBranch(String name) async {
+  static Future<String> createBranch({
+    required String name,
+    required String location,
+  }) async {
     _requireOwner();
     final normalizedName = name.trim();
+    final normalizedLocation = location.trim();
     if (normalizedName.isEmpty || normalizedName.length > 80) {
       throw ArgumentError('Branch names must contain 1 to 80 characters.');
+    }
+    if (normalizedLocation.isEmpty || normalizedLocation.length > 120) {
+      throw ArgumentError('Branch locations must contain 1 to 120 characters.');
     }
 
     final normalizedKey = _nameKey(normalizedName);
@@ -69,6 +79,7 @@ class BranchService {
     await reference.set({
       'businessId': BusinessAccessService.businessId,
       'name': normalizedName,
+      'location': normalizedLocation,
       'nameKey': normalizedKey,
       'active': true,
       'barModeEnabled': false,
@@ -82,11 +93,34 @@ class BranchService {
   static Future<void> updateBranch({
     required String branchId,
     required String name,
+    required String location,
   }) async {
     _requireOwner();
+    final businessId = BusinessAccessService.businessId;
+    final legacyStaff = await FirebaseFirestore.instance
+        .collection('employeeMemberships')
+        .where('businessUid', isEqualTo: businessId)
+        .get();
+    final assignedAccountStaff = await FirebaseFirestore.instance
+        .collection('businessMemberships')
+        .doc(businessId)
+        .collection('members')
+        .where('shopId', isEqualTo: branchId)
+        .limit(1)
+        .get();
+    if (legacyStaff.docs.any(
+          (document) => document.data()['shopId'] == branchId,
+        ) ||
+        assignedAccountStaff.docs.isNotEmpty) {
+      throw StateError('staff_shop_location_assigned');
+    }
     final normalizedName = name.trim();
+    final normalizedLocation = location.trim();
     if (normalizedName.isEmpty || normalizedName.length > 80) {
       throw ArgumentError('Branch names must contain 1 to 80 characters.');
+    }
+    if (normalizedLocation.isEmpty || normalizedLocation.length > 120) {
+      throw ArgumentError('Branch locations must contain 1 to 120 characters.');
     }
     final normalizedKey = _nameKey(normalizedName);
     final existing = await _branches
@@ -101,6 +135,7 @@ class BranchService {
     }
     await _branches.doc(branchId).update({
       'name': normalizedName,
+      'location': normalizedLocation,
       'nameKey': normalizedKey,
       'updatedAt': FieldValue.serverTimestamp(),
     });

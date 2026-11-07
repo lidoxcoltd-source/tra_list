@@ -50,6 +50,7 @@ class BusinessAccessService {
     'categories': 'staff_module_categories',
     'stock': 'staff_module_stock',
     'profile': 'staff_module_profile',
+    'staff': 'staff_module_staff',
   };
 
   static const actions = <String, String>{
@@ -57,6 +58,7 @@ class BusinessAccessService {
     'create': 'staff_action_create',
     'edit': 'staff_action_edit',
     'delete': 'staff_action_delete',
+    'manage': 'staff_action_manage',
   };
 
   static final businessUid = ''.obs;
@@ -230,9 +232,20 @@ class BusinessAccessService {
       hasMembership.value &&
       isActive.value &&
       !isOwner.value &&
-      !isBartender;
+      barRole.value == 'waiter';
+  static bool get canManageStaff =>
+      isOwner.value ||
+      (isReady.value &&
+          isActive.value &&
+          isBarManager &&
+          _hasPermission('staff', 'manage'));
+  static bool get isBarManager =>
+      barModeEnabled.value && barRole.value == 'manager';
   static bool get canUseBarPos =>
-      isOwner.value || isBarWaiter || can('invoices', 'create');
+      isOwner.value ||
+      (isActive.value && isBarBartender) ||
+      isBarWaiter ||
+      can('invoices', 'create');
 
   static Future<void> _loadBarMode(BusinessAccessOption option) async {
     _cancelAccessSubscriptions();
@@ -258,7 +271,7 @@ class BusinessAccessService {
         debugPrint('Could not load Bar Mode settings: $error');
         debugPrintStack(stackTrace: stackTrace);
         initializationError = 'Could not load Bar Mode settings: $error';
-        barModeEnabled.value = true;
+        barModeEnabled.value = false;
       },
     );
 
@@ -325,6 +338,20 @@ class BusinessAccessService {
     barModeEnabled.value = enabled;
   }
 
+  static Future<bool> refreshBarModeSetting() async {
+    final id = businessUid.value;
+    if (id.isEmpty) return false;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(id)
+        .collection('barSettings')
+        .doc('config')
+        .get(const GetOptions(source: Source.server));
+    final enabled = snapshot.data()?['enabled'] == true;
+    barModeEnabled.value = enabled;
+    return enabled;
+  }
+
   static void _applySelection(BusinessAccessOption option) {
     businessUid.value = option.businessId;
     isOwner.value = option.isOwner;
@@ -340,8 +367,9 @@ class BusinessAccessService {
 
   static Future<void> ensureCurrentAccountEnabled() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
+    if (user == null) {
       throw StateError('Sign in before checking account access.');
+    }
     final accountAccess = await FirebaseFirestore.instance
         .collection('accountAccess')
         .doc(user.uid)
@@ -374,7 +402,8 @@ class BusinessAccessService {
   }
 
   static bool canReadBusinessProfile() {
-    return isBarWaiter ||
+    return canManageStaff ||
+        isBarWaiter ||
         can('profile', 'view') ||
         can('invoices', 'create') ||
         can('quotations', 'create') ||
@@ -391,9 +420,10 @@ class BusinessAccessService {
 
   static bool canAccessRoute(String route) {
     if (isOwner.value) return true;
+    if (route == '/staff') return canManageStaff;
     if (isBarBartender) {
       if (route == '/tasks') return isActive.value;
-      return route == '/pos' && can('invoices', 'create');
+      return route == '/pos' && isActive.value;
     }
     if (route == '/pos') return canUseBarPos;
     // Every active staff member can open their own assigned tasks.
@@ -411,9 +441,11 @@ class BusinessAccessService {
       '/jobs' => ('jobs', 'view'),
       '/jobs-archive' => ('jobs', 'view'),
       '/analytics' => ('analytics', 'view'),
+      '/business-intelligence' => ('analytics', 'view'),
       '/categories' => ('categories', 'view'),
       '/stock' => ('stock', 'view'),
       '/pos' => ('invoices', 'create'),
+      '/staff' => ('staff', 'manage'),
       _ => null,
     };
     return permission != null && can(permission.$1, permission.$2);

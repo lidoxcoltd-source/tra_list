@@ -12,6 +12,7 @@ import 'package:tra_list/theme/app_theme.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/tasks/task_editor_page.dart';
 import 'chat_service.dart';
+import 'branch_service.dart';
 
 class _BarModeSettingsCard extends StatefulWidget {
   const _BarModeSettingsCard();
@@ -136,11 +137,18 @@ class StaffManagementPage extends StatelessWidget {
               tooltip: 'tk_all'.tr,
               icon: const Icon(Icons.task_alt_rounded),
             ),
-          IconButton(
-            onPressed: () => _showInvitationDialog(context),
-            tooltip: 'staff_invite'.tr,
-            icon: const Icon(Icons.mail_outline_rounded),
-          ),
+          if (BusinessAccessService.isOwner.value)
+            IconButton(
+              onPressed: () => _showShopLocationsDialog(context),
+              tooltip: 'staff_shop_locations'.tr,
+              icon: const Icon(Icons.store_mall_directory_outlined),
+            ),
+          if (BusinessAccessService.isOwner.value)
+            IconButton(
+              onPressed: () => _showInvitationDialog(context),
+              tooltip: 'staff_invite'.tr,
+              icon: const Icon(Icons.mail_outline_rounded),
+            ),
         ],
         backgroundColor: MjasiColors.background,
         foregroundColor: _ink,
@@ -183,16 +191,19 @@ class StaffManagementPage extends StatelessWidget {
                 return ListView(
                   padding: const EdgeInsets.all(MjasiSpacing.md),
                   children: [
-                    const _BarModeSettingsCard(),
+                    if (BusinessAccessService.isOwner.value)
+                      const _BarModeSettingsCard(),
                     const SizedBox(height: MjasiSpacing.md),
                     _messageState(
                       icon: Icons.groups_2_outlined,
                       message: 'staff_empty'.tr,
-                      action: FilledButton.icon(
-                        onPressed: () => _showStaffDialog(context),
-                        icon: const Icon(Icons.person_add_alt_1_rounded),
-                        label: Text('staff_add'.tr),
-                      ),
+                      action: BusinessAccessService.canManageStaff
+                          ? FilledButton.icon(
+                              onPressed: () => _showStaffDialog(context),
+                              icon: const Icon(Icons.person_add_alt_1_rounded),
+                              label: Text('staff_add'.tr),
+                            )
+                          : null,
                     ),
                   ],
                 );
@@ -206,7 +217,8 @@ class StaffManagementPage extends StatelessWidget {
                   88,
                 ),
                 children: [
-                  const _BarModeSettingsCard(),
+                  if (BusinessAccessService.isOwner.value)
+                    const _BarModeSettingsCard(),
                   const SizedBox(height: MjasiSpacing.sm),
                   Wrap(
                     spacing: 6,
@@ -245,8 +257,13 @@ class StaffManagementPage extends StatelessWidget {
                   const SizedBox(height: MjasiSpacing.md),
                   _StaffInsights(
                     staff: staff,
-                    cardBuilder: (member, perf) =>
-                        _staffCard(context, member.data, member.id, perf: perf),
+                    cardBuilder: (member, perf) => _staffCard(
+                      context,
+                      member.data,
+                      member.id,
+                      perf: perf,
+                      isLegacy: member.isLegacy,
+                    ),
                   ),
                 ],
               );
@@ -327,6 +344,7 @@ class StaffManagementPage extends StatelessWidget {
     Map<String, dynamic> data,
     String employeeUid, {
     _Perf? perf,
+    bool isLegacy = false,
   }) {
     final active = data['active'] == true;
     final removed = data['removed'] == true;
@@ -336,6 +354,16 @@ class StaffManagementPage extends StatelessWidget {
     final shopNickname = data['shopNickname']?.toString() ?? '';
     final dailyExpenseLimit =
         (data['dailyExpenseLimit'] as num?)?.toDouble() ?? 0;
+    final targetPermissions = Map<String, dynamic>.from(
+      data['permissions'] as Map? ?? const {},
+    );
+    final targetStaffPermissions = Map<String, dynamic>.from(
+      targetPermissions['staff'] as Map? ?? const {},
+    );
+    final canManageTarget =
+        BusinessAccessService.isOwner.value ||
+        (data['barRole'] != 'manager' &&
+            targetStaffPermissions['manage'] != true);
     Future<void> openChat() async {
       try {
         final conversationId = await ChatService.getOrCreateDirectChat(
@@ -416,82 +444,85 @@ class StaffManagementPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36),
-                  iconSize: 18,
-                  tooltip: 'staff_edit'.tr,
-                  onSelected: (value) {
-                    if (value == 'permissions') {
-                      _showStaffDialog(
-                        context,
-                        employeeUid: employeeUid,
-                        memberData: data,
-                      );
-                    } else if (value == 'password') {
-                      _changeStaffPassword(context, employeeUid);
-                    } else if (value == 'remove') {
-                      _confirmRemoveStaff(context, employeeUid, name);
-                    } else if (value == 'limit') {
-                      _editDailyExpenseLimit(
-                        context,
-                        employeeUid,
-                        dailyExpenseLimit,
-                      );
-                    } else if (value == 'chat') {
-                      openChat();
-                    } else if (value == 'task') {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              TaskEditorPage(initialAssigneeUid: employeeUid),
-                        ),
-                      );
-                    } else {
-                      _changeActive(employeeUid, !active);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'permissions',
-                      child: Text('staff_edit'.tr),
-                    ),
-                    PopupMenuItem(
-                      value: 'limit',
-                      child: Text(
-                        dailyExpenseLimit > 0
-                            ? 'staff_change_limit'.tr
-                            : 'staff_set_limit'.tr,
-                      ),
-                    ),
-                    if (active)
+                if (canManageTarget)
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36),
+                    iconSize: 18,
+                    tooltip: 'staff_edit'.tr,
+                    onSelected: (value) {
+                      if (value == 'permissions') {
+                        _showStaffDialog(
+                          context,
+                          employeeUid: employeeUid,
+                          memberData: data,
+                        );
+                      } else if (value == 'password') {
+                        _changeStaffPassword(context, employeeUid);
+                      } else if (value == 'remove') {
+                        _confirmRemoveStaff(context, employeeUid, name);
+                      } else if (value == 'limit') {
+                        _editDailyExpenseLimit(
+                          context,
+                          employeeUid,
+                          dailyExpenseLimit,
+                        );
+                      } else if (value == 'chat') {
+                        openChat();
+                      } else if (value == 'task') {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                TaskEditorPage(initialAssigneeUid: employeeUid),
+                          ),
+                        );
+                      } else {
+                        _changeActive(employeeUid, !active);
+                      }
+                    },
+                    itemBuilder: (context) => [
                       PopupMenuItem(
-                        value: 'chat',
-                        child: Text('chat_start_private'.tr),
+                        value: 'permissions',
+                        child: Text('staff_edit'.tr),
                       ),
-                    if (active && BusinessAccessService.isOwner.value)
-                      PopupMenuItem(value: 'task', child: Text('tk_new'.tr)),
-                    PopupMenuItem(
-                      value: 'active',
-                      child: Text(
-                        active ? 'staff_disable'.tr : 'staff_enable'.tr,
-                      ),
-                    ),
-                    if (!removed && data['invitationId'] == null)
                       PopupMenuItem(
-                        value: 'password',
-                        child: Text('staff_change_password'.tr),
-                      ),
-                    if (!removed)
-                      PopupMenuItem(
-                        value: 'remove',
+                        value: 'limit',
                         child: Text(
-                          'staff_remove'.tr,
-                          style: const TextStyle(color: MjasiColors.error),
+                          dailyExpenseLimit > 0
+                              ? 'staff_change_limit'.tr
+                              : 'staff_set_limit'.tr,
                         ),
                       ),
-                  ],
-                ),
+                      if (active)
+                        PopupMenuItem(
+                          value: 'chat',
+                          child: Text('chat_start_private'.tr),
+                        ),
+                      if (active && BusinessAccessService.isOwner.value)
+                        PopupMenuItem(value: 'task', child: Text('tk_new'.tr)),
+                      PopupMenuItem(
+                        value: 'active',
+                        child: Text(
+                          active ? 'staff_disable'.tr : 'staff_enable'.tr,
+                        ),
+                      ),
+                      if (!removed &&
+                          data['invitationId'] == null &&
+                          BusinessAccessService.isOwner.value)
+                        PopupMenuItem(
+                          value: 'password',
+                          child: Text('staff_change_password'.tr),
+                        ),
+                      if (!removed)
+                        PopupMenuItem(
+                          value: 'remove',
+                          child: Text(
+                            'staff_remove'.tr,
+                            style: const TextStyle(color: MjasiColors.error),
+                          ),
+                        ),
+                    ],
+                  ),
               ],
             ),
             if (shopNickname.isNotEmpty || phone.isNotEmpty) ...[
@@ -512,9 +543,20 @@ class StaffManagementPage extends StatelessWidget {
                   if (!BusinessAccessService.barModeEnabled.value) {
                     return const SizedBox.shrink();
                   }
-                  final currentRole = data['barRole'] == 'bartender'
-                      ? 'bartender'
-                      : 'waiter';
+                  if (data['barRole'] == 'manager' &&
+                      !BusinessAccessService.isOwner.value) {
+                    return const SizedBox.shrink();
+                  }
+                  final storedRole = data['barRole']?.toString();
+                  final currentRole =
+                      const {
+                        'staff',
+                        'waiter',
+                        'bartender',
+                        'manager',
+                      }.contains(storedRole)
+                      ? storedRole!
+                      : 'staff';
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -536,6 +578,10 @@ class StaffManagementPage extends StatelessWidget {
                           ),
                           items: [
                             DropdownMenuItem(
+                              value: 'staff',
+                              child: Text('bar_role_staff'.tr),
+                            ),
+                            DropdownMenuItem(
                               value: 'waiter',
                               child: Text('bar_role_waiter'.tr),
                             ),
@@ -543,10 +589,19 @@ class StaffManagementPage extends StatelessWidget {
                               value: 'bartender',
                               child: Text('bar_role_bartender'.tr),
                             ),
+                            if (BusinessAccessService.isOwner.value)
+                              DropdownMenuItem(
+                                value: 'manager',
+                                child: Text('bar_role_manager'.tr),
+                              ),
                           ],
                           onChanged: (role) {
                             if (role != null && role != currentRole) {
-                              _changeBarRole(employeeUid, role);
+                              _changeBarRole(
+                                employeeUid,
+                                role,
+                                preferLegacyMembership: isLegacy,
+                              );
                             }
                           },
                         ),
@@ -623,20 +678,31 @@ class StaffManagementPage extends StatelessWidget {
     }
   }
 
-  Future<void> _changeBarRole(String employeeUid, String role) async {
+  Future<void> _changeBarRole(
+    String employeeUid,
+    String role, {
+    required bool preferLegacyMembership,
+  }) async {
     try {
-      await StaffService.setBarRole(employeeUid: employeeUid, role: role);
-      Get.snackbar(
-        'success'.tr,
-        role == 'bartender'
-            ? 'bar_role_bartender_assigned'.tr
-            : 'bar_role_waiter_assigned'.tr,
-        snackPosition: SnackPosition.BOTTOM,
+      await StaffService.setBarRole(
+        employeeUid: employeeUid,
+        role: role,
+        preferLegacyMembership: preferLegacyMembership,
       );
+      Get.snackbar('success'.tr, switch (role) {
+        'bartender' => 'bar_role_bartender_assigned'.tr,
+        'waiter' => 'bar_role_waiter_assigned'.tr,
+        'manager' => 'bar_role_manager_assigned'.tr,
+        _ => 'bar_role_staff_assigned'.tr,
+      }, snackPosition: SnackPosition.BOTTOM);
     } catch (error, stackTrace) {
       debugPrint('Could not update staff Bar Mode role: $error');
       debugPrintStack(stackTrace: stackTrace);
-      Get.snackbar('error'.tr, '${'staff_update_error'.tr}: $error');
+      final message =
+          error is FirebaseException && error.code == 'permission-denied'
+          ? 'Huna ruhusa ya kubadili jukumu hili. Hakikisha Firestore Rules zilizowekwa kwenye Firebase zinaruhusu owner kusasisha barRole.'
+          : '${'staff_update_error'.tr}: $error';
+      Get.snackbar('error'.tr, message);
     }
   }
 
@@ -820,6 +886,13 @@ class StaffManagementPage extends StatelessWidget {
       debugPrintStack(stackTrace: stackTrace);
       Get.snackbar('error'.tr, '${'staff_invitation_create_error'.tr}: $error');
     }
+  }
+
+  Future<void> _showShopLocationsDialog(BuildContext context) async {
+    await Get.dialog<void>(
+      const _ShopLocationsDialog(),
+      barrierDismissible: false,
+    );
   }
 }
 
@@ -1675,6 +1748,175 @@ class _StaffDailyExpenseLimitDialogState
   }
 }
 
+class _ShopLocationsDialog extends StatelessWidget {
+  const _ShopLocationsDialog();
+
+  Future<void> _editBranch(
+    BuildContext context, {
+    BusinessBranch? branch,
+  }) async {
+    final result = await Get.dialog<Map<String, String>>(
+      _ShopLocationEditor(branch: branch),
+      barrierDismissible: false,
+    );
+    if (result == null) return;
+    try {
+      if (branch == null) {
+        await BranchService.createBranch(
+          name: result['name']!,
+          location: result['location']!,
+        );
+      } else {
+        await BranchService.updateBranch(
+          branchId: branch.id,
+          name: result['name']!,
+          location: result['location']!,
+        );
+      }
+      Get.snackbar('success'.tr, 'staff_shop_location_saved'.tr);
+    } catch (error) {
+      final message =
+          error is StateError && error.message == 'staff_shop_location_assigned'
+          ? 'staff_shop_location_assigned'.tr
+          : '$error';
+      Get.snackbar('error'.tr, message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('staff_shop_locations'.tr),
+    content: SizedBox(
+      width: 460,
+      height: 360,
+      child: StreamBuilder<List<BusinessBranch>>(
+        stream: BranchService.watchBranches(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return Text('${snapshot.error}');
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final branches = snapshot.data!;
+          return ListView(
+            shrinkWrap: true,
+            children: [
+              if (branches.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Text('staff_shop_location_empty'.tr),
+                ),
+              for (final branch in branches)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.storefront_outlined),
+                  title: Text(branch.name),
+                  subtitle: Text(branch.location),
+                  trailing: IconButton(
+                    tooltip: 'edit'.tr,
+                    onPressed: () => _editBranch(context, branch: branch),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _editBranch(context),
+                icon: const Icon(Icons.add_business_outlined),
+                label: Text('staff_shop_location_add'.tr),
+              ),
+            ],
+          );
+        },
+      ),
+    ),
+    actions: [TextButton(onPressed: Get.back, child: Text('done'.tr))],
+  );
+}
+
+class _ShopLocationEditor extends StatefulWidget {
+  const _ShopLocationEditor({this.branch});
+
+  final BusinessBranch? branch;
+
+  @override
+  State<_ShopLocationEditor> createState() => _ShopLocationEditorState();
+}
+
+class _ShopLocationEditorState extends State<_ShopLocationEditor> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _location;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.branch?.name ?? '');
+    _location = TextEditingController(text: widget.branch?.location ?? '');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _location.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      widget.branch == null ? 'staff_shop_location_add'.tr : 'edit'.tr,
+    ),
+    content: SizedBox(
+      width: 400,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _name,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'staff_shop_location_name'.tr,
+                prefixIcon: const Icon(Icons.storefront_outlined),
+              ),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'required_field'.tr
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _location,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'staff_shop_location_address'.tr,
+                prefixIcon: const Icon(Icons.location_on_outlined),
+              ),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'required_field'.tr
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
+      FilledButton(
+        onPressed: () {
+          if (!_formKey.currentState!.validate()) return;
+          Get.back<Map<String, String>>(
+            result: {
+              'name': _name.text.trim(),
+              'location': _location.text.trim(),
+            },
+          );
+        },
+        child: Text('save'.tr),
+      ),
+    ],
+  );
+}
+
 class _StaffEditorDialog extends StatefulWidget {
   const _StaffEditorDialog({this.employeeUid, this.memberData});
 
@@ -1691,9 +1933,12 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
   late final TextEditingController _shopNicknameController;
+  late final TextEditingController _usernameController;
   late final TextEditingController _dailyExpenseLimitController;
   final _passwordController = TextEditingController();
   late final Future<Map<String, dynamic>> _businessProfile;
+  late final Future<List<BusinessBranch>> _branches;
+  String? _selectedBranchId;
   late final Map<String, Map<String, bool>> _permissions;
   late String _barRole;
   bool _saving = false;
@@ -1703,9 +1948,11 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   @override
   void initState() {
     super.initState();
-    _barRole = widget.memberData?['barRole'] == 'bartender'
-        ? 'bartender'
-        : 'waiter';
+    final savedBarRole = widget.memberData?['barRole']?.toString();
+    _barRole =
+        const {'staff', 'waiter', 'bartender', 'manager'}.contains(savedBarRole)
+        ? savedBarRole!
+        : 'staff';
     _nameController = TextEditingController(
       text: widget.memberData?['name']?.toString() ?? '',
     );
@@ -1721,6 +1968,13 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           widget.memberData?['username']?.toString() ??
           '',
     );
+    _usernameController = TextEditingController(
+      text:
+          widget.memberData?['username']?.toString() ??
+          widget.memberData?['shopNickname']?.toString() ??
+          '',
+    );
+    _selectedBranchId = widget.memberData?['shopId']?.toString();
     _dailyExpenseLimitController = TextEditingController(
       text: widget.memberData?['dailyExpenseLimit'] is num
           ? _formatDailyExpenseLimit(
@@ -1729,7 +1983,13 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           : '',
     );
     _businessProfile = ProfileService.loadOrCreate();
+    _branches = BranchService.fetchBranches();
     _permissions = _readPermissions(widget.memberData?['permissions']);
+    if (BusinessAccessService.barModeEnabled.value &&
+        (_barRole == 'waiter' || _barRole == 'bartender')) {
+      _permissions['invoices']!['create'] = true;
+      _permissions['stock']!['view'] = true;
+    }
   }
 
   @override
@@ -1738,6 +1998,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     _emailController.dispose();
     _phoneController.dispose();
     _shopNicknameController.dispose();
+    _usernameController.dispose();
     _dailyExpenseLimitController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -1746,254 +2007,513 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final availableHeight =
-        media.size.height -
-        media.viewInsets.bottom -
-        media.viewPadding.vertical -
-        180;
-    final dialogHeight = availableHeight.clamp(80.0, 560.0);
+    final dialogHeight =
+        (media.size.height -
+                media.viewInsets.bottom -
+                media.viewPadding.vertical -
+                40)
+            .clamp(180.0, 720.0);
 
-    return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      title: Text(
-        _isEditing ? 'staff_edit'.tr : 'staff_add'.tr,
-        style: const TextStyle(
-          color: StaffManagementPage._ink,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      content: SizedBox(
-        width: 560,
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: SizedBox(
+        width: 600,
         height: dialogHeight,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!_isEditing) ...[
-                  FutureBuilder<Map<String, dynamic>>(
-                    future: _businessProfile,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return _assignedBusinessCard(
-                          'staff_store_load_error'.tr,
-                        );
-                      }
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return _assignedBusinessCard('staff_store_loading'.tr);
-                      }
-                      final profile = snapshot.data ?? const {};
-                      final shopNickname =
-                          profile['shopNickname']?.toString().trim() ?? '';
-                      if (_shopNicknameController.text.isEmpty &&
-                          shopNickname.isNotEmpty) {
-                        _shopNicknameController.text = shopNickname;
-                      }
-                      return _assignedBusinessCard(
-                        profile['name']?.toString().trim().isNotEmpty == true
-                            ? profile['name'].toString().trim()
-                            : 'staff_store_not_named'.tr,
-                      );
-                    },
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(22, 20, 20, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF124F58), Color(0xFF176D76)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Icon(
+                      _isEditing
+                          ? Icons.manage_accounts_outlined
+                          : Icons.person_add_alt_1_rounded,
+                      color: Colors.white,
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Row(
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.info_outline_rounded,
-                          size: 17,
-                          color: StaffManagementPage._brand,
+                        Text(
+                          _isEditing ? 'staff_edit'.tr : 'staff_add'.tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'staff_login_credentials_note'.tr,
-                            style: const TextStyle(
-                              color: StaffManagementPage._muted,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _isEditing
+                              ? 'staff_dialog_edit_subtitle'.tr
+                              : 'staff_dialog_add_subtitle'.tr,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            fontSize: 12,
+                            height: 1.35,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
-                ],
-                TextFormField(
-                  controller: _nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'staff_name'.tr,
-                    prefixIcon: const Icon(Icons.person_outline),
-                  ),
-                  validator: (value) => (value == null || value.trim().isEmpty)
-                      ? 'required_field'.tr
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  readOnly:
-                      _isEditing && widget.memberData?['businessEmail'] == null,
-                  decoration: InputDecoration(
-                    labelText: 'staff_email_optional'.tr,
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    helperText:
-                        _isEditing &&
-                            widget.memberData?['businessEmail'] == null
-                        ? 'staff_email_legacy_note'.tr
-                        : 'staff_email_contact_note'.tr,
-                  ),
-                  validator: (value) {
-                    final email = value?.trim() ?? '';
-                    return email.isEmpty || GetUtils.isEmail(email)
-                        ? null
-                        : 'invalid_email'.tr;
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'staff_phone'.tr,
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _shopNicknameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'staff_shop_nickname'.tr,
-                    prefixIcon: const Icon(Icons.storefront_outlined),
-                    helperText: 'staff_shop_nickname_hint'.tr,
-                  ),
-                  validator: (value) {
-                    return (value?.trim().isEmpty ?? true)
-                        ? 'staff_shop_nickname_required'.tr
-                        : null;
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _dailyExpenseLimitController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: const [_ThousandsSeparatorInputFormatter()],
-                  decoration: InputDecoration(
-                    labelText: 'staff_daily_expense_limit'.tr,
-                    prefixIcon: const Icon(Icons.warning_amber_rounded),
-                    helperText: 'staff_daily_expense_limit_hint'.tr,
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) return null;
-                    final amount = _parseDailyExpenseLimit(value);
-                    return amount == null || amount < 0 || amount > 1000000000
-                        ? 'staff_daily_expense_limit_invalid'.tr
-                        : null;
-                  },
-                ),
-                if (!_isEditing) ...[
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'staff_password'.tr,
-                      prefixIcon: const Icon(Icons.lock_outline),
-                    ),
-                    validator: (value) => (value?.length ?? 0) >= 6
-                        ? null
-                        : 'staff_password_minimum'.tr,
+                  IconButton(
+                    tooltip: 'cancel'.tr,
+                    onPressed: _saving ? null : () => Get.back<bool>(),
+                    color: Colors.white,
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
-                Obx(() {
-                  if (!BusinessAccessService.barModeEnabled.value) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 10),
-                      Text(
-                        'bar_mode_title'.tr,
-                        style: const TextStyle(
-                          color: StaffManagementPage._ink,
-                          fontWeight: FontWeight.w700,
+                      if (!_isEditing) ...[
+                        FutureBuilder<Map<String, dynamic>>(
+                          future: _businessProfile,
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) {
+                              return _assignedBusinessCard(
+                                'staff_store_load_error'.tr,
+                              );
+                            }
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return _assignedBusinessCard(
+                                'staff_store_loading'.tr,
+                              );
+                            }
+                            final profile = snapshot.data ?? const {};
+                            final shopNickname =
+                                profile['shopNickname']?.toString().trim() ??
+                                '';
+                            if (_shopNicknameController.text.isEmpty &&
+                                shopNickname.isNotEmpty) {
+                              _shopNicknameController.text = shopNickname;
+                            }
+                            return _assignedBusinessCard(
+                              profile['name']?.toString().trim().isNotEmpty ==
+                                      true
+                                  ? profile['name'].toString().trim()
+                                  : 'staff_store_not_named'.tr,
+                            );
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: _barRole,
+                        const SizedBox(height: 14),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 17,
+                                color: StaffManagementPage._brand,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'staff_login_credentials_note'.tr,
+                                  style: const TextStyle(
+                                    color: StaffManagementPage._muted,
+                                    fontSize: 12,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      TextFormField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
                         decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.local_bar_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          labelText: 'staff_name'.tr,
+                          prefixIcon: const Icon(Icons.person_outline),
                         ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'waiter',
-                            child: Text('bar_role_waiter'.tr),
-                          ),
-                          DropdownMenuItem(
-                            value: 'bartender',
-                            child: Text('bar_role_bartender'.tr),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _barRole = value);
-                          }
+                        validator: (value) =>
+                            (value == null || value.trim().isEmpty)
+                            ? 'required_field'.tr
+                            : null,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        readOnly:
+                            _isEditing &&
+                            widget.memberData?['businessEmail'] == null,
+                        decoration: InputDecoration(
+                          labelText: 'staff_email_optional'.tr,
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          helperText:
+                              _isEditing &&
+                                  widget.memberData?['businessEmail'] == null
+                              ? 'staff_email_legacy_note'.tr
+                              : 'staff_email_contact_note'.tr,
+                        ),
+                        validator: (value) {
+                          final email = value?.trim() ?? '';
+                          return email.isEmpty || GetUtils.isEmail(email)
+                              ? null
+                              : 'invalid_email'.tr;
                         },
                       ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'staff_phone'.tr,
+                          prefixIcon: const Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FutureBuilder<List<BusinessBranch>>(
+                        future: _branches,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return _assignedBusinessCard(
+                              '${'staff_store_load_error'.tr}: ${snapshot.error}',
+                            );
+                          }
+                          if (!snapshot.hasData) {
+                            return _assignedBusinessCard(
+                              'staff_store_loading'.tr,
+                            );
+                          }
+                          final branches = snapshot.data!
+                              .where((branch) => branch.active)
+                              .toList();
+                          if (_selectedBranchId == null ||
+                              !branches.any(
+                                (branch) => branch.id == _selectedBranchId,
+                              )) {
+                            final existingShop = _shopNicknameController.text
+                                .trim();
+                            final match = branches.where(
+                              (branch) =>
+                                  branch.name.toLowerCase() ==
+                                  existingShop.toLowerCase(),
+                            );
+                            if (match.isNotEmpty)
+                              _selectedBranchId = match.first.id;
+                          }
+                          return DropdownButtonFormField<String>(
+                            initialValue:
+                                branches.any(
+                                  (branch) => branch.id == _selectedBranchId,
+                                )
+                                ? _selectedBranchId
+                                : null,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'staff_shop_location'.tr,
+                              prefixIcon: const Icon(
+                                Icons.store_mall_directory_outlined,
+                              ),
+                              helperText: branches.isEmpty
+                                  ? 'staff_shop_location_empty'.tr
+                                  : null,
+                            ),
+                            items: [
+                              for (final branch in branches)
+                                DropdownMenuItem(
+                                  value: branch.id,
+                                  child: Text(
+                                    '${branch.name} - ${branch.location}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: (id) =>
+                                setState(() => _selectedBranchId = id),
+                            validator: (value) =>
+                                value == null ||
+                                    !branches.any(
+                                      (branch) => branch.id == value,
+                                    )
+                                ? 'staff_shop_location_required'.tr
+                                : null,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _usernameController,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        readOnly: _isEditing,
+                        decoration: InputDecoration(
+                          labelText: 'staff_username'.tr,
+                          prefixIcon: const Icon(Icons.alternate_email_rounded),
+                          helperText: 'staff_username_hint'.tr,
+                        ),
+                        validator: (value) {
+                          if (_isEditing) return null;
+                          final username = value?.trim() ?? '';
+                          return RegExp(
+                                r'^[a-zA-Z0-9._-]{3,32}$',
+                              ).hasMatch(username)
+                              ? null
+                              : 'staff_username_required'.tr;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _dailyExpenseLimitController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: const [
+                          _ThousandsSeparatorInputFormatter(),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'staff_daily_expense_limit'.tr,
+                          prefixIcon: const Icon(Icons.warning_amber_rounded),
+                          helperText: 'staff_daily_expense_limit_hint'.tr,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty)
+                            return null;
+                          final amount = _parseDailyExpenseLimit(value);
+                          return amount == null ||
+                                  amount < 0 ||
+                                  amount > 1000000000
+                              ? 'staff_daily_expense_limit_invalid'.tr
+                              : null;
+                        },
+                      ),
+                      if (!_isEditing) ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: 'staff_password'.tr,
+                            prefixIcon: const Icon(Icons.lock_outline),
+                          ),
+                          validator: (value) => (value?.length ?? 0) >= 6
+                              ? null
+                              : 'staff_password_minimum'.tr,
+                        ),
+                      ],
+                      Obx(() {
+                        if (!BusinessAccessService.barModeEnabled.value) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 10),
+                            Text(
+                              'bar_mode_title'.tr,
+                              style: const TextStyle(
+                                color: StaffManagementPage._ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            DropdownButtonFormField<String>(
+                              value: _barRole,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(
+                                  Icons.local_bar_outlined,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'staff',
+                                  child: Text('bar_role_staff'.tr),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'waiter',
+                                  child: Text('bar_role_waiter'.tr),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'bartender',
+                                  child: Text('bar_role_bartender'.tr),
+                                ),
+                                if (BusinessAccessService.isOwner.value)
+                                  DropdownMenuItem(
+                                    value: 'manager',
+                                    child: Text('bar_role_manager'.tr),
+                                  ),
+                              ],
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    final leavingBarRole =
+                                        (_barRole == 'waiter' ||
+                                            _barRole == 'bartender') &&
+                                        value != 'waiter' &&
+                                        value != 'bartender';
+                                    _barRole = value;
+                                    _permissions['staff']!['manage'] =
+                                        value == 'manager';
+                                    if (value == 'waiter' ||
+                                        value == 'bartender') {
+                                      _permissions['invoices']!['create'] =
+                                          true;
+                                      _permissions['stock']!['view'] = true;
+                                    } else if (leavingBarRole) {
+                                      _permissions['invoices']!['create'] =
+                                          false;
+                                      _permissions['stock']!['view'] = false;
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              switch (_barRole) {
+                                'waiter' => 'bar_waiter_role_help'.tr,
+                                'bartender' => 'bar_bartender_role_help'.tr,
+                                'manager' => 'bar_manager_role_help'.tr,
+                                _ => 'bar_staff_role_help'.tr,
+                              },
+                              style: const TextStyle(
+                                color: StaffManagementPage._muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (_barRole == 'waiter' ||
+                                _barRole == 'bartender') ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEAF5F2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFCDE5DC),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      size: 18,
+                                      color: Color(0xFF21866D),
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        'staff_bar_default_permissions'.tr,
+                                        style: const TextStyle(
+                                          color: Color(0xFF315C52),
+                                          fontSize: 12,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'staff_permissions'.tr,
+                          style: const TextStyle(
+                            color: StaffManagementPage._ink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      for (final module
+                          in BusinessAccessService.modules.entries)
+                        _permissionCard(module.key, module.value.tr),
                     ],
-                  );
-                }),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'staff_permissions'.tr,
-                    style: const TextStyle(
-                      color: StaffManagementPage._ink,
-                      fontWeight: FontWeight.w700,
-                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                for (final module in BusinessAccessService.modules.entries)
-                  _permissionCard(module.key, module.value.tr),
-              ],
+              ),
             ),
-          ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 13, 20, 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _saving ? null : () => Get.back<bool>(),
+                    child: Text('cancel'.tr),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_rounded, size: 18),
+                    label: Text(_isEditing ? 'save'.tr : 'staff_create'.tr),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: StaffManagementPage._brand,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Get.back<bool>(),
-          child: Text('cancel'.tr),
-        ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(_isEditing ? 'save'.tr : 'staff_create'.tr),
-        ),
-      ],
     );
   }
 
@@ -2050,7 +2570,11 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
         side: const BorderSide(color: Color(0xFFE5EAEC)),
       ),
       child: ExpansionTile(
+        key: ValueKey('permission-$module-$_barRole'),
         dense: true,
+        initiallyExpanded:
+            (_barRole == 'waiter' || _barRole == 'bartender') &&
+            (module == 'invoices' || module == 'stock'),
         title: Text(
           label,
           style: const TextStyle(
@@ -2060,15 +2584,25 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           ),
         ),
         children: [
-          for (final action in BusinessAccessService.actions.entries)
+          for (final action in BusinessAccessService.actions.entries.where(
+            (action) => module == 'staff'
+                ? action.key == 'manage'
+                : action.key != 'manage',
+          ))
             SwitchListTile.adaptive(
               dense: true,
               title: Text(action.value.tr),
               value: _permissions[module]![action.key] ?? false,
               activeTrackColor: StaffManagementPage._brand,
-              onChanged: (value) {
-                setState(() => _permissions[module]![action.key] = value);
-              },
+              onChanged:
+                  module == 'staff' &&
+                      action.key == 'manage' &&
+                      (!BusinessAccessService.isOwner.value ||
+                          _barRole != 'manager')
+                  ? null
+                  : (value) {
+                      setState(() => _permissions[module]![action.key] = value);
+                    },
             ),
         ],
       ),
@@ -2089,13 +2623,22 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
 
     setState(() => _saving = true);
     try {
+      final branches = await _branches;
+      final selectedBranch = branches.firstWhere(
+        (branch) => branch.id == _selectedBranchId && branch.active,
+        orElse: () => throw StateError(
+          'Select an active shop and location before saving staff.',
+        ),
+      );
       if (_isEditing) {
         await StaffService.updateStaff(
           employeeUid: widget.employeeUid!,
           name: _nameController.text,
           email: _emailController.text,
           phone: _phoneController.text,
-          shopNickname: _shopNicknameController.text,
+          shopNickname: selectedBranch.name,
+          shopLocation: selectedBranch.location,
+          shopId: selectedBranch.id,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
           barRole: BusinessAccessService.barModeEnabled.value ? _barRole : null,
@@ -2105,11 +2648,16 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           name: _nameController.text,
           email: _emailController.text,
           phone: _phoneController.text,
-          shopNickname: _shopNicknameController.text,
+          shopNickname: selectedBranch.name,
+          shopLocation: selectedBranch.location,
+          shopId: selectedBranch.id,
+          username: _usernameController.text,
           password: _passwordController.text,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
-          barRole: BusinessAccessService.barModeEnabled.value ? _barRole : 'waiter',
+          barRole: BusinessAccessService.barModeEnabled.value
+              ? _barRole
+              : 'staff',
         );
       }
       if (mounted) Get.back<bool>(result: true);
@@ -2118,7 +2666,11 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() => _saving = false);
-        Get.snackbar('error'.tr, '${'staff_save_error'.tr}: $error');
+        final message =
+            error is StateError && error.message == 'staff_username_taken'
+            ? 'staff_username_taken'.tr
+            : '${'staff_save_error'.tr}: $error';
+        Get.snackbar('error'.tr, message);
       }
     }
   }
@@ -2258,7 +2810,9 @@ class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
                 ),
               ),
               const SizedBox(height: 8),
-              for (final entry in BusinessAccessService.modules.entries)
+              for (final entry in BusinessAccessService.modules.entries.where(
+                (entry) => entry.key != 'staff',
+              ))
                 Card(
                   margin: const EdgeInsets.only(bottom: 6),
                   color: const Color(0xFFF8FAFA),
@@ -2267,7 +2821,9 @@ class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
                     title: Text(entry.value.tr),
                     children: [
                       for (final action
-                          in BusinessAccessService.actions.entries)
+                          in BusinessAccessService.actions.entries.where(
+                            (action) => action.key != 'manage',
+                          ))
                         SwitchListTile.adaptive(
                           dense: true,
                           title: Text(action.value.tr),

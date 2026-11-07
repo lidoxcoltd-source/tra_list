@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,7 +13,20 @@ import 'package:tra_list/services/profile_service.dart';
 
 import 'market_audio.dart';
 import 'market_video.dart';
+import 'market_video_preview.dart' show extractVideoThumbnail;
 import 'market_models.dart';
+
+class MarketThumbnailBackfillResult {
+  const MarketThumbnailBackfillResult({
+    required this.updated,
+    required this.failed,
+    required this.total,
+  });
+
+  final int updated;
+  final int failed;
+  final int total;
+}
 
 class MarketPostPage {
   const MarketPostPage({
@@ -853,6 +865,76 @@ class MarketService {
                     MarketPost.fromDoc(doc).expiresAt!.isAfter(now))
                   MarketPost.fromDoc(doc),
     ];
+  }
+
+  /// Generates and saves thumbnails for this author's older video posts.
+  /// Each post is checked against the app's existing edit permission first.
+  static Future<MarketThumbnailBackfillResult> backfillVideoThumbnails(
+    String authorUid, {
+    void Function(int completed, int total)? onProgress,
+  }) async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      throw StateError('Sign in to update video previews.');
+    }
+    final snapshot = await _firestore
+        .collection('marketPosts')
+        .where('authorUid', isEqualTo: authorUid)
+        .get();
+    final candidates = snapshot.docs
+        .map(MarketPost.fromDoc)
+        .where(
+          (post) =>
+              post.videoUrl.isNotEmpty &&
+              post.videoThumb.isEmpty &&
+              canEditPost(post),
+        )
+        .toList();
+    var updated = 0;
+    var failed = 0;
+    onProgress?.call(0, candidates.length);
+
+    for (var index = 0; index < candidates.length; index++) {
+      final post = candidates[index];
+      try {
+        final videoRef = FirebaseStorage.instance.refFromURL(post.videoUrl);
+        const maxDownloadBytes = 50 * 1024 * 1024;
+        final bytes = await videoRef.getData(maxDownloadBytes);
+        if (bytes == null || bytes.isEmpty) {
+          throw StateError('Video file is empty or unavailable.');
+        }
+        final path = videoRef.fullPath;
+        final lastSegment = path.substring(path.lastIndexOf('/') + 1);
+        final dot = lastSegment.lastIndexOf('.');
+        final extension = dot < 0
+            ? 'mp4'
+            : lastSegment.substring(dot + 1).toLowerCase();
+        final thumbnail = await extractVideoThumbnail(bytes, extension);
+        if (thumbnail == null || thumbnail.isEmpty) {
+          throw StateError('Could not extract a frame from the video.');
+        }
+        final thumbnailRef = FirebaseStorage.instance.ref(
+          'market/$authorUid/${post.id}_thumb.jpg',
+        );
+        await thumbnailRef.putData(
+          thumbnail,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        final thumbnailUrl = await thumbnailRef.getDownloadURL();
+        await _firestore.collection('marketPosts').doc(post.id).update({
+          'videoThumb': thumbnailUrl,
+        });
+        updated++;
+      } catch (error) {
+        debugPrint('Thumbnail backfill failed for ${post.id}: $error');
+        failed++;
+      }
+      onProgress?.call(index + 1, candidates.length);
+    }
+    return MarketThumbnailBackfillResult(
+      updated: updated,
+      failed: failed,
+      total: candidates.length,
+    );
   }
 
   static Future<List<MarketPost>> searchSavedPosts() async {

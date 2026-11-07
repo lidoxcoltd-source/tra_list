@@ -11,6 +11,7 @@ import 'services/profile_service.dart';
 import 'services/business_access_service.dart';
 import 'services/notification_service.dart';
 import 'utils/url_launcher_platform.dart';
+import 'stock/thermal_receipt_printer.dart';
 
 class AddReceiptPage extends StatefulWidget {
   final ReceiptData? receiptData;
@@ -72,6 +73,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   Color _accentColor = const Color(0xFFFFA000);
 
   bool _isLoading = false;
+  bool _isPrinting = false;
 
   @override
   void initState() {
@@ -394,56 +396,76 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
     }
   }
 
-  void _previewReceipt() {
-    final receiptData = ReceiptData(
-      company: CompanyInfo(
-        name: _companyNameController.text,
-        addressLine: _companyAddressController.text,
-        mobile: _companyMobileController.text,
-        tin: _companyTinController.text,
-        vrn: _companyVrnController.text,
-        serialNo: _companySerialController.text,
-        uim: _companyUimController.text,
-        taxOffice: _companyTaxOfficeController.text,
-        logo: const AssetImage('assets/tra-logo.png'),
+  ReceiptData _receiptDataFromForm() => ReceiptData(
+    company: CompanyInfo(
+      name: _companyNameController.text,
+      addressLine: _companyAddressController.text,
+      mobile: _companyMobileController.text,
+      tin: _companyTinController.text,
+      vrn: _companyVrnController.text,
+      serialNo: _companySerialController.text,
+      uim: _companyUimController.text,
+      taxOffice: _companyTaxOfficeController.text,
+      logo: const AssetImage('assets/tra-logo.png'),
+    ),
+    customer: CustomerInfo(
+      name: _customerNameController.text,
+      idType: _customerIdTypeController.text,
+      idNo: _customerIdNoController.text,
+      mobile: _customerMobileController.text,
+      vrn: _customerVrnController.text,
+    ),
+    meta: ReceiptMeta(
+      receiptNo: _receiptNoController.text,
+      zNumber: _zNumberController.text,
+      receiptDate: _receiptDateController.text,
+      receiptTime: _receiptTimeController.text,
+    ),
+    items: [
+      LineItem(
+        description: _itemDescriptionController.text,
+        qty: int.tryParse(_itemQtyController.text) ?? 1,
+        amount:
+            double.tryParse(_itemAmountController.text.replaceAll(',', '')) ??
+            0.0,
       ),
-      customer: CustomerInfo(
-        name: _customerNameController.text,
-        idType: _customerIdTypeController.text,
-        idNo: _customerIdNoController.text,
-        mobile: _customerMobileController.text,
-        vrn: _customerVrnController.text,
-      ),
-      meta: ReceiptMeta(
-        receiptNo: _receiptNoController.text,
-        zNumber: _zNumberController.text,
-        receiptDate: _receiptDateController.text,
-        receiptTime: _receiptTimeController.text,
-      ),
-      items: [
-        LineItem(
-          description: _itemDescriptionController.text,
-          qty: int.tryParse(_itemQtyController.text) ?? 1,
-          amount:
-              double.tryParse(_itemAmountController.text.replaceAll(',', '')) ??
-              0.0,
-        ),
-      ],
-      totalExclTax:
-          double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ??
-          0.0,
-      tax: double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
-      totalInclTax:
-          double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ??
-          0.0,
-      verificationCode: _verificationCodeController.text,
-      qr: const AssetImage('assets/frame.png'),
-    );
+    ],
+    totalExclTax:
+        double.tryParse(_totalExclTaxController.text.replaceAll(',', '')) ??
+        0.0,
+    tax: double.tryParse(_taxController.text.replaceAll(',', '')) ?? 0.0,
+    totalInclTax:
+        double.tryParse(_totalInclTaxController.text.replaceAll(',', '')) ??
+        0.0,
+    verificationCode: _verificationCodeController.text,
+    qr: const AssetImage('assets/frame.png'),
+  );
 
+  void _previewReceipt() {
+    final receiptData = _receiptDataFromForm();
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => ReceiptPage(data: receiptData)),
     );
+  }
+
+  Future<void> _printReceipt() async {
+    if (_isLoading || _isPrinting) return;
+    setState(() => _isPrinting = true);
+    try {
+      final bytes = await buildReceiptPdf(_receiptDataFromForm());
+      if (!mounted) return;
+      final printed = await printThermalReceipt(context, bytes);
+      if (printed && mounted) {
+        Get.snackbar('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
+      }
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar('Error'.tr, error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
   }
 
   @override
@@ -883,6 +905,28 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                     ),
                   ],
                 ),
+                if (!kIsWeb) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading || _isPrinting
+                          ? null
+                          : _printReceipt,
+                      icon: _isPrinting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.print_outlined),
+                      label: Text('pos_print_thermal'.tr),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

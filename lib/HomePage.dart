@@ -29,37 +29,33 @@ import 'package:tra_list/services/personal_finance_page.dart';
 import 'package:tra_list/services/support_center_fab.dart';
 import 'package:tra_list/services/staff_service.dart';
 import 'package:tra_list/stock/products_pages.dart';
+import 'package:tra_list/stock/bar_orders_page.dart';
+import 'package:tra_list/stock/stock_service.dart';
 import 'package:tra_list/tasks/task_banner.dart';
 import 'package:tra_list/tasks/task_service.dart';
 import 'package:tra_list/services/push_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'services/subscription_controller.dart';
 
-enum _FinancePeriod { today, yesterday, thisWeek, thisMonth }
+import 'package:tra_list/home/models/home_models.dart';
+import 'package:tra_list/home/widgets/breathing_connectivity_dot.dart';
+import 'package:tra_list/home/widgets/quick_actions_panel.dart';
+import 'package:tra_list/home/widgets/about_dialog.dart';
+import 'package:tra_list/home/widgets/home_debt_metrics.dart';
+import 'package:tra_list/home/widgets/home_staff_summary.dart';
+import 'package:tra_list/home/widgets/bar_sales_live_summary.dart';
+import 'package:tra_list/home/widgets/business_wallet_preview.dart';
+import 'package:tra_list/home/staff_sales_history_page.dart';
+import 'package:tra_list/home/widgets/home_bottom_bar.dart';
 
-enum _HomeDestination { dashboard, explore, reports, chat }
-
-class _StaffStat {
-  _StaffStat(this.name);
-  final String name;
-  double income = 0;
-  double expense = 0;
-  int count = 0;
-}
-
-class _BusinessRecommendation {
-  const _BusinessRecommendation({
-    required this.titleKey,
-    required this.descriptionKey,
-    required this.icon,
-    required this.color,
-  });
-
-  final String titleKey;
-  final String descriptionKey;
-  final IconData icon;
-  final Color color;
-}
+typedef _FinancePeriod = FinancePeriod;
+typedef _HomeDestination = HomeDestination;
+typedef _StaffStat = StaffStat;
+typedef _BusinessRecommendation = BusinessRecommendation;
+// (Extracted to home_debt_metrics.dart)
+typedef _QuickActionData = QuickActionData;
+typedef _QuickActionsPanel = QuickActionsPanel;
+typedef _BreathingConnectivityDot = BreathingConnectivityDot;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
@@ -143,6 +139,8 @@ class _HomePageState extends State<HomePage> {
   int taskCount = 0;
   bool _staffOpen = false;
   bool _quickActionsOpen = false;
+  int _dashboardSwipePage = 0;
+  int _dashboardSwipeDirection = 1;
   bool _desktopRailExtended = true;
   late _HomeDestination _activeDestination;
   List<_StaffStat> staffStats = [];
@@ -163,6 +161,13 @@ class _HomePageState extends State<HomePage> {
   bool get _isPersonalMode =>
       AccountModeService.current == AccountMode.personal;
 
+  bool get _isWalletSwipePage {
+    final hasBarSales =
+        BusinessAccessService.barModeEnabled.value &&
+        BusinessAccessService.canUseBarPos;
+    return _dashboardSwipePage >= (hasBarSales ? 2 : 1);
+  }
+
   bool get _canSwitchBusiness =>
       BusinessAccessService.availableBusinesses
           .where((business) => business.isActive)
@@ -170,8 +175,7 @@ class _HomePageState extends State<HomePage> {
       1;
 
   bool get _canSelectDashboardShop =>
-      BusinessAccessService.isOwner.value &&
-      _availableShopNicknames.isNotEmpty;
+      BusinessAccessService.isOwner.value && _availableShopNicknames.isNotEmpty;
 
   bool get _hasSubscriptionExemption =>
       _isSuperAdmin || _normalizedUserRole == 'admin';
@@ -321,35 +325,92 @@ class _HomePageState extends State<HomePage> {
         for (final m in members.docs)
           m.id: (m.data()['name'] ?? '').toString().trim(),
       };
-      final snap = await TransactionService.getTransactions(
-        limit: 1000,
-        startDate: start,
-        endDate: end,
-        shopNickname: _selectedShopNickname.isEmpty
-            ? null
-            : _selectedShopNickname,
-      );
+      final photoUrls = {
+        for (final m in members.docs)
+          m.id: (m.data()['photoUrl'] ?? '').toString().trim(),
+      };
       final byUid = <String, _StaffStat>{
         for (final e in names.entries)
-          e.key: _StaffStat(e.value.isEmpty ? '—' : e.value),
-      };
-      for (final doc in snap.docs) {
-        final t = doc.data();
-        final stat = byUid.putIfAbsent(
-          t.uid,
-          () => _StaffStat(
-            t.uid == BusinessAccessService.businessId ? 'hs_owner'.tr : '—',
+          e.key: _StaffStat(
+            e.value.isEmpty ? '—' : e.value,
+            uid: e.key,
+            photoUrl: photoUrls[e.key] ?? '',
           ),
+      };
+      if (BusinessAccessService.can('transactions', 'view')) {
+        final snap = await TransactionService.getTransactions(
+          limit: 1000,
+          startDate: start,
+          endDate: end,
+          shopNickname: _selectedShopNickname.isEmpty
+              ? null
+              : _selectedShopNickname,
         );
-        stat.count++;
-        if (t.type == TransactionType.income) {
-          stat.income += t.amount;
-        } else {
-          stat.expense += t.amount;
+        for (final doc in snap.docs) {
+          final t = doc.data();
+          final stat = byUid.putIfAbsent(
+            t.uid,
+            () => _StaffStat(
+              t.uid == BusinessAccessService.businessId ? 'hs_owner'.tr : '—',
+              uid: t.uid,
+              photoUrl: photoUrls[t.uid] ?? '',
+            ),
+          );
+          stat.count++;
+          if (t.type == TransactionType.income) {
+            stat.income += t.amount;
+          } else {
+            stat.expense += t.amount;
+          }
+        }
+      }
+      if (BusinessAccessService.can('invoices', 'view')) {
+        final invoices = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(BusinessAccessService.businessId)
+            .collection('invoices')
+            .where(
+              'createdAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(start),
+            )
+            .where('createdAt', isLessThan: Timestamp.fromDate(end))
+            .get();
+        for (final invoice in invoices.docs) {
+          final data = invoice.data();
+          if (data['kind'] == 'quotation') continue;
+          final uid = (data['cashierUid'] ?? data['uid'] ?? '').toString();
+          if (uid.isEmpty) continue;
+          final invoiceShop = (data['shopNickname'] ?? '').toString();
+          if (_selectedShopNickname.isNotEmpty &&
+              ((invoiceShop.isNotEmpty &&
+                      invoiceShop != _selectedShopNickname) ||
+                  (_shopByStaffUid.containsKey(uid) &&
+                      _shopByStaffUid[uid] != _selectedShopNickname))) {
+            continue;
+          }
+          final stat = byUid.putIfAbsent(
+            uid,
+            () => _StaffStat(
+              names[uid]?.isNotEmpty == true
+                  ? names[uid]!
+                  : uid == FirebaseAuth.instance.currentUser?.uid
+                  ? ownerName
+                  : '—',
+              uid: uid,
+              photoUrl: photoUrls[uid] ?? '',
+            ),
+          );
+          stat.sales += (data['total'] as num?)?.toDouble() ?? 0;
+          stat.saleCount++;
+          final items = data['items'] as List? ?? const [];
+          for (final item in items.whereType<Map>()) {
+            stat.unitsSold +=
+                ((item['qty'] ?? item['quantity']) as num?)?.toDouble() ?? 0;
+          }
         }
       }
       final list = byUid.values.toList()
-        ..sort((a, b) => b.income.compareTo(a.income));
+        ..sort((a, b) => b.sales.compareTo(a.sales));
       if (!mounted || request != _financeRequest) return;
       setState(() {
         staffStats = list;
@@ -720,9 +781,7 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: recommendation.color.withValues(alpha: .07),
         borderRadius: BorderRadius.circular(_Radius.sm),
-        border: Border(
-          left: BorderSide(color: recommendation.color, width: 3),
-        ),
+        border: Border(left: BorderSide(color: recommendation.color, width: 3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -999,10 +1058,16 @@ class _HomePageState extends State<HomePage> {
         !useNavigationRail &&
         !_isPersonalMode &&
         _activeDestination == _HomeDestination.dashboard;
+    final walletSwipePage =
+        !_isPersonalMode &&
+        _activeDestination == _HomeDestination.dashboard &&
+        _isWalletSwipePage;
     return SupportCenterFabOverlay(
       onAiAnalysisPressed: _showHomeBusinessSummary,
       child: Scaffold(
-        backgroundColor: _activeDestination == _HomeDestination.chat
+        backgroundColor: walletSwipePage
+            ? const Color(0xFFF2F5FC)
+            : _activeDestination == _HomeDestination.chat
             ? const Color(0xFF191D24)
             : mobileBusinessDashboard
             ? Colors.white
@@ -1015,7 +1080,8 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             children: [
               if (_activeDestination != _HomeDestination.chat &&
-                  !mobileBusinessDashboard)
+                  !mobileBusinessDashboard &&
+                  !walletSwipePage)
                 _buildHeader(context),
               Expanded(
                 child: LayoutBuilder(
@@ -1092,6 +1158,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildDashboardContent(BuildContext context) {
+    if (!_isPersonalMode && _isWalletSwipePage) {
+      return _buildWalletSwipePage();
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 960;
@@ -1155,7 +1224,11 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildWelcomePanel(wide),
+                    if (BusinessAccessService.isBarWaiter) ...[
+                      _buildWaiterOrdersShortcut(),
+                      const SizedBox(height: 10),
+                    ],
+                    _buildBusinessBarSwipe(_buildWelcomePanel(wide)),
                     const SizedBox(height: _Spacing.xl),
                     if (wide)
                       Row(
@@ -1197,6 +1270,289 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildWalletSwipePage() => GestureDetector(
+    onHorizontalDragEnd: (details) {
+      if ((details.primaryVelocity ?? 0) > 120) {
+        setState(() {
+          _dashboardSwipeDirection = -1;
+          _dashboardSwipePage--;
+        });
+      }
+    },
+    child: Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: MjasiColors.background,
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: BusinessWalletPreview(
+                onBack: () => setState(() {
+                  _dashboardSwipeDirection = -1;
+                  _dashboardSwipePage--;
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildBusinessBarSwipe(Widget businessCard) => Obx(() {
+    final showBarSales =
+        BusinessAccessService.barModeEnabled.value &&
+        BusinessAccessService.canUseBarPos;
+    final lastPage = showBarSales ? 2 : 1;
+    final currentPage = _dashboardSwipePage.clamp(0, lastPage).toInt();
+    return LayoutBuilder(
+      builder: (context, constraints) => GestureDetector(
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -120 && currentPage < lastPage) {
+            setState(() {
+              _dashboardSwipeDirection = 1;
+              _dashboardSwipePage++;
+            });
+          } else if (velocity > 120 && currentPage > 0) {
+            setState(() {
+              _dashboardSwipeDirection = -1;
+              _dashboardSwipePage--;
+            });
+          }
+        },
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) {
+              final direction = animation.status == AnimationStatus.reverse
+                  ? -_dashboardSwipeDirection
+                  : _dashboardSwipeDirection;
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(direction.toDouble(), 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              );
+            },
+            child: SizedBox(
+              key: ValueKey(currentPage),
+              width: constraints.maxWidth,
+              child: currentPage == 0
+                  ? Stack(
+                      children: [
+                        businessCard,
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: _buildBarSwipeIndicator(
+                            tooltip: 'Ukurasa unaofuata',
+                            icon: Icons.arrow_forward_rounded,
+                            onTap: () => setState(() {
+                              _dashboardSwipeDirection = 1;
+                              _dashboardSwipePage = currentPage + 1;
+                            }),
+                          ),
+                        ),
+                      ],
+                    )
+                  : currentPage == 1 && showBarSales
+                  ? Stack(
+                      children: [
+                        const BarSalesLiveSummary(),
+                        Positioned(
+                          left: 6,
+                          top: 6,
+                          child: _buildBarSwipeIndicator(
+                            tooltip: 'Rudi kwenye biashara',
+                            icon: Icons.arrow_back_rounded,
+                            onTap: () => setState(() {
+                              _dashboardSwipeDirection = -1;
+                              _dashboardSwipePage = currentPage - 1;
+                            }),
+                          ),
+                        ),
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: _buildBarSwipeIndicator(
+                            tooltip: 'Fungua wallet',
+                            icon: Icons.arrow_forward_rounded,
+                            onTap: () => setState(() {
+                              _dashboardSwipeDirection = 1;
+                              _dashboardSwipePage = currentPage + 1;
+                            }),
+                          ),
+                        ),
+                      ],
+                    )
+                  : BusinessWalletPreview(
+                      onBack: () => setState(() {
+                        _dashboardSwipeDirection = -1;
+                        _dashboardSwipePage = currentPage - 1;
+                      }),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  Widget _buildBarSwipeIndicator({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) => Tooltip(
+    message: tooltip,
+    child: Material(
+      color: const Color(0xF2FFFFFF),
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: Icon(icon, size: 14, color: const Color(0xFF16855B)),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildStaffSalesSection() => Obx(() {
+    if (staffStats.isEmpty || !BusinessAccessService.barModeEnabled.value) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _staffOpen = !_staffOpen),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'hs_staff_title'.tr,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _staffOpen
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_staffOpen) ...[
+          const SizedBox(height: _Spacing.sm),
+          _buildStaffSummary(),
+        ],
+      ],
+    );
+  });
+
+  Widget _buildWaiterOrdersShortcut() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: StockService.current().watchBarOrders(),
+      builder: (context, snapshot) {
+        final activeCount = (snapshot.data ?? const <Map<String, dynamic>>[])
+            .where(
+              (order) =>
+                  order['status'] == 'pending' || order['status'] == 'served',
+            )
+            .length;
+        return Material(
+          color: const Color(0xFF0759BE),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => Get.to(() => const BarOrdersPage()),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.room_service_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'bar_orders'.tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'bar_counter_orders_hint'.tr,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: .82),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 34),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      snapshot.hasError ? '—' : '$activeCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF0759BE),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMobileBusinessDashboard() {
     final user = FirebaseAuth.instance.currentUser;
     final greetingName = ownerName.isNotEmpty
@@ -1214,6 +1570,15 @@ class _HomePageState extends State<HomePage> {
         : activeShopNickname.isNotEmpty
         ? activeShopNickname
         : storeName;
+    final staffRoleKey = switch (BusinessAccessService.barRole.value) {
+      'manager' => 'bar_role_manager',
+      'bartender' => 'bar_role_bartender',
+      'waiter' => 'bar_role_waiter',
+      _ => 'bar_role_staff',
+    };
+    final staffPosition = BusinessAccessService.isOwner.value
+        ? null
+        : staffRoleKey.tr;
     final canViewFinance =
         BusinessAccessService.can('transactions', 'view') ||
         BusinessAccessService.can('analytics', 'view');
@@ -1264,6 +1629,30 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
+                    if (staffPosition != null) ...[
+                      const SizedBox(width: 7),
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 130),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF2FF),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          staffPosition,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF315B9B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (_canSelectDashboardShop)
                       const Padding(
                         padding: EdgeInsets.only(left: 5),
@@ -1279,7 +1668,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildMobileBalanceCard(canViewFinance),
+          _buildBusinessBarSwipe(_buildMobileBalanceCard(canViewFinance)),
           const SizedBox(height: 10),
           _buildMobilePaymentActions(),
           if (canViewFinance) ...[
@@ -1304,6 +1693,10 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
             _buildMobileFinanceSummary(),
+          ],
+          if (BusinessAccessService.isBarWaiter) ...[
+            const SizedBox(height: 18),
+            _buildWaiterOrdersShortcut(),
           ],
           const SizedBox(height: 20),
           _buildMobileShortcuts(),
@@ -1497,8 +1890,7 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.north_rounded,
           onTap: () => _openTransactionForm(TransactionType.expense),
         ),
-      if (BusinessAccessService.can('staff', 'view') ||
-          BusinessAccessService.isOwner.value)
+      if (BusinessAccessService.canManageStaff)
         (
           label: 'home_manage_staff'.tr,
           icon: Icons.groups_2_outlined,
@@ -1696,8 +2088,7 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.category_outlined,
           onTap: () => _openRestrictedRoute(AppRoutes.categories),
         ),
-      if (BusinessAccessService.can('staff', 'view') ||
-          BusinessAccessService.isOwner.value)
+      if (BusinessAccessService.canManageStaff)
         (
           label: 'home_manage_staff'.tr,
           icon: Icons.groups_2_outlined,
@@ -1721,6 +2112,12 @@ class _HomePageState extends State<HomePage> {
           label: 'home_analytics'.tr,
           icon: Icons.bar_chart_rounded,
           onTap: () => _openRestrictedRoute(AppRoutes.analytics),
+        ),
+      if (BusinessAccessService.can('analytics', 'view'))
+        (
+          label: 'bi_title'.tr,
+          icon: Icons.auto_awesome_outlined,
+          onTap: () => _openRestrictedRoute(AppRoutes.businessIntelligence),
         ),
     ];
     if (shortcuts.isEmpty) return const SizedBox.shrink();
@@ -2058,224 +2455,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMobileNavigation() {
-    final canOpenReports =
-        _isPersonalMode || BusinessAccessService.can('analytics', 'view');
-    final canOpenChat =
-        !_isPersonalMode && BusinessAccessService.hasBusinessAccess;
-    final lightStyle =
-        !_isPersonalMode && _activeDestination == _HomeDestination.dashboard;
-    final background = lightStyle ? Colors.white : MjasiColors.primaryNavy;
-
-    return Container(
-      margin: lightStyle
-          ? EdgeInsets.zero
-          : const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: lightStyle
-            ? BorderRadius.zero
-            : BorderRadius.circular(MjasiRadius.md),
-        border: lightStyle
-            ? const Border(top: BorderSide(color: Color(0xFFE6ECF5)))
-            : Border.all(color: Colors.white.withValues(alpha: .08)),
-        boxShadow: lightStyle
-            ? const []
-            : const [
-                BoxShadow(
-                  color: Color(0x26071B3A),
-                  blurRadius: 18,
-                  offset: Offset(0, 6),
-                ),
-              ],
-      ),
-      child: ClipRRect(
-        borderRadius: lightStyle
-            ? BorderRadius.zero
-            : BorderRadius.circular(MjasiRadius.md),
-        child: BottomAppBar(
-          color: background,
-          elevation: 0,
-          padding: EdgeInsets.symmetric(horizontal: lightStyle ? 4 : 10),
-          child: SizedBox(
-            height: lightStyle ? 76 : 72,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _mobileNavigationItem(
-                    icon: Icons.home_rounded,
-                    label: 'nav_home'.tr,
-                    onTap: () => _selectDestination(_HomeDestination.dashboard),
-                    selected: _activeDestination == _HomeDestination.dashboard,
-                    lightStyle: lightStyle,
-                  ),
-                ),
-                Expanded(
-                  child: _mobileNavigationItem(
-                    icon: Icons.explore_outlined,
-                    label: 'nav_explore'.tr,
-                    onTap: _openMarket,
-                    selected: _activeDestination == _HomeDestination.explore,
-                    lightStyle: lightStyle,
-                  ),
-                ),
-                SizedBox(
-                  width: lightStyle ? 60 : 64,
-                  child: _quickNavigationAction(lightStyle: lightStyle),
-                ),
-                if (canOpenChat)
-                  Expanded(
-                    child: _mobileNavigationItem(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'chat_nav_label'.tr,
-                      onTap: _openChat,
-                      selected: _activeDestination == _HomeDestination.chat,
-                      lightStyle: lightStyle,
-                    ),
-                  ),
-                if (canOpenReports)
-                  Expanded(
-                    child: _mobileNavigationItem(
-                      icon: Icons.insert_chart_outlined,
-                      label: 'nav_reports'.tr,
-                      onTap: () => _isPersonalMode
-                          ? _selectDestination(_HomeDestination.reports)
-                          : _openRestrictedRoute(
-                              AppRoutes.analytics,
-                              destination: _HomeDestination.reports,
-                            ),
-                      selected: _activeDestination == _HomeDestination.reports,
-                      lightStyle: lightStyle,
-                    ),
-                  ),
-              ],
+    return HomeBottomBar(
+      canOpenReports:
+          _isPersonalMode || BusinessAccessService.can('analytics', 'view'),
+      canOpenChat: !_isPersonalMode && BusinessAccessService.hasBusinessAccess,
+      lightStyle:
+          !_isPersonalMode && _activeDestination == _HomeDestination.dashboard,
+      activeDestination: _activeDestination,
+      quickActionsOpen: _quickActionsOpen,
+      onSelectDestination: _selectDestination,
+      onOpenMarket: _openMarket,
+      onOpenChat: _openChat,
+      onOpenReports: () => _isPersonalMode
+          ? _selectDestination(_HomeDestination.reports)
+          : _openRestrictedRoute(
+              AppRoutes.analytics,
+              destination: _HomeDestination.reports,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _quickNavigationAction({bool lightStyle = false}) {
-    return Semantics(
-      button: true,
-      label: 'home_quick_access'.tr,
-      child: InkWell(
-        onTap: _showQuickActions,
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 70,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: lightStyle ? 46 : 38,
-                height: lightStyle ? 46 : 34,
-                decoration: BoxDecoration(
-                  color: lightStyle
-                      ? const Color(0xFF0D6FEB)
-                      : MjasiColors.secondaryBlue,
-                  borderRadius: BorderRadius.circular(lightStyle ? 23 : 12),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x333B82F6),
-                      blurRadius: 10,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: AnimatedRotation(
-                  turns: _quickActionsOpen ? .125 : 0,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutBack,
-                  child: const Icon(
-                    Icons.add_rounded,
-                    color: Colors.white,
-                    size: 25,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'nav_add'.tr,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: lightStyle
-                      ? const Color(0xFF17263D)
-                      : Colors.white.withValues(alpha: .9),
-                  fontSize: 9,
-                  height: 1.1,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _mobileNavigationItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool selected = false,
-    bool lightStyle = false,
-  }) {
-    final color = lightStyle
-        ? (selected ? const Color(0xFF0D6FEB) : const Color(0xFF52657D))
-        : (selected
-              ? const Color(0xFF8DBBFF)
-              : Colors.white.withValues(alpha: .68));
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          height: 62,
-          child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-              decoration: BoxDecoration(
-                color: selected && lightStyle
-                    ? const Color(0xFFEAF2FF)
-                    : selected
-                    ? Colors.white.withValues(alpha: .09)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(lightStyle ? 24 : 14),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: color, size: 20),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: lightStyle
-                          ? const Color(0xFF17263D)
-                          : selected
-                          ? Colors.white
-                          : color,
-                      fontSize: 9.5,
-                      height: 1.1,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      onShowQuickActions: _showQuickActions,
     );
   }
 
@@ -2699,9 +2896,7 @@ class _HomePageState extends State<HomePage> {
                                 vertical: _Spacing.md,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  _Radius.sm,
-                                ),
+                                borderRadius: BorderRadius.circular(_Radius.sm),
                               ),
                             ),
                             icon: const Icon(Icons.logout_rounded),
@@ -3136,11 +3331,7 @@ class _HomePageState extends State<HomePage> {
       icon: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.language_rounded,
-            color: foregroundColor,
-            size: 20,
-          ),
+          Icon(Icons.language_rounded, color: foregroundColor, size: 20),
           if (MediaQuery.sizeOf(context).width >= 360) ...[
             const SizedBox(width: _Spacing.xs),
             Text(
@@ -3388,8 +3579,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _selectDashboardShop() async {
-    if (!BusinessAccessService.isOwner.value ||
-        !_canSelectDashboardShop) {
+    if (!BusinessAccessService.isOwner.value || !_canSelectDashboardShop) {
       return;
     }
 
@@ -3432,9 +3622,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   child: Icon(
                     icon,
-                    color: isSelected
-                        ? Colors.white
-                        : MjasiColors.primaryNavy,
+                    color: isSelected ? Colors.white : MjasiColors.primaryNavy,
                     size: 20,
                   ),
                 ),
@@ -3729,41 +3917,7 @@ class _HomePageState extends State<HomePage> {
                       TaskBanner(
                         onTap: () => _openRestrictedRoute(AppRoutes.tasks),
                       ),
-                      if (staffStats.isNotEmpty) ...[
-                        InkWell(
-                          onTap: () => setState(() => _staffOpen = !_staffOpen),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'hs_staff_title'.tr,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.75,
-                                      ),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                Icon(
-                                  _staffOpen
-                                      ? Icons.keyboard_arrow_up_rounded
-                                      : Icons.keyboard_arrow_down_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (_staffOpen) ...[
-                          const SizedBox(height: _Spacing.sm),
-                          _buildStaffSummary(),
-                        ],
-                      ],
+                      _buildStaffSalesSection(),
                     ],
                   ),
                 ),
@@ -3776,103 +3930,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildStaffSummary() {
-    Widget row(String name, String income, String expense, String count) {
-      const style = TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w600,
-      );
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style,
-              ),
+    return HomeStaffSummary(
+      staffStats: staffStats,
+      onViewHistory: (staff) {
+        if (!BusinessAccessService.can('invoices', 'view')) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => StaffSalesHistoryPage(
+              staffUid: staff.uid,
+              staffName: staff.name,
+              photoUrl: staff.photoUrl,
+              shopNickname: _selectedShopNickname,
             ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                income,
-                textAlign: TextAlign.right,
-                style: style.copyWith(color: const Color(0xFF34D399)),
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                expense,
-                textAlign: TextAlign.right,
-                style: style.copyWith(color: const Color(0xFFF87171)),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Text(count, textAlign: TextAlign.right, style: style),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Material(
-      color: Colors.white.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(_Radius.sm),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _openRestrictedRoute(AppRoutes.tasks),
-        child: Padding(
-          padding: const EdgeInsets.all(_Spacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'hs_staff_title'.tr,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'tk_all'.tr,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              row('hs_staff'.tr, 'income'.tr, 'expenses'.tr, '#'),
-              Divider(height: 8, color: Colors.white.withValues(alpha: 0.15)),
-              for (final s in staffStats)
-                row(
-                  s.name,
-                  _formatAmount(s.income),
-                  _formatAmount(s.expense),
-                  '${s.count}',
-                ),
-            ],
           ),
-        ),
-      ),
+        );
+      },
+      formatAmount: _formatAmount,
     );
   }
 
@@ -4394,154 +4467,13 @@ class _HomePageState extends State<HomePage> {
   Widget _buildDebtMetrics(bool wide) {
     final debts = debtController;
     if (debts == null) return const SizedBox.shrink();
-    return Obx(() {
-      final metrics = [
-        _DebtMetric(
-          'home_debt_receivable'.tr,
-          'TZS ${debts.receivableBalance.toStringAsFixed(0)}',
-          Icons.call_received_rounded,
-          _AppColors.positive,
-          _AppColors.positiveBg,
-          DebtFilter.customerOwesShop,
-        ),
-        _DebtMetric(
-          'home_debt_payable'.tr,
-          'TZS ${debts.payableBalance.toStringAsFixed(0)}',
-          Icons.call_made_rounded,
-          _AppColors.warning,
-          _AppColors.warningBg,
-          DebtFilter.shopOwesOther,
-        ),
-        _DebtMetric(
-          'debt_overdue'.tr,
-          debts.overdueCount.toString(),
-          Icons.event_busy_outlined,
-          _AppColors.negative,
-          _AppColors.negativeBg,
-          DebtFilter.overdue,
-        ),
-      ];
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = _Spacing.sm;
-          return Row(
-            children: [
-              for (var i = 0; i < metrics.length; i++) ...[
-                if (i > 0) const SizedBox(width: spacing),
-                Expanded(
-                  child: _debtMetricCard(
-                    metrics[i],
-                    wide: wide,
-                    compact: constraints.maxWidth < 500,
-                    onTap: () {
-                      debts.filter.value = metrics[i].filter;
-                      _openRestrictedRoute(AppRoutes.jobs);
-                    },
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      );
-    });
-  }
-
-  Widget _debtMetricCard(
-    _DebtMetric metric, {
-    bool wide = false,
-    bool compact = false,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: metric.background,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_Radius.md),
-        side: BorderSide(color: metric.color.withValues(alpha: .13)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(_Radius.md),
-        child: Padding(
-          padding: EdgeInsets.all(compact ? 8 : 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: compact
-                        ? 24
-                        : wide
-                        ? 34
-                        : 28,
-                    height: compact
-                        ? 24
-                        : wide
-                        ? 34
-                        : 28,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .78),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(
-                      metric.icon,
-                      size: compact
-                          ? 13
-                          : wide
-                          ? 17
-                          : 14,
-                      color: metric.color,
-                    ),
-                  ),
-                  const SizedBox(width: _Spacing.xs),
-                  Expanded(
-                    child: Text(
-                      metric.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _AppColors.inkSoft,
-                        fontSize: compact
-                            ? 9
-                            : wide
-                            ? 11.5
-                            : 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(
-                height: compact
-                    ? 3
-                    : wide
-                    ? 10
-                    : 6,
-              ),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  metric.value,
-                  style: TextStyle(
-                    color: metric.color,
-                    fontSize: compact
-                        ? 13
-                        : wide
-                        ? 19
-                        : 15,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.35,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return HomeDebtMetrics(
+      debts: debts,
+      wide: wide,
+      onTapFilter: (filter) {
+        debts.filter.value = filter;
+        _openRestrictedRoute(AppRoutes.jobs);
+      },
     );
   }
 
@@ -4904,34 +4836,125 @@ class _HomePageState extends State<HomePage> {
 
   void _showSubscriptionRequiredDialog() {
     Get.dialog(
-      AlertDialog(
+      Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_Radius.md),
+          borderRadius: BorderRadius.circular(_Radius.lg),
         ),
-        title: Row(
-          children: [
-            const Icon(Icons.lock_outline, color: _AppColors.brand),
-            const SizedBox(width: 8),
-            Flexible(child: Text('subscription_required_title'.tr)),
-          ],
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_AppColors.brand, _AppColors.brandDeep],
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.32),
+                        ),
+                      ),
+                      child: Icon(
+                        _isOnline
+                            ? Icons.lock_clock_rounded
+                            : Icons.cloud_off_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'subscription_required_title'.tr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _isOnline
+                          ? 'subscription_required_message'.tr
+                          : 'offline_subscription_grace_expired'.tr,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _AppColors.inkSoft,
+                        fontSize: 15,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: Get.back,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              foregroundColor: _AppColors.ink,
+                              side: const BorderSide(color: _AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(_Radius.md),
+                              ),
+                            ),
+                            child: Text('cancel'.tr),
+                          ),
+                        ),
+                        if (BusinessAccessService.isOwner.value) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Get.back();
+                                _openSubscription();
+                              },
+                              icon: const Icon(Icons.workspace_premium_rounded),
+                              label: Text('sub_subscribe_now'.tr),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: _AppColors.brand,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    _Radius.md,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        content: Text(
-          _isOnline
-              ? 'subscription_required_message'.tr
-              : 'offline_subscription_grace_expired'.tr,
-        ),
-        actions: [
-          TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
-          if (BusinessAccessService.isOwner.value)
-            FilledButton(
-              onPressed: () {
-                Get.back();
-                _openSubscription();
-              },
-              style: FilledButton.styleFrom(backgroundColor: _AppColors.brand),
-              child: Text('sub_subscribe_now'.tr),
-            ),
-        ],
       ),
       barrierDismissible: true,
     );
@@ -4941,505 +4964,5 @@ class _HomePageState extends State<HomePage> {
     Get.toNamed(AppRoutes.subscription)?.then((_) => _loadSubscriptionStatus());
   }
 
-  void _showAboutDialog() {
-    final sw = Get.locale?.languageCode == 'sw';
-    String t(String en, String swText) => sw ? swText : en;
-
-    Widget link(IconData icon, String label, VoidCallback onTap) {
-      return ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_Radius.md),
-        ),
-        leading: Icon(icon, color: _AppColors.brand, size: 22),
-        title: Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: _AppColors.ink,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: _AppColors.muted),
-        onTap: onTap,
-      );
-    }
-
-    void open(String route) {
-      Get.back();
-      Get.toNamed(route);
-    }
-
-    Get.dialog(
-      Dialog(
-        backgroundColor: _AppColors.surface,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [_AppColors.brandDeep, _AppColors.brand],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.storefront_rounded,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'MJASI POS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        t(
-                          'Manage income, expenses, invoices, receipts and jobs',
-                          'Simamia mapato, matumizi, ankara, risiti na kazi',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
-                  child: Column(
-                    children: [
-                      link(
-                        Icons.privacy_tip_outlined,
-                        t('Privacy Policy', 'Sera ya Faragha'),
-                        () => open(AppRoutes.privacy),
-                      ),
-                      link(
-                        Icons.gavel_outlined,
-                        t('Terms & Conditions', 'Masharti na Vigezo'),
-                        () => open(AppRoutes.terms),
-                      ),
-                      link(
-                        Icons.link_rounded,
-                        t('All app links', 'Viungo vyote vya app'),
-                        () => open(AppRoutes.appUrls),
-                      ),
-                      link(
-                        Icons.support_agent_outlined,
-                        t('Help & Support', 'Msaada'),
-                        () => open(AppRoutes.support),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: SizedBox(
-                    height: 46,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _AppColors.brand,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(_Radius.md),
-                        ),
-                      ),
-                      onPressed: Get.back,
-                      child: Text('close'.tr),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DebtMetric {
-  const _DebtMetric(
-    this.label,
-    this.value,
-    this.icon,
-    this.color,
-    this.background,
-    this.filter,
-  );
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final Color background;
-  final DebtFilter filter;
-}
-
-typedef _QuickActionData = ({String label, IconData icon, VoidCallback onTap});
-
-class _QuickActionsPanel extends StatelessWidget {
-  const _QuickActionsPanel({
-    required this.actions,
-    required this.onSelected,
-    required this.onClose,
-    this.desktop = false,
-    this.title,
-    this.headerIcon = Icons.bolt_rounded,
-  });
-
-  final List<_QuickActionData> actions;
-  final ValueChanged<_QuickActionData> onSelected;
-  final VoidCallback onClose;
-  final bool desktop;
-  final String? title;
-  final IconData headerIcon;
-
-  @override
-  Widget build(BuildContext context) {
-    const iconColors = [
-      Color(0xFF168A62),
-      Color(0xFFE06B35),
-      Color(0xFF3269D3),
-      Color(0xFF8051C7),
-      Color(0xFF168A9B),
-      Color(0xFFC04468),
-    ];
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Colors.white, Color(0xFFF5F8FF)],
-              ),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: const Color(0xFFE5EBF5)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x26071932),
-                  blurRadius: 28,
-                  offset: Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 14, 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF1FF),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFDDE8FA)),
-                        ),
-                        child: Icon(
-                          headerIcon,
-                          color: Color(0xFF3269D3),
-                          size: 25,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title ?? 'home_quick_access'.tr,
-                              style: const TextStyle(
-                                color: Color(0xFF10233F),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -.25,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'home_quick_access_sub'.tr,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: const Color(0xFF65738A),
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: onClose,
-                        tooltip: MaterialLocalizations.of(
-                          context,
-                        ).closeButtonTooltip,
-                        style: IconButton.styleFrom(
-                          foregroundColor: const Color(0xFF53647C),
-                          backgroundColor: const Color(0xFFF0F4FA),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                        ),
-                        icon: const Icon(Icons.close_rounded, size: 19),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(
-                  height: 1,
-                  indent: 18,
-                  endIndent: 18,
-                  color: const Color(0xFFE8EDF5),
-                ),
-                Flexible(
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.all(desktop ? 12 : 16),
-                    itemCount: actions.length,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: desktop ? 1 : 2,
-                      mainAxisSpacing: 9,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: desktop ? 5.0 : 1.7,
-                    ),
-                    itemBuilder: (context, index) {
-                      final action = actions[index];
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: 1),
-                        duration: Duration(
-                          milliseconds: 220 + ((index > 7 ? 7 : index) * 35),
-                        ),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) => Opacity(
-                          opacity: value,
-                          child: Transform.translate(
-                            offset: Offset(0, 12 * (1 - value)),
-                            child: child,
-                          ),
-                        ),
-                        child: _QuickActionTile(
-                          action: action,
-                          color: iconColors[index % iconColors.length],
-                          onTap: () => onSelected(action),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (!desktop)
-          CustomPaint(
-            size: const Size(42, 22),
-            painter: _QuickActionsTailPainter(),
-          ),
-      ],
-    );
-  }
-}
-
-class _QuickActionTile extends StatelessWidget {
-  const _QuickActionTile({
-    required this.action,
-    required this.color,
-    required this.onTap,
-  });
-
-  final _QuickActionData action;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(17),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(17),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFAFBFE),
-            borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: const Color(0xFFE6ECF5)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .11),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(action.icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  action.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF172942),
-                    fontSize: 12,
-                    height: 1.15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: const Color(0xFF9AA7B9),
-                size: 13,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActionsTailPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    final paint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.white, Color(0xFFF5F8FF)],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _BreathingConnectivityDot extends StatefulWidget {
-  const _BreathingConnectivityDot({required this.color, required this.label});
-
-  final Color color;
-  final String label;
-
-  @override
-  State<_BreathingConnectivityDot> createState() =>
-      _BreathingConnectivityDotState();
-}
-
-class _BreathingConnectivityDotState extends State<_BreathingConnectivityDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
-
-  late final Animation<double> _breath = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeInOut,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.label,
-      child: Semantics(
-        label: widget.label,
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: AnimatedBuilder(
-            animation: _breath,
-            builder: (context, child) {
-              final progress = _breath.value;
-              final haloSize = 10 + progress * 8;
-              return Center(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: haloSize,
-                      height: haloSize,
-                      decoration: BoxDecoration(
-                        color: widget.color.withValues(
-                          alpha: .28 * (1 - progress),
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    child!,
-                  ],
-                ),
-              );
-            },
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: widget.color,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.color.withValues(alpha: .45),
-                    blurRadius: 5,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  void _showAboutDialog() => showMjasiAboutDialog(context);
 }

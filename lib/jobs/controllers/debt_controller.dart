@@ -127,7 +127,6 @@ class DebtController extends GetxController {
     } catch (error, stackTrace) {
       debugPrint('Failed to save debt: $error');
       debugPrintStack(stackTrace: stackTrace);
-      Get.snackbar('error'.tr, 'debt_save_error'.trParams({'error': '$error'}));
       rethrow;
     }
   }

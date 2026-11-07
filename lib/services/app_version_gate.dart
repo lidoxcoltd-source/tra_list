@@ -204,19 +204,19 @@ class _AppVersionGateState extends State<AppVersionGate>
       fit: StackFit.expand,
       children: [
         widget.child,
-        IgnorePointer(
-          ignoring: !_blocked,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const ModalBarrier(color: Colors.transparent, dismissible: false),
-              Offstage(
-                offstage: !_blocked,
-                child: _buildUpdateRequired(context),
-              ),
-            ],
+        if (_blocked)
+          Positioned.fill(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ModalBarrier(
+                  color: Colors.transparent,
+                  dismissible: false,
+                ),
+                _buildUpdateRequired(context),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

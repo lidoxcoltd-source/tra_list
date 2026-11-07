@@ -190,11 +190,19 @@ service cloud.firestore {
         || (
           exists(businessMembershipPath(businessUid, employeeUid))
           && get(businessMembershipPath(businessUid, employeeUid)).data.businessUid == businessUid
+          && get(businessMembershipPath(businessUid, employeeUid)).data.get('employeeUid', '') == employeeUid
         );
     }
 
     function membershipData(businessUid, employeeUid) {
+      // Prefer the business-scoped membership only when it belongs to this
+      // business. A stale/mis-keyed modern record must not shadow the valid
+      // legacy membership the app selected for this employee.
       return exists(businessMembershipPath(businessUid, employeeUid))
+          && get(businessMembershipPath(businessUid, employeeUid))
+            .data.get('businessUid', '') == businessUid
+          && get(businessMembershipPath(businessUid, employeeUid))
+            .data.get('employeeUid', '') == employeeUid
         ? get(businessMembershipPath(businessUid, employeeUid)).data
         : get(membershipPath(employeeUid)).data;
     }
@@ -248,7 +256,56 @@ service cloud.firestore {
     function isActiveBarWaiter(businessUid) {
       return isBarModeEnabled(businessUid)
         && hasActiveMembership(businessUid)
-        && !isActiveBartender(businessUid);
+        && membershipData(businessUid, request.auth.uid).get('barRole', '')
+          == 'waiter';
+    }
+
+    function canManageStaff(businessUid) {
+      return isBusinessOwner(businessUid)
+        || (
+          isBarModeEnabled(businessUid)
+          && hasActiveMembership(businessUid)
+          && membershipData(businessUid, request.auth.uid).get('barRole', '')
+            == 'manager'
+          && membershipData(businessUid, request.auth.uid)
+            .get('permissions', {}).get('staff', {}).get('manage', false)
+            == true
+        );
+    }
+
+    function canAssignManagerRole(businessUid, data) {
+      return isBusinessOwner(businessUid)
+        || (
+          data.get('barRole', 'staff') != 'manager'
+          && data.get('permissions', {}).get('staff', {}).get('manage', false)
+            != true
+        );
+    }
+
+    function canManageStaffMember(businessUid, data) {
+      return isBusinessOwner(businessUid)
+        || (
+          canManageStaff(businessUid)
+          && data.get('barRole', 'staff') != 'manager'
+          && data.get('permissions', {}).get('staff', {}).get('manage', false)
+            != true
+        );
+    }
+
+    function shopBranchPath(businessUid, branchId) {
+      return /databases/$(database)/documents/users/$(businessUid)/branches/$(branchId);
+    }
+
+    function hasValidShopAssignment(businessUid, memberData) {
+      let path = shopBranchPath(businessUid, memberData.get('shopId', ''));
+      return memberData.get('shopId', '') is string
+        && exists(path)
+        && get(path).data.get('businessId', '') == businessUid
+        && get(path).data.get('active', false) == true
+        && get(path).data.get('name', '')
+          == memberData.get('shopNickname', '')
+        && get(path).data.get('location', '')
+          == memberData.get('shopLocation', '');
     }
 
     function hasActiveMembershipFor(businessUid, employeeUid) {
@@ -301,8 +358,30 @@ service cloud.firestore {
     }
 
     function canUseBarPos(businessUid) {
-      return hasPermission(businessUid, 'invoices', 'create')
+      return isBusinessOwner(businessUid)
+        || isActiveBartender(businessUid)
+        || hasPermission(businessUid, 'invoices', 'create')
         || isActiveBarWaiter(businessUid);
+    }
+
+    function canReadBarOrders(businessUid) {
+      return isBarModeEnabled(businessUid)
+        && (
+          isBusinessOwner(businessUid)
+          || (
+            hasActiveMembership(businessUid)
+            && (
+              membershipData(businessUid, request.auth.uid)
+                .get('barRole', '') in ['bartender', 'waiter']
+              || membershipData(businessUid, request.auth.uid)
+                .get('permissions', {}).get('invoices', {}).get('create', false)
+                == true
+              || membershipData(businessUid, request.auth.uid)
+                .get('permissions', {}).get('invoices', {}).get('view', false)
+                == true
+            )
+          )
+        );
     }
 
     function canAccessTransactionShop(businessUid, data) {
@@ -343,7 +422,9 @@ service cloud.firestore {
     }
 
     function canViewProfile(businessUid) {
-      return hasPermission(businessUid, 'profile', 'view')
+      return canManageStaff(businessUid)
+        || isActiveBartender(businessUid)
+        || hasPermission(businessUid, 'profile', 'view')
         || isActiveBarWaiter(businessUid)
         || hasPermission(businessUid, 'invoices', 'create')
         || hasPermission(businessUid, 'quotations', 'create')
@@ -371,10 +452,7 @@ service cloud.firestore {
     function canCreateBusinessDocument(businessUid, data) {
       return isBusinessOwner(businessUid)
         || (
-          (
-            isActiveBartender(businessUid)
-            || isActiveBarWaiter(businessUid)
-          )
+          canUseBarPos(businessUid)
           && data.get('source', '') == 'pos'
           && data.get('kind', 'invoice') == 'invoice'
           && data.get('cashierUid', '') == request.auth.uid
@@ -602,38 +680,58 @@ service cloud.firestore {
         && (
           request.auth.uid == employeeUid
           || (
-            resource.data.businessUid == request.auth.uid
-            && isBusinessOwner(request.auth.uid)
+            canManageStaff(resource.data.businessUid)
           )
         );
       allow list: if signedIn()
-        && isBusinessOwner(request.auth.uid)
-        && resource.data.businessUid == request.auth.uid;
+        && canManageStaff(resource.data.businessUid);
       allow create: if signedIn()
         && employeeUid != request.auth.uid
-        && isBusinessOwner(request.auth.uid)
+        && canManageStaff(request.resource.data.businessUid)
         && request.resource.data.employeeUid == employeeUid
-        && request.resource.data.businessUid == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.active == true
         && request.resource.data.businessEmail is string
         && request.resource.data.businessName is string
         && request.resource.data.shopNickname is string
         && request.resource.data.shopNickname.size() > 0
+        && request.resource.data.shopLocation is string
+        && request.resource.data.shopLocation.size() > 0
+        && request.resource.data.shopId is string
+        && request.resource.data.shopId.size() > 0
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 3
+        && request.resource.data.username.size() <= 32
+        && request.resource.data.usernameKey is string
+        && request.resource.data.usernameKey
+          == request.resource.data.username.lower()
+        && hasValidShopAssignment(
+          request.resource.data.businessUid,
+          request.resource.data
+        )
         && request.resource.data.email is string
         && request.resource.data.phone is string
         && request.resource.data.get('dailyExpenseLimit', 0) is number
         && request.resource.data.get('dailyExpenseLimit', 0) >= 0
         && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
         && request.resource.data.get('barRole', 'staff')
-          in ['staff', 'waiter', 'bartender']
+          in ['staff', 'waiter', 'bartender', 'manager']
+        && canAssignManagerRole(
+          request.resource.data.businessUid,
+          request.resource.data
+        )
         && request.resource.data.keys().hasOnly([
           'employeeUid',
           'businessUid',
           'businessEmail',
           'businessName',
           'shopNickname',
+          'shopLocation',
+          'shopId',
+          'username',
+          'usernameKey',
           'name',
+          'photoUrl',
           'email',
           'phone',
           'active',
@@ -645,13 +743,39 @@ service cloud.firestore {
           'updatedAt'
         ]);
       allow update: if signedIn()
-        && employeeUid != request.auth.uid
-        && isBusinessOwner(request.auth.uid)
-        && resource.data.businessUid == request.auth.uid
+        && (
+          (
+            employeeUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['photoUrl', 'updatedAt'])
+            && request.resource.data.get('photoUrl', '') is string
+            && request.resource.data.get('photoUrl', '').size() <= 2048
+            && request.resource.data.updatedAt == request.time
+            && (
+              request.resource.data.get('photoUrl', '') == ''
+              || request.resource.data.get('photoUrl', '').matches('https://.*')
+            )
+          )
+          || (
+        employeeUid != request.auth.uid
+        && canManageStaffMember(resource.data.businessUid, resource.data)
         && request.resource.data.businessUid == resource.data.businessUid
         && request.resource.data.employeeUid == resource.data.employeeUid
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly([
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['barRole', 'permissions', 'updatedAt'])
+            && request.resource.data.get('barRole', 'staff')
+              in ['staff', 'waiter', 'bartender', 'manager']
+            && canAssignManagerRole(resource.data.businessUid, request.resource.data)
+            && (
+              isBusinessOwner(resource.data.businessUid)
+              || request.resource.data.get('permissions', {})
+                == resource.data.get('permissions', {})
+            )
+          )
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'email',
             'phone',
@@ -660,29 +784,42 @@ service cloud.firestore {
             'active',
             'removed',
             'shopNickname',
+            'shopLocation',
+            'shopId',
             'dailyExpenseLimit',
             'updatedAt'
-          ])
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.phone is string
-        && request.resource.data.shopNickname is string
-        && request.resource.data.shopNickname.size() > 0
-        && request.resource.data.get('dailyExpenseLimit', 0) is number
-        && request.resource.data.get('dailyExpenseLimit', 0) >= 0
-        && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
-        && request.resource.data.get('barRole', 'staff')
-          in ['staff', 'waiter', 'bartender']
-        && request.resource.data.get('active', false) is bool
-        && request.resource.data.get('removed', false) is bool
-        && (
-          request.resource.data.get('removed', false) != true
-          || request.resource.data.active == false
+            ])
+            && request.resource.data.name is string
+            && request.resource.data.email is string
+            && request.resource.data.phone is string
+            && request.resource.data.shopNickname is string
+            && request.resource.data.shopNickname.size() > 0
+            && request.resource.data.shopLocation is string
+            && request.resource.data.shopLocation.size() > 0
+            && request.resource.data.shopId is string
+            && request.resource.data.shopId.size() > 0
+            && hasValidShopAssignment(
+              resource.data.businessUid,
+              request.resource.data
+            )
+            && request.resource.data.get('dailyExpenseLimit', 0) is number
+            && request.resource.data.get('dailyExpenseLimit', 0) >= 0
+            && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
+            && request.resource.data.get('barRole', 'staff')
+              in ['staff', 'waiter', 'bartender', 'manager']
+            && canAssignManagerRole(resource.data.businessUid, request.resource.data)
+            && request.resource.data.get('active', false) is bool
+            && request.resource.data.get('removed', false) is bool
+            && (
+              request.resource.data.get('removed', false) != true
+              || request.resource.data.active == false
+            )
+          )
+          )
         );
       allow delete: if signedIn()
         && employeeUid != request.auth.uid
-        && isBusinessOwner(request.auth.uid)
-        && resource.data.businessUid == request.auth.uid;
+        && canManageStaffMember(resource.data.businessUid, resource.data);
     }
 
     match /chatPresence/{businessUid}/members/{employeeUid} {
@@ -715,25 +852,38 @@ service cloud.firestore {
       allow get: if signedIn()
         && (
           request.auth.uid == employeeUid
-          || isBusinessOwner(businessUid)
+          || canManageStaff(businessUid)
         );
       allow list: if signedIn()
         && (
-          isBusinessOwner(businessUid)
+          canManageStaff(businessUid)
           || resource.data.employeeUid == request.auth.uid
         );
       allow create, delete: if false;
       allow update: if signedIn()
         && employeeUid != request.auth.uid
-        && isBusinessOwner(businessUid)
+        && canManageStaffMember(businessUid, resource.data)
         && resource.data.businessUid == businessUid
         && resource.data.employeeUid == employeeUid
         && resource.data.get('role', '') == 'staff'
         && request.resource.data.businessUid == resource.data.businessUid
         && request.resource.data.employeeUid == resource.data.employeeUid
         && request.resource.data.get('role', '') == resource.data.role
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly([
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['barRole', 'permissions', 'updatedAt'])
+            && request.resource.data.get('barRole', 'staff')
+              in ['staff', 'waiter', 'bartender', 'manager']
+            && canAssignManagerRole(businessUid, request.resource.data)
+            && (
+              isBusinessOwner(businessUid)
+              || request.resource.data.get('permissions', {})
+                == resource.data.get('permissions', {})
+            )
+          )
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'email',
             'phone',
@@ -742,24 +892,34 @@ service cloud.firestore {
             'active',
             'removed',
             'shopNickname',
+            'shopLocation',
+            'shopId',
             'dailyExpenseLimit',
             'updatedAt'
-          ])
-        && request.resource.data.name is string
-        && request.resource.data.email is string
-        && request.resource.data.phone is string
-        && request.resource.data.shopNickname is string
-        && request.resource.data.shopNickname.size() > 0
-        && request.resource.data.get('dailyExpenseLimit', 0) is number
-        && request.resource.data.get('dailyExpenseLimit', 0) >= 0
-        && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
-        && request.resource.data.get('barRole', 'staff')
-          in ['staff', 'waiter', 'bartender']
-        && request.resource.data.get('active', false) is bool
-        && request.resource.data.get('removed', false) is bool
-        && (
-          request.resource.data.get('removed', false) != true
-          || request.resource.data.active == false
+            ])
+            && request.resource.data.name is string
+            && request.resource.data.email is string
+            && request.resource.data.phone is string
+            && request.resource.data.shopNickname is string
+            && request.resource.data.shopNickname.size() > 0
+            && request.resource.data.shopLocation is string
+            && request.resource.data.shopLocation.size() > 0
+            && request.resource.data.shopId is string
+            && request.resource.data.shopId.size() > 0
+            && hasValidShopAssignment(businessUid, request.resource.data)
+            && request.resource.data.get('dailyExpenseLimit', 0) is number
+            && request.resource.data.get('dailyExpenseLimit', 0) >= 0
+            && request.resource.data.get('dailyExpenseLimit', 0) <= 1000000000
+            && request.resource.data.get('barRole', 'staff')
+              in ['staff', 'waiter', 'bartender', 'manager']
+            && canAssignManagerRole(businessUid, request.resource.data)
+            && request.resource.data.get('active', false) is bool
+            && request.resource.data.get('removed', false) is bool
+            && (
+              request.resource.data.get('removed', false) != true
+              || request.resource.data.active == false
+            )
+          )
         );
     }
 
@@ -771,6 +931,34 @@ service cloud.firestore {
 
     match /businessInvitations/{invitationCode} {
       allow read, write: if false;
+    }
+
+    match /users/{businessUid}/branches/{branchId} {
+      allow get, list: if isBusinessOwner(businessUid)
+        || hasActiveMembership(businessUid);
+      allow create: if isBusinessOwner(businessUid)
+        && request.resource.data.keys().hasOnly([
+          'businessId', 'name', 'location', 'nameKey', 'active',
+          'barModeEnabled', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.businessId == businessUid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.location is string
+        && request.resource.data.location.size() > 0
+        && request.resource.data.nameKey is string
+        && request.resource.data.active == true
+        && request.resource.data.barModeEnabled is bool
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isBusinessOwner(businessUid)
+        && request.resource.data.businessId == resource.data.businessId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'location', 'nameKey', 'active', 'barModeEnabled', 'updatedAt'
+        ])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isBusinessOwner(businessUid);
     }
 
     match /users/{businessUid}/{document=**} {
@@ -1199,7 +1387,22 @@ service cloud.firestore {
     }
 
     match /users/{businessUid}/invoices/{documentId} {
-      allow read: if canAccessDocument(businessUid, resource.data, 'view');
+      allow get: if (
+          !exists(/databases/$(database)/documents/users/$(businessUid)/invoices/$(documentId))
+          && canUseBarPos(businessUid)
+        )
+        || (
+          canUseBarPos(businessUid)
+          && resource.data.get('source', '') == 'pos'
+          && resource.data.get('cashierUid', '') == request.auth.uid
+        )
+        || canAccessDocument(businessUid, resource.data, 'view');
+      allow list: if canAccessDocument(businessUid, resource.data, 'view')
+        || (
+          isBarModeEnabled(businessUid)
+          && canUseBarPos(businessUid)
+          && resource.data.get('cashierUid', '') == request.auth.uid
+        );
       allow create: if canCreateBusinessDocument(
         businessUid,
         request.resource.data
@@ -1238,27 +1441,27 @@ service cloud.firestore {
     }
 
     function canReadProducts(businessUid) {
-      return hasPermission(businessUid, 'stock', 'view')
+      return isActiveBartender(businessUid)
+        || isActiveBarWaiter(businessUid)
+        || hasPermission(businessUid, 'stock', 'view')
         || hasPermission(businessUid, 'stock', 'create')
         || hasPermission(businessUid, 'stock', 'edit')
-        || isActiveBarWaiter(businessUid)
-        || isActiveBartender(businessUid)
-        || hasPermission(businessUid, 'invoices', 'create')
+        || canUseBarPos(businessUid)
         || hasPermission(businessUid, 'invoices', 'edit')
         || hasPermission(businessUid, 'quotations', 'create');
     }
 
     function canMoveSaleStock(businessUid) {
       return hasPermission(businessUid, 'invoices', 'create')
-        || isActiveBarWaiter(businessUid)
         || isActiveBartender(businessUid)
+        || isActiveBarWaiter(businessUid)
         || hasPermission(businessUid, 'invoices', 'delete');
     }
 
     function validBarOrderCreate(businessUid) {
       let data = request.resource.data;
       return isBarModeEnabled(businessUid)
-        && canUseBarPos(businessUid)
+        && (isActiveBartender(businessUid) || isBusinessOwner(businessUid))
         && data.keys().hasOnly([
           'businessId', 'tableNumber', 'customerName', 'items', 'total',
           'status', 'createdBy', 'createdByName', 'createdAt'
@@ -1295,12 +1498,12 @@ service cloud.firestore {
       let data = request.resource.data;
       let changed = data.diff(resource.data).affectedKeys();
       return isBarModeEnabled(businessUid)
-        && canUseBarPos(businessUid)
         && data.businessId == businessUid
         && (
           (
             resource.data.status == 'pending'
             && data.status == 'served'
+            && (isBusinessOwner(businessUid) || isActiveBarWaiter(businessUid))
             && changed.hasOnly([
               'status', 'servedBy', 'servedByName', 'servedAt'
             ])
@@ -1310,6 +1513,14 @@ service cloud.firestore {
           || (
             resource.data.status == 'pending'
             && data.status == 'cancelled'
+            && (
+              isBusinessOwner(businessUid)
+              || isActiveBarWaiter(businessUid)
+              || (
+                isActiveBartender(businessUid)
+                && resource.data.createdBy == request.auth.uid
+              )
+            )
             && changed.hasOnly([
               'status', 'cancelledBy', 'cancelledByName', 'cancelledAt'
             ])
@@ -1319,6 +1530,11 @@ service cloud.firestore {
           || (
             resource.data.status == 'served'
             && data.status == 'paid'
+            && (
+              isBusinessOwner(businessUid)
+              || isActiveBarWaiter(businessUid)
+              || hasPermission(businessUid, 'invoices', 'create')
+            )
             && !isActiveBartender(businessUid)
             && changed.hasOnly([
               'status', 'invoiceId', 'paidBy', 'paidByName', 'paidAt'
@@ -1342,11 +1558,7 @@ service cloud.firestore {
     }
 
     match /users/{businessUid}/barOrders/{orderId} {
-      allow read: if isBarModeEnabled(businessUid)
-        && (
-          canUseBarPos(businessUid)
-          || hasPermission(businessUid, 'invoices', 'view')
-        );
+      allow read: if canReadBarOrders(businessUid);
       allow create: if validBarOrderCreate(businessUid);
       allow update: if validBarOrderUpdate(businessUid, orderId);
       allow delete: if false;
@@ -1356,21 +1568,23 @@ service cloud.firestore {
       allow read: if canReadProducts(businessUid);
       allow create: if hasPermission(businessUid, 'stock', 'create')
         && request.resource.data.businessId == businessUid;
-      allow update: if resource.data.businessId == businessUid
-        && request.resource.data.businessId == businessUid
-        && (
-          hasPermission(businessUid, 'stock', 'edit')
-          || (
-            (
-              hasPermission(businessUid, 'stock', 'create')
-              || canMoveSaleStock(businessUid)
-            )
-            && onlyStockTotalsChanged()
-            && (
-              !isActiveBartender(businessUid)
-              || !request.resource.data.diff(resource.data)
-                .affectedKeys().hasAny(['costPrice'])
-            )
+      // Legacy products are already tenant-scoped by this document path and
+      // may not have a businessId field. Keep an explicitly different ID
+      // blocked, while allowing the POS to update stock totals on those docs.
+      allow update: if (
+          resource.data.get('businessId', businessUid) == businessUid
+          && request.resource.data.get('businessId', businessUid) == businessUid
+          && hasPermission(businessUid, 'stock', 'edit')
+        )
+        || (
+          (isActiveBartender(businessUid)
+            || hasPermission(businessUid, 'stock', 'create')
+            || canMoveSaleStock(businessUid))
+          && onlyStockTotalsChanged()
+          && (
+            !isActiveBartender(businessUid)
+            || !request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(['costPrice'])
           )
         );
       allow delete: if hasPermission(businessUid, 'stock', 'delete');
@@ -1400,7 +1614,8 @@ service cloud.firestore {
 
     // Immutable ledger: entries can be created but never edited or deleted.
     match /users/{businessUid}/stockMovements/{movementId} {
-      allow get: if hasPermission(businessUid, 'stock', 'view')
+      allow get: if isActiveBartender(businessUid)
+        || hasPermission(businessUid, 'stock', 'view')
         || canMoveSaleStock(businessUid);
       allow list: if hasPermission(businessUid, 'stock', 'view');
       allow create: if request.auth != null
@@ -1413,7 +1628,7 @@ service cloud.firestore {
             && request.resource.data.type in ['purchase', 'opening_stock']
           )
           || (
-            canMoveSaleStock(businessUid)
+            (isActiveBartender(businessUid) || canMoveSaleStock(businessUid))
             && request.resource.data.type in ['sale', 'sale_reversal']
           )
         );

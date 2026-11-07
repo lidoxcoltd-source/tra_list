@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:tra_list/services/business_access_service.dart';
@@ -12,6 +13,13 @@ class StockAlert {
   final StockState state;
   final double quantity;
   final String unit;
+}
+
+class PosSaleResult {
+  const PosSaleResult({required this.alerts, required this.company});
+
+  final List<StockAlert> alerts;
+  final Map<String, dynamic> company;
 }
 
 class _Req {
@@ -527,19 +535,70 @@ class StockService {
   /// Creates the sale document AND deducts stock in one transaction. If any
   /// product lacks stock nothing is written. Calling it again for the same
   /// [saleRef] is a no-op.
+  Future<PosSaleResult> finalizePosSale({
+    required String saleId,
+    required Map<String, dynamic> saleData,
+    required List<SaleLine> lines,
+  }) async {
+    _requireInvoiceCreate();
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('completePosSale')
+        .call(<String, dynamic>{
+          'businessUid': businessId,
+          'saleId': saleId,
+          'saleData': saleData,
+          'lines': [
+            for (final line in lines)
+              {'productId': line.productId, 'quantity': line.quantity},
+          ],
+        });
+    final result = Map<String, dynamic>.from(response.data as Map);
+    final company = Map<String, dynamic>.from(
+      result['company'] as Map? ?? const <String, dynamic>{},
+    );
+    final alerts = <StockAlert>[];
+    for (final raw in result['alerts'] as List? ?? const []) {
+      if (raw is! Map) continue;
+      final stateName = raw['state']?.toString();
+      final state = StockState.values
+          .where((value) => value.name == stateName)
+          .firstOrNull;
+      if (state == null) continue;
+      alerts.add(
+        StockAlert(
+          raw['productName']?.toString() ?? '',
+          state,
+          (raw['quantity'] as num?)?.toDouble() ?? 0,
+          raw['unit']?.toString() ?? '',
+        ),
+      );
+    }
+    await _notifyAlerts(alerts);
+    return PosSaleResult(alerts: alerts, company: company);
+  }
+
   Future<List<StockAlert>> finalizeSale({
     required DocumentReference<Map<String, dynamic>> saleRef,
     required Map<String, dynamic> saleData,
     required List<SaleLine> lines,
   }) async {
     _requireInvoiceCreate();
+    debugPrint(
+      'POS transaction identity: business=$businessId, user=$uid, '
+      'barBartender=${BusinessAccessService.isBarBartender}, '
+      'barWaiter=${BusinessAccessService.isBarWaiter}, '
+      'payment=${saleData['salePayment']}, source=${saleData['source']}, '
+      'kind=${saleData['kind']}',
+    );
     final merged = <String, double>{};
     for (final l in lines) {
       if (l.quantity <= 0) throw StockException('stk_err_qty');
       merged[l.productId] = roundQty((merged[l.productId] ?? 0) + l.quantity);
     }
     final alerts = await _db.runTransaction<List<StockAlert>>((tx) async {
+      debugPrint('POS transaction: checking invoice ${saleRef.path}');
       if ((await tx.get(saleRef)).exists) return const [];
+      debugPrint('POS transaction: invoice check passed');
       final reqs = [
         for (final e in merged.entries)
           _Req(
@@ -551,13 +610,18 @@ class StockService {
             movementId: 'sale_${saleRef.id}_${e.key}',
           ),
       ];
+      debugPrint(
+        'POS transaction: reading ${reqs.length} product(s) and stock movements',
+      );
       final alerts = await _applyWrites(tx, await _applyReads(tx, reqs));
+      debugPrint('POS transaction: stock writes staged');
       tx.set(saleRef, {
         ...saleData,
         'stockLines': [
           for (final e in merged.entries) {'productId': e.key, 'qty': e.value},
         ],
       });
+      debugPrint('POS transaction: invoice write staged');
       return alerts;
     });
     await _notifyAlerts(alerts);
@@ -584,7 +648,10 @@ class StockService {
     String tableNumber = '',
     String customerName = '',
   }) async {
-    _requireInvoiceCreate();
+    if (!BusinessAccessService.isBarBartender &&
+        !BusinessAccessService.isOwner.value) {
+      throw StockException('stk_err_permission');
+    }
     if (lines.isEmpty) throw StockException('stk_err_no_lines');
     if (tableNumber.trim().isEmpty) {
       throw StockException('bar_table_required');
@@ -593,71 +660,30 @@ class StockService {
     if (merged.length > 100) {
       throw StockException('stk_err_order_line_limit');
     }
-    final orderRef = barOrders.doc();
-    await _db.runTransaction((tx) async {
-      final snaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
-      for (final productId in merged.keys) {
-        snaps[productId] = await tx.get(products.doc(productId));
-      }
-
-      final items = <Map<String, dynamic>>[];
-      var total = 0.0;
-      for (final entry in merged.entries) {
-        final snap = snaps[entry.key]!;
-        if (!snap.exists) throw StockException('stk_err_product_missing');
-        final data = snap.data()!;
-        if (data['active'] == false) {
-          throw StockException('stk_err_product_missing');
-        }
-        final tracked = data['tracked'] != false;
-        final quantity = entry.value;
-        final onHand = (data['quantity'] as num?)?.toDouble() ?? 0;
-        final reserved = (data['reservedQuantity'] as num?)?.toDouble() ?? 0;
-        if (tracked && quantity > onHand - reserved) {
-          throw StockException('stk_err_insufficient', {
-            'name': data['name']?.toString() ?? '',
-            'available': formatQty(
-              (onHand - reserved).clamp(0, double.infinity),
-            ),
-            'unit': data['unit']?.toString() ?? '',
-          });
-        }
-        final unitPrice = (data['sellPrice'] as num?)?.toDouble() ?? 0;
-        final amount = roundMoney(quantity * unitPrice);
-        total = roundMoney(total + amount);
-        items.add({
-          'productId': entry.key,
-          'name': data['name']?.toString() ?? '',
-          'quantity': quantity,
-          'unit': data['unit']?.toString() ?? 'piece',
-          'unitPrice': unitPrice,
-          'amount': amount,
-          'tracked': tracked,
-        });
-        if (tracked) {
-          tx.update(products.doc(entry.key), {
-            'reservedQuantity': roundQty(reserved + quantity),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
-      }
-      tx.set(orderRef, {
-        'businessId': businessId,
+    final orderId = barOrders.doc().id;
+    try {
+      await FirebaseFunctions.instance.httpsCallable('submitBarOrder').call({
+        'businessUid': businessId,
+        'orderId': orderId,
         'tableNumber': tableNumber.trim(),
         'customerName': customerName.trim(),
-        'items': items,
-        'total': total,
-        'status': 'pending',
-        'createdBy': uid,
-        'createdByName': userName,
-        'createdAt': FieldValue.serverTimestamp(),
+        'lines': [
+          for (final entry in merged.entries)
+            {'productId': entry.key, 'quantity': entry.value},
+        ],
       });
-    });
-    return orderRef.id;
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint('Bar-order callable failed: ${error.code}: ${error.message}');
+      rethrow;
+    }
+    return orderId;
   }
 
   Future<void> serveBarOrder(String orderId) async {
-    _requireInvoiceCreate();
+    if (!BusinessAccessService.isBarWaiter &&
+        !BusinessAccessService.isOwner.value) {
+      throw StockException('stk_err_permission');
+    }
     final orderRef = barOrders.doc(orderId);
     final alerts = await _db.runTransaction<List<StockAlert>>((tx) async {
       final orderSnap = await tx.get(orderRef);
@@ -675,13 +701,6 @@ class StockService {
         }
       }
 
-      final movementWrites =
-          <
-            MapEntry<
-              DocumentReference<Map<String, dynamic>>,
-              Map<String, dynamic>
-            >
-          >[];
       final alerts = <StockAlert>[];
       for (final item in items) {
         if (item['tracked'] != true) continue;
@@ -718,25 +737,20 @@ class StockService {
             ),
           );
         }
-        movementWrites.add(
-          MapEntry(
-            movements.doc('bar_${orderId}_$productId'),
-            _movementData(
-              productId: productId,
-              productName: data['name']?.toString() ?? '',
-              type: MovementType.sale,
-              change: -quantity,
-              previous: onHand,
-              resulting: nextQuantity,
-              unitCost: (data['costPrice'] as num?)?.toDouble() ?? 0,
-              refType: 'barOrder',
-              refId: orderId,
-            ),
+        tx.set(
+          movements.doc('bar_${orderId}_$productId'),
+          _movementData(
+            productId: productId,
+            productName: data['name']?.toString() ?? '',
+            type: MovementType.sale,
+            change: -quantity,
+            previous: onHand,
+            resulting: nextQuantity,
+            unitCost: (data['costPrice'] as num?)?.toDouble() ?? 0,
+            refType: 'barOrder',
+            refId: orderId,
           ),
         );
-      }
-      for (final write in movementWrites) {
-        tx.set(write.key, write.value);
       }
       tx.update(orderRef, {
         'status': 'served',
@@ -759,6 +773,11 @@ class StockService {
       if (order['status'] != 'pending') {
         throw StockException('stk_err_order_not_pending');
       }
+      final mayCancel =
+          BusinessAccessService.isOwner.value ||
+          BusinessAccessService.isBarWaiter ||
+          (BusinessAccessService.isBarBartender && order['createdBy'] == uid);
+      if (!mayCancel) throw StockException('stk_err_permission');
       final items = _barOrderItems(
         order,
       ).where((item) => item['tracked'] == true).toList();
@@ -825,6 +844,12 @@ class StockService {
       )) {
         throw StockException('stk_err_order_table_mismatch');
       }
+      final waiterNames = orders
+          .map((order) => order['servedByName']?.toString().trim() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList();
+      final waiterName = waiterNames.join(', ');
       final receiptItems = <Map<String, dynamic>>[];
       var total = 0.0;
       for (final order in orders) {
@@ -855,6 +880,8 @@ class StockService {
           'dueDate': date,
           'paymentMethod': paymentMethod,
         },
+        'tableNumber': tableNumber,
+        'waiterName': waiterName,
         'items': receiptItems,
         'total': total,
       };
@@ -869,6 +896,7 @@ class StockService {
         'salePayment': paymentMethod,
         'cashierUid': uid,
         'cashierName': userName,
+        'waiterName': waiterName,
         'stockLines': const [],
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -894,7 +922,7 @@ class StockService {
 
   void _requireInvoiceCreate() {
     if (!_canModule('invoices', 'create') &&
-        !BusinessAccessService.isBarWaiter) {
+        !BusinessAccessService.canUseBarPos) {
       throw StockException('stk_err_permission');
     }
   }
@@ -976,13 +1004,28 @@ class StockService {
     final prepared = _Prepared();
     final snaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
     for (final id in reqs.map((r) => r.productId).toSet()) {
-      snaps[id] = await tx.get(products.doc(id));
+      final ref = products.doc(id);
+      debugPrint('POS transaction: reading product ${ref.path}');
+      snaps[id] = await tx.get(ref);
+      debugPrint(
+        'POS transaction: product read ${ref.path}, exists=${snaps[id]!.exists}',
+      );
+      final productData = snaps[id]!.data();
+      debugPrint(
+        'POS transaction: product tenant field ${ref.path}: '
+        'businessId=${productData?['businessId'] ?? '<missing>'}',
+      );
     }
     final done = <String>{};
     for (final r in reqs) {
-      if (r.movementId != null &&
-          (await tx.get(movements.doc(r.movementId!))).exists) {
-        done.add(r.movementId!);
+      if (r.movementId != null) {
+        final ref = movements.doc(r.movementId!);
+        debugPrint('POS transaction: checking movement ${ref.path}');
+        final movement = await tx.get(ref);
+        debugPrint(
+          'POS transaction: movement check ${ref.path}, exists=${movement.exists}',
+        );
+        if (movement.exists) done.add(r.movementId!);
       }
     }
 
@@ -1107,18 +1150,28 @@ class StockService {
     final alerts = <StockAlert>[];
     for (final p in prepared.products) {
       if (!p.touched) continue;
+      debugPrint('POS transaction: staging product update ${p.ref.path}');
       tx.update(p.ref, {
         'quantity': p.quantity,
-        'costPrice': p.cost,
+        if (!BusinessAccessService.isBarBartender) 'costPrice': p.cost,
         'stockState': p.newState.name,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      debugPrint(
+        'POS transaction: product update fields '
+        '${BusinessAccessService.isBarBartender ? 'quantity,stockState,updatedAt' : 'quantity,costPrice,stockState,updatedAt'}',
+      );
       // Alert only when the state actually worsens (no repeated spam).
       if (p.newState.name != p.oldState && p.newState != StockState.ok) {
         alerts.add(StockAlert(p.name, p.newState, p.quantity, p.unit));
       }
     }
     for (final m in prepared.movements) {
+      debugPrint(
+        'POS transaction: staging movement create ${m.ref.path}, '
+        'businessMatches=${m.data['businessId'] == businessId}, '
+        'userMatches=${m.data['userId'] == uid}, type=${m.data['type']}',
+      );
       tx.set(m.ref, m.data);
     }
     return alerts;

@@ -222,6 +222,10 @@ class InvoicePdf {
                           (invoice['paymentMethod'] ?? '').toString(),
                           t.smallBold,
                         ),
+                        if ((data['tableNumber']?.toString() ?? '').isNotEmpty)
+                          _kv('Table:', data['tableNumber'].toString(), t.smallBold),
+                        if ((data['waiterName']?.toString() ?? '').isNotEmpty)
+                          _kv('Served by:', data['waiterName'].toString(), t.smallBold),
                       ],
                     ),
                   ],

@@ -99,6 +99,7 @@ class ReceiptData {
   final double totalInclTax;
   final String verificationCode;
   final ImageProvider? qr;
+  final String servedBy;
 
   const ReceiptData({
     required this.company,
@@ -110,6 +111,7 @@ class ReceiptData {
     required this.totalInclTax,
     required this.verificationCode,
     this.qr,
+    this.servedBy = '',
   });
 
   ReceiptData copyWith({CompanyInfo? company, ImageProvider? qr}) =>
@@ -123,6 +125,7 @@ class ReceiptData {
         totalInclTax: totalInclTax,
         verificationCode: verificationCode,
         qr: qr ?? this.qr,
+        servedBy: servedBy,
       );
 }
 
@@ -258,6 +261,8 @@ class ReceiptPage extends StatelessWidget {
                   labelStyle,
                   textSmall,
                 ),
+                if (d.servedBy.isNotEmpty)
+                  _twoColRow('SERVED BY:', d.servedBy, labelStyle, textSmall),
                 _twoColRow(
                   'CUSTOMER ID TYPE:',
                   d.customer.idType,
@@ -730,6 +735,7 @@ Future<Uint8List> buildReceiptPdf(ReceiptData d) async {
 
         // Customer
         kv('CUSTOMER NAME:', d.customer.name),
+        if (d.servedBy.isNotEmpty) kv('SERVED BY:', d.servedBy),
         kv('CUSTOMER ID TYPE:', d.customer.idType),
         kv('CUSTOMER ID NO:', d.customer.idNo),
         kv('CUSTOMER MOBILE:', d.customer.mobile),

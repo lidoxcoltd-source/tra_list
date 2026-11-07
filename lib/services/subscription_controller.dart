@@ -111,6 +111,10 @@ class SubscriptionController extends GetxController {
       'Business subscription check: business=${BusinessAccessService.businessId}, '
       'owner=${BusinessAccessService.isOwner.value}, '
       'active=${BusinessAccessService.isActive.value}, '
+      'membership=${BusinessAccessService.hasMembership.value}, '
+      'barMode=${BusinessAccessService.barModeEnabled.value}, '
+      'barRole=${BusinessAccessService.barRole.value}, '
+      'canUseBarPos=${BusinessAccessService.canUseBarPos}, '
       'expiry=${data['expiry'] ?? data['expiryDate']}, '
       'subscribed=$subscribed, trial=$trial',
     );

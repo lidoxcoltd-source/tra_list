@@ -836,7 +836,7 @@ class _GridPostTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const placeholder = ColoredBox(color: MarketPalette.surfaceRaised);
+    const placeholder = MarketMediaPlaceholder();
     return GestureDetector(
       onTap: () => _open(context),
       child: RepaintBoundary(
@@ -857,12 +857,15 @@ class _GridPostTile extends StatelessWidget {
             else
               CachedNetworkImage(
                 imageUrl: post.images.isNotEmpty
-                    ? post.images.first
+                    ? post.videoThumb.isNotEmpty
+                          ? post.videoThumb
+                          : post.images.first
                     : post.videoThumb,
                 fit: BoxFit.cover,
                 memCacheWidth: 400,
                 placeholder: (_, _) => placeholder,
                 errorWidget: (_, _, _) => placeholder,
+                fadeInDuration: const Duration(milliseconds: 120),
               ),
             const Positioned.fill(
               child: DecoratedBox(
@@ -962,17 +965,23 @@ class _PostTile extends StatelessWidget {
                         fontSize: 14,
                         maxLines: 6,
                       )
-                    : post.images.isEmpty
-                    ? const ColoredBox(color: MarketPalette.surfaceRaised)
+                    : post.images.isEmpty && post.videoThumb.isEmpty
+                    ? const MarketMediaPlaceholder()
                     : CachedNetworkImage(
-                        imageUrl: post.images.first,
+                        imageUrl: post.videoThumb.isNotEmpty
+                            ? post.videoThumb
+                            : post.images.first,
                         fit: BoxFit.cover,
                         memCacheWidth: 600,
+                        placeholder: (_, _) => const MarketMediaPlaceholder(),
+                        fadeInDuration: const Duration(milliseconds: 120),
                         errorWidget: (_, _, _) => const ColoredBox(
                           color: MarketPalette.surfaceRaised,
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: MarketPalette.textMuted,
+                          child: Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: MarketPalette.textMuted,
+                            ),
                           ),
                         ),
                       ),
@@ -1460,12 +1469,19 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                           ),
                         );
                       },
-                      cover: post.images.isEmpty
+                      cover: post.videoThumb.isEmpty && post.images.isEmpty
                           ? null
                           : CachedNetworkImage(
-                              imageUrl: post.images.first,
+                              imageUrl: post.videoThumb.isNotEmpty
+                                  ? post.videoThumb
+                                  : post.images.first,
                               fit: BoxFit.cover,
                               memCacheWidth: 1000,
+                              placeholder: (_, _) =>
+                                  const MarketMediaPlaceholder(),
+                              errorWidget: (_, _, _) =>
+                                  const MarketMediaPlaceholder(),
+                              fadeInDuration: const Duration(milliseconds: 120),
                             ),
                     )
                   else if (post.isTextOnly)
@@ -1486,9 +1502,13 @@ class _FeedPostTileState extends State<_FeedPostTile> {
                         imageUrl: post.images[index],
                         fit: BoxFit.cover,
                         memCacheWidth: 1000,
+                        placeholder: (_, _) => const MarketMediaPlaceholder(),
+                        fadeInDuration: const Duration(milliseconds: 120),
                         errorWidget: (_, _, _) => const ColoredBox(
                           color: MarketPalette.surfaceRaised,
-                          child: Icon(Icons.broken_image_outlined),
+                          child: Center(
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
                         ),
                       ),
                     ),

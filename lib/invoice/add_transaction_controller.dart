@@ -104,10 +104,10 @@ class AddTransactionController extends GetxController {
   Future<void> _updateConnectionStatus(bool connected) async {
     final wasOnline = isOnline.value;
     isOnline.value = connected;
-    if (wasOnline != connected) _showConnectivityStatus();
-    if (!wasOnline && connected) {
-      await _syncOfflineData();
-    }
+    if (wasOnline != connected)
+      if (!wasOnline && connected) {
+        await _syncOfflineData();
+      }
   }
 
   bool _isRetryableNetworkError(Object error) {
@@ -140,7 +140,7 @@ class AddTransactionController extends GetxController {
     }
   }
 
-  void _showConnectivityStatus() {
+  /*   void _showConnectivityStatus() {
     final message = isOnline.isTrue
         ? 'Back online - transactions will sync automatically'.tr
         : 'No internet connection - transactions will be saved offline'.tr;
@@ -158,7 +158,7 @@ class AddTransactionController extends GetxController {
         color: Colors.white,
       ),
     );
-  }
+  } */
 
   Future<void> loadBrandColors() async {
     try {

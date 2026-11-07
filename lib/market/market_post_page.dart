@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -100,23 +101,38 @@ class _MarketPostPageState extends State<MarketPostPage> {
                           ? MarketVideoView(
                               url: post.videoUrl,
                               visibilityKey: 'detail-${post.id}',
-                              cover: post.images.isEmpty
+                              cover: post.images.isEmpty &&
+                                      post.videoThumb.isEmpty
                                   ? null
-                                  : Image.network(
-                                      post.images.first,
+                                  : CachedNetworkImage(
+                                      imageUrl: post.videoThumb.isNotEmpty
+                                          ? post.videoThumb
+                                          : post.images.first,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) =>
-                                          const SizedBox(),
+                                      memCacheWidth: 1000,
+                                      placeholder: (_, _) =>
+                                          const MarketMediaPlaceholder(),
+                                      errorWidget: (_, _, _) =>
+                                          const MarketMediaPlaceholder(),
+                                      fadeInDuration:
+                                          const Duration(milliseconds: 120),
                                     ),
                             )
                           : PageView.builder(
                               itemCount: post.images.length,
-                              itemBuilder: (_, index) => Image.network(
-                                post.images[index],
+                              itemBuilder: (_, index) => CachedNetworkImage(
+                                imageUrl: post.images[index],
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const ColoredBox(
+                                memCacheWidth: 1000,
+                                placeholder: (_, _) =>
+                                    const MarketMediaPlaceholder(),
+                                fadeInDuration:
+                                    const Duration(milliseconds: 120),
+                                errorWidget: (_, _, _) => const ColoredBox(
                                   color: MarketPalette.surfaceRaised,
-                                  child: Icon(Icons.broken_image_outlined),
+                                  child: Center(
+                                    child: Icon(Icons.broken_image_outlined),
+                                  ),
                                 ),
                               ),
                             ),

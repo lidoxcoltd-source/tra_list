@@ -22,7 +22,7 @@ class LoginController extends GetxController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   final emailController = TextEditingController();
-  final shopNicknameController = TextEditingController();
+  final usernameController = TextEditingController();
   final passwordController = TextEditingController();
 
   final isLoading = false.obs;
@@ -148,7 +148,7 @@ class LoginController extends GetxController {
     if (!google &&
         (emailController.text.trim().isEmpty ||
             passwordController.text.isEmpty ||
-            (staffLogin && shopNicknameController.text.trim().isEmpty))) {
+            (staffLogin && usernameController.text.trim().isEmpty))) {
       Get.snackbar(
         'Error',
         staffLogin
@@ -171,27 +171,41 @@ class LoginController extends GetxController {
         if (credential == null) return;
         userCredential = credential;
       } else if (staffLogin) {
-        try {
-          userCredential = await _auth.signInWithEmailAndPassword(
-            email: StaffService.staffAuthEmail(
-              businessEmail: enteredEmail,
+        final username = usernameController.text.trim();
+        final staffEmails = <String>{
+          StaffService.staffAuthEmail(
+            businessEmail: enteredEmail,
+            username: username,
+          ),
+          StaffService.legacyStaffAuthEmail(
+            businessEmail: enteredEmail,
+            username: username,
+          ),
+          StaffService.legacyPasswordStaffAuthEmail(
+            businessEmail: enteredEmail,
+            password: passwordController.text,
+          ),
+        };
+        UserCredential? staffCredential;
+        FirebaseAuthException? lastAuthError;
+        for (final staffEmail in staffEmails) {
+          try {
+            staffCredential = await _auth.signInWithEmailAndPassword(
+              email: staffEmail,
               password: passwordController.text,
-            ),
-            password: passwordController.text,
-          );
-        } on FirebaseAuthException catch (error) {
-          if (error.code != 'user-not-found' &&
-              error.code != 'invalid-credential') {
-            rethrow;
+            );
+            break;
+          } on FirebaseAuthException catch (error) {
+            if (error.code != 'user-not-found' &&
+                error.code != 'invalid-credential' &&
+                error.code != 'wrong-password') {
+              rethrow;
+            }
+            lastAuthError = error;
           }
-          userCredential = await _auth.signInWithEmailAndPassword(
-            email: StaffService.legacyStaffAuthEmail(
-              businessEmail: enteredEmail,
-              username: shopNicknameController.text,
-            ),
-            password: passwordController.text,
-          );
         }
+        if (staffCredential == null) throw lastAuthError!;
+        userCredential = staffCredential;
       } else {
         userCredential = await _auth.signInWithEmailAndPassword(
           email: enteredEmail,
@@ -219,12 +233,10 @@ class LoginController extends GetxController {
                   .trim()
                   .toLowerCase() ??
               '';
-          final storedLegacyUsername =
+          final storedUsername =
               membership.data()?['username']?.toString().trim().toLowerCase() ??
               '';
-          final enteredShopNickname = shopNicknameController.text
-              .trim()
-              .toLowerCase();
+          final enteredUsername = usernameController.text.trim().toLowerCase();
           final storedBusinessEmail =
               membership
                   .data()?['businessEmail']
@@ -232,14 +244,14 @@ class LoginController extends GetxController {
                   .trim()
                   .toLowerCase() ??
               '';
-          final shopMatches =
-              storedShopNickname == enteredShopNickname ||
-              storedLegacyUsername == enteredShopNickname;
+          final staffIdentifier = storedUsername.isNotEmpty
+              ? storedUsername
+              : storedShopNickname;
           if (!membership.exists ||
               BusinessAccessService.isOwner.value ||
               !BusinessAccessService.isActive.value ||
-              enteredShopNickname.isEmpty ||
-              !shopMatches ||
+              enteredUsername.isEmpty ||
+              staffIdentifier != enteredUsername ||
               (storedBusinessEmail.isNotEmpty &&
                   storedBusinessEmail != enteredEmail.toLowerCase())) {
             await _auth.signOut();
@@ -449,7 +461,7 @@ class LoginController extends GetxController {
   @override
   void onClose() {
     emailController.dispose();
-    shopNicknameController.dispose();
+    usernameController.dispose();
     passwordController.dispose();
     super.onClose();
   }
@@ -937,12 +949,12 @@ class _LoginPageState extends State<LoginPage> {
                       ? Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: TextFormField(
-                            controller: controller.shopNicknameController,
+                            controller: controller.usernameController,
                             autocorrect: false,
                             enableSuggestions: false,
                             decoration: _fieldDecoration(
-                              'staff_shop_nickname'.tr,
-                              Icons.storefront_outlined,
+                              'staff_username'.tr,
+                              Icons.alternate_email_rounded,
                               accent: accent,
                             ),
                           ),

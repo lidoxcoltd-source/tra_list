@@ -393,131 +393,15 @@ class _JobsPageState extends State<JobsPage> {
   }
 
   Future<void> _recordPayment(Debt debt) async {
-    final amountController = TextEditingController();
-    final notesController = TextEditingController();
-    var paidAt = DateTime.now();
-    var method = 'cash';
-    final formKey = GlobalKey<FormState>();
     await Get.dialog<void>(
-      StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('debt_record_payment'.tr),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${'debt_balance'.tr}: ${_currency.format(debt.balance)}',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: amountController,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: const [ThousandsSeparatorFormatter()],
-                  decoration: InputDecoration(
-                    labelText: 'debt_payment_amount'.tr,
-                    suffixText: 'TZS',
-                    border: const OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    final amount =
-                        double.tryParse(
-                          (value ?? '').trim().replaceAll(',', ''),
-                        ) ??
-                        0;
-                    if (amount <= 0) return 'validation_amount_positive'.tr;
-                    if (amount > debt.balance) {
-                      return 'debt_payment_exceeds_balance'.tr;
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: method,
-                  decoration: InputDecoration(
-                    labelText: 'debt_payment_method'.tr,
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final value in const [
-                      'cash',
-                      'mobile_money',
-                      'bank',
-                      'other',
-                    ])
-                      DropdownMenuItem(
-                        value: value,
-                        child: Text('debt_payment_method_$value'.tr),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) setDialogState(() => method = value);
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: notesController,
-                  decoration: InputDecoration(
-                    labelText: 'debt_payment_notes_optional'.tr,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: paidAt,
-                      firstDate: DateTime(now.year - 10),
-                      lastDate: DateTime(now.year + 1),
-                    );
-                    if (date != null) setDialogState(() => paidAt = date);
-                  },
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(
-                    '${'debt_payment_date'.tr}: ${_dateFormat.format(paidAt)}',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Get.back(), child: Text('cancel'.tr)),
-            FilledButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                final amount = double.parse(
-                  amountController.text.trim().replaceAll(',', ''),
-                );
-                try {
-                  await _controller.recordPayment(
-                    debtId: debt.id,
-                    amount: amount,
-                    paidAt: paidAt,
-                    method: method,
-                    notes: notesController.text,
-                  );
-                  if (Get.isDialogOpen == true) Get.back();
-                } catch (_) {
-                  // The controller reports payment errors to the user.
-                }
-              },
-              child: Text('save'.tr),
-            ),
-          ],
-        ),
+      _RecordDebtPaymentDialog(
+        debt: debt,
+        controller: _controller,
+        currency: _currency,
+        dateFormat: _dateFormat,
       ),
+      barrierDismissible: false,
     );
-    amountController.dispose();
-    notesController.dispose();
   }
 
   Future<void> _showPaymentHistory(Debt debt) async {
@@ -596,6 +480,197 @@ class _JobsPageState extends State<JobsPage> {
         ),
       ),
       isScrollControlled: true,
+    );
+  }
+}
+
+class _RecordDebtPaymentDialog extends StatefulWidget {
+  const _RecordDebtPaymentDialog({
+    required this.debt,
+    required this.controller,
+    required this.currency,
+    required this.dateFormat,
+  });
+
+  final Debt debt;
+  final DebtController controller;
+  final NumberFormat currency;
+  final DateFormat dateFormat;
+
+  @override
+  State<_RecordDebtPaymentDialog> createState() =>
+      _RecordDebtPaymentDialogState();
+}
+
+class _RecordDebtPaymentDialogState extends State<_RecordDebtPaymentDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _amountController = TextEditingController();
+  final _notesController = TextEditingController();
+  DateTime _paidAt = DateTime.now();
+  String _method = 'cash';
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving || !(_formKey.currentState?.validate() ?? false)) return;
+    final amount = double.parse(
+      _amountController.text.trim().replaceAll(',', ''),
+    );
+    setState(() => _saving = true);
+    try {
+      await widget.controller.recordPayment(
+        debtId: widget.debt.id,
+        amount: amount,
+        paidAt: _paidAt,
+        method: _method,
+        notes: _notesController.text,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      // The controller reports payment errors to the user.
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enteredAmount =
+        double.tryParse(_amountController.text.trim().replaceAll(',', '')) ?? 0;
+    final remainingBalance = (widget.debt.balance - enteredAmount).clamp(
+      0,
+      widget.debt.balance,
+    );
+
+    return PopScope(
+      canPop: !_saving,
+      child: AlertDialog(
+        scrollable: true,
+        title: Text('debt_record_payment'.tr),
+        content: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${'debt_balance'.tr}: ${widget.currency.format(widget.debt.balance)}',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${'debt_remaining_after_payment'.tr}: ${widget.currency.format(remainingBalance)}',
+                  style: TextStyle(
+                    color: remainingBalance == 0
+                        ? const Color(0xFF176C55)
+                        : const Color(0xFF19313A),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _amountController,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: const [ThousandsSeparatorFormatter()],
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'debt_payment_amount'.tr,
+                  suffixText: 'TZS',
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  final amount =
+                      double.tryParse(
+                        (value ?? '').trim().replaceAll(',', ''),
+                      ) ??
+                      0;
+                  if (amount <= 0) return 'validation_amount_positive'.tr;
+                  if (amount > widget.debt.balance) {
+                    return 'debt_payment_exceeds_balance'.tr;
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _method,
+                decoration: InputDecoration(
+                  labelText: 'debt_payment_method'.tr,
+                  border: const OutlineInputBorder(),
+                ),
+                items: [
+                  for (final value in const [
+                    'cash',
+                    'mobile_money',
+                    'bank',
+                    'other',
+                  ])
+                    DropdownMenuItem(
+                      value: value,
+                      child: Text('debt_payment_method_$value'.tr),
+                    ),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value != null) setState(() => _method = value);
+                      },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _notesController,
+                enabled: !_saving,
+                decoration: InputDecoration(
+                  labelText: 'debt_payment_notes_optional'.tr,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        final now = DateTime.now();
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _paidAt,
+                          firstDate: DateTime(now.year - 10),
+                          lastDate: DateTime(now.year + 1),
+                        );
+                        if (date != null && mounted) {
+                          setState(() => _paidAt = date);
+                        }
+                      },
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  '${'debt_payment_date'.tr}: ${widget.dateFormat.format(_paidAt)}',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving ? Text('debt_saving'.tr) : Text('save'.tr),
+          ),
+        ],
+      ),
     );
   }
 }

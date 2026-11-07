@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,14 +7,13 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
-import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/services/pdf/pdf_saver.dart' as pdf_saver;
-import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'stock_media.dart';
 import 'stock_models.dart';
@@ -20,6 +21,8 @@ import 'pos_list_document.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
 import 'bar_orders_page.dart';
+import 'pos_receipt_pdf.dart';
+import 'thermal_receipt_printer.dart';
 
 class _CartLine {
   _CartLine(this.product, this.qty);
@@ -53,6 +56,7 @@ class _PosPageState extends State<PosPage> {
   bool _saving = false;
   bool _listBusy = false;
   bool _barOrderMode = false;
+  StreamSubscription<List<Product>>? _productsSubscription;
   String _payment = 'cash';
   String _lastCode = '';
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -79,7 +83,7 @@ class _PosPageState extends State<PosPage> {
   @override
   void initState() {
     super.initState();
-    _service.watchProducts().listen(
+    _productsSubscription = _service.watchProducts().listen(
       (list) {
         if (!mounted) return;
         setState(() {
@@ -96,9 +100,14 @@ class _PosPageState extends State<PosPage> {
       onError: (Object error, StackTrace stackTrace) {
         debugPrint('Could not load POS products: $error');
         debugPrint(
-          'POS access state: ready=${BusinessAccessService.isReady.value}, '
+          'POS access state: business=${BusinessAccessService.businessUid.value}, '
+          'ready=${BusinessAccessService.isReady.value}, '
+          'membership=${BusinessAccessService.hasMembership.value}, '
+          'legacyMembership=${BusinessAccessService.isLegacyMembership.value}, '
           'active=${BusinessAccessService.isActive.value}, '
           'barMode=${BusinessAccessService.barModeEnabled.value}, '
+          'barRole=${BusinessAccessService.barRole.value}, '
+          'canUseBarPos=${BusinessAccessService.canUseBarPos}, '
           'barWaiter=${BusinessAccessService.isBarWaiter}, '
           'bartender=${BusinessAccessService.isBarBartender}, '
           'invoiceCreate=${BusinessAccessService.can('invoices', 'create')}, '
@@ -134,6 +143,7 @@ class _PosPageState extends State<PosPage> {
 
   @override
   void dispose() {
+    _productsSubscription?.cancel();
     _scanner?.dispose();
     _codeCtl.dispose();
     _codeFocus.dispose();
@@ -299,16 +309,22 @@ class _PosPageState extends State<PosPage> {
     return 'POS-${n.year % 100}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}';
   }
 
-  Future<void> _complete() async {
+  Future<void> _complete({bool printReceipt = false}) async {
     if (_saving || _listBusy || _cart.isEmpty) return;
+    if (BusinessAccessService.isBarBartender) {
+      stockToast('stk_error'.tr, 'stk_err_permission'.tr, error: true);
+      return;
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _saving = true);
+    var saleStage = 'kuandaa taarifa za mauzo';
     try {
-      final company = await ProfileService.loadOrCreate();
       final number = _invoiceNumber();
       final now = DateTime.now();
       final date = '${now.day}/${now.month}/${now.year}';
+      final receiptTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       final items = [
         for (final l in _cart)
           {
@@ -319,54 +335,76 @@ class _PosPageState extends State<PosPage> {
             'productId': l.product.id,
           },
       ];
+      final cashierName = (user.displayName ?? '').trim().isNotEmpty
+          ? user.displayName!.trim()
+          : (user.email ?? 'Mhudumu');
       final data = {
-        'company': company,
+        'businessId': BusinessAccessService.businessId,
+        'cashierUid': user.uid,
+        'cashierName': cashierName,
+        'receiptTime': receiptTime,
         'client': {'name': _customer.text.trim()},
         'invoice': {
           'number': number,
           'issueDate': date,
           'dueDate': date,
-          'paymentMethod': company['paymentMethod'],
+          'paymentMethod': _payment,
         },
         'items': items,
         'total': _total,
       };
-      await _service.finalizeSale(
-        saleRef: _saleRef,
-        saleData: {
-          ...data,
-          'kind': 'invoice',
-          'id': _saleRef.id,
-          'uid': user.uid,
-          'cashierUid': user.uid,
-          'cashierName': (user.displayName ?? '').trim().isNotEmpty
-              ? user.displayName!.trim()
-              : (user.email ?? ''),
-          'source': 'pos',
-          'salePayment': _payment,
-          'createdAt': FieldValue.serverTimestamp(),
-        },
+      saleStage = 'kuandika invoice na kutoa bidhaa stoo';
+      final saleResult = await _service.finalizePosSale(
+        saleId: _saleRef.id,
+        saleData: {...data, 'salePayment': _payment},
         lines: [
           for (final l in _cart)
             SaleLine(productId: l.product.id!, quantity: l.qty),
         ],
       );
+      saleStage = 'kutuma taarifa ya mauzo';
       await NotificationService.notifyOwner(
         action: 'invoice',
         summary: 'POS sale $number (TSH ${_total.toStringAsFixed(0)})',
         amount: _total,
       );
       if (!mounted) return;
+      saleStage = 'kuonyesha risiti';
       final total = _total;
-      final receipt = Map<String, dynamic>.from(data);
+      final receipt = <String, dynamic>{
+        ...data,
+        'company': saleResult.company,
+        'id': _saleRef.id,
+        'receiptId': _saleRef.id,
+      };
       _reset();
+      if (printReceipt) {
+        var printed = false;
+        try {
+          final bytes = await buildPosReceiptPdf(receipt);
+          if (!mounted) return;
+          printed = await printThermalReceipt(context, bytes);
+          if (printed && mounted) {
+            stockToast('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
+          }
+        } catch (error) {
+          if (mounted) {
+            stockToast('stk_error'.tr, stockErrorText(error), error: true);
+          }
+        }
+        if (printed || !mounted) return;
+      }
       await _showDone(number, total, receipt);
     } catch (e) {
       if (!mounted) return;
+      debugPrint('POS sale failed during: $saleStage: $e');
+      if (e is FirebaseException) {
+        debugPrint('POS sale Firestore error code: ${e.code}');
+      }
       stockToast(
         'stk_error'.tr,
         e is FirebaseException && e.code == 'permission-denied'
-            ? 'stk_err_permission'.tr
+            ? 'Ruhusa imekataliwa wakati wa kurekodi mauzo. Hakikisha bartender ana Bar Mode na bidhaa zina shopNickname sahihi.'
             : stockErrorText(e),
         error: true,
       );
@@ -377,6 +415,39 @@ class _PosPageState extends State<PosPage> {
 
   Future<void> _submitBarOrder() async {
     if (_saving || _listBusy || _cart.isEmpty) return;
+    try {
+      await BusinessAccessService.refreshBarModeSetting();
+    } catch (error, stackTrace) {
+      debugPrint('Could not refresh Bar Mode before order submission: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      stockToast(
+        'stk_error'.tr,
+        'Imeshindikana kuthibitisha mipangilio ya Bar Mode. Hakikisha kifaa kiko mtandaoni kisha jaribu tena.',
+        error: true,
+      );
+      return;
+    }
+    debugPrint(
+      'Bar-order access: business=${BusinessAccessService.businessUid.value}, '
+      'user=${FirebaseAuth.instance.currentUser?.uid}, '
+      'ready=${BusinessAccessService.isReady.value}, '
+      'membership=${BusinessAccessService.hasMembership.value}, '
+      'active=${BusinessAccessService.isActive.value}, '
+      'owner=${BusinessAccessService.isOwner.value}, '
+      'barMode=${BusinessAccessService.barModeEnabled.value}, '
+      'barRole=${BusinessAccessService.barRole.value}, '
+      'bartender=${BusinessAccessService.isBarBartender}',
+    );
+    if (!BusinessAccessService.isBarBartender) {
+      stockToast(
+        'stk_error'.tr,
+        BusinessAccessService.barModeEnabled.value
+            ? 'Akaunti hii haijawekwa kama bartender hai kwenye biashara iliyochaguliwa.'
+            : 'Bar Mode haijawashwa kwenye biashara iliyochaguliwa.',
+        error: true,
+      );
+      return;
+    }
     if (_table.text.trim().isEmpty) {
       stockToast('stk_error'.tr, 'bar_table_required'.tr, error: true);
       return;
@@ -396,10 +467,18 @@ class _PosPageState extends State<PosPage> {
       stockToast('bar_order_sent'.tr, 'bar_order_sent_help'.tr);
     } catch (e) {
       if (!mounted) return;
+      debugPrint('POS bar-order submission failed: $e');
+      if (e is FirebaseException) {
+        debugPrint('Bar-order Firestore error code: ${e.code}');
+      } else if (e is FirebaseFunctionsException) {
+        debugPrint('Bar-order function error code: ${e.code}');
+      }
       stockToast(
         'stk_error'.tr,
-        e is FirebaseException && e.code == 'permission-denied'
-            ? 'stk_err_permission'.tr
+        e is FirebaseFunctionsException && e.code == 'permission-denied'
+            ? e.message ?? 'Huna ruhusa ya kutuma oda kwenye biashara hii.'
+            : e is FirebaseException && e.code == 'permission-denied'
+            ? 'Oda imekataliwa na ruhusa za biashara. Hakikisha umeingia kwenye biashara sahihi na umewekwa kama bartender hai.'
             : stockErrorText(e),
         error: true,
       );
@@ -844,6 +923,7 @@ class _PosPageState extends State<PosPage> {
     Map<String, dynamic> receipt,
   ) {
     var busyAction = '';
+    final pdfBytes = buildPosReceiptPdf(receipt);
 
     Future<void> saveOrShare(
       BuildContext dialogContext,
@@ -852,7 +932,7 @@ class _PosPageState extends State<PosPage> {
     }) async {
       setDialogState(() => busyAction = share ? 'share' : 'save');
       try {
-        final bytes = await InvoicePdf.generateBytes(receipt);
+        final bytes = await pdfBytes;
         final fileName =
             'Receipt_${number.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}.pdf';
         if (share) {
@@ -887,80 +967,164 @@ class _PosPageState extends State<PosPage> {
       }
     }
 
+    Future<void> printThermal(
+      BuildContext dialogContext,
+      StateSetter setDialogState,
+    ) async {
+      setDialogState(() => busyAction = 'print');
+      try {
+        final bytes = await pdfBytes;
+        if (!dialogContext.mounted) return;
+        final printed = await printThermalReceipt(dialogContext, bytes);
+        if (printed && dialogContext.mounted) {
+          stockToast('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
+        }
+      } catch (error) {
+        if (dialogContext.mounted) {
+          stockToast('stk_error'.tr, stockErrorText(error), error: true);
+        }
+      } finally {
+        if (dialogContext.mounted) {
+          setDialogState(() => busyAction = '');
+        }
+      }
+    }
+
     return showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          icon: const Icon(Icons.check_circle, color: kStockOk, size: 48),
-          title: Text('pos_sale_done'.tr),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$number\nTZS ${formatMoney(total)}',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(12),
+        child: SizedBox(
+          width: 520,
+          height: MediaQuery.sizeOf(dialogContext).height * 0.88,
+          child: StatefulBuilder(
+            builder: (ctx, setDialogState) => Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: busyAction.isEmpty
-                        ? () => saveOrShare(ctx, setDialogState, share: false)
-                        : null,
-                    icon: busyAction == 'save'
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_outlined),
-                    label: Text('pos_save_receipt'.tr),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: kStockOk),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'pos_sale_done'.tr,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text('$number - TZS ${formatMoney(total)}'),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'stk_cancel'.tr,
+                        onPressed: busyAction.isEmpty
+                            ? () => Navigator.pop(ctx)
+                            : null,
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    onPressed: busyAction.isEmpty
-                        ? () => saveOrShare(ctx, setDialogState, share: true)
-                        : null,
-                    icon: busyAction == 'share'
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.share_outlined),
-                    label: Text('pos_share_receipt'.tr),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: FutureBuilder<Uint8List>(
+                      future: pdfBytes,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(stockErrorText(snapshot.error!)),
+                          );
+                        }
+                        if (!snapshot.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        return PdfPreview(
+                          build: (_) async => snapshot.data!,
+                          pdfFileName: 'Receipt_$number.pdf',
+                          canChangePageFormat: false,
+                          canChangeOrientation: false,
+                          allowSharing: false,
+                          maxPageWidth: 420,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (!kIsWeb)
+                        OutlinedButton.icon(
+                          onPressed: busyAction.isEmpty
+                              ? () => printThermal(ctx, setDialogState)
+                              : null,
+                          icon: busyAction == 'print'
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.print_outlined),
+                          label: Text('pos_print_thermal'.tr),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: busyAction.isEmpty
+                            ? () =>
+                                  saveOrShare(ctx, setDialogState, share: false)
+                            : null,
+                        icon: busyAction == 'save'
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.download_outlined),
+                        label: Text('pos_save_receipt'.tr),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: busyAction.isEmpty
+                            ? () =>
+                                  saveOrShare(ctx, setDialogState, share: true)
+                            : null,
+                        icon: busyAction == 'share'
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.share_outlined),
+                        label: Text('pos_share_receipt'.tr),
+                      ),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kStockBlue,
+                        ),
+                        onPressed: busyAction.isEmpty
+                            ? () => Navigator.pop(ctx)
+                            : null,
+                        child: Text('pos_new_sale'.tr),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            OutlinedButton.icon(
-              onPressed: busyAction.isEmpty
-                  ? () async {
-                      try {
-                        await InvoicePdf.generate(receipt);
-                      } catch (error) {
-                        stockToast(
-                          'stk_error'.tr,
-                          stockErrorText(error),
-                          error: true,
-                        );
-                      }
-                    }
-                  : null,
-              icon: const Icon(Icons.receipt_long),
-              label: Text('pos_receipt'.tr),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: kStockBlue),
-              onPressed: busyAction.isEmpty ? () => Navigator.pop(ctx) : null,
-              child: Text('pos_new_sale'.tr),
-            ),
-          ],
         ),
       ),
     );
@@ -1003,10 +1167,7 @@ class _PosPageState extends State<PosPage> {
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _loadError!,
-                    textAlign: TextAlign.center,
-                  ),
+                  child: Text(_loadError!, textAlign: TextAlign.center),
                 ),
               )
             : wide
@@ -1184,14 +1345,82 @@ class _PosPageState extends State<PosPage> {
   }
 
   Widget _cartPane() {
+    final availableProducts = _products
+        .where((product) => product.active)
+        .toList();
     return Column(
       children: [
         Expanded(
           child: _cart.isEmpty
-              ? StockMessage(
-                  icon: Icons.shopping_cart_outlined,
-                  text: 'pos_empty'.tr,
-                )
+              ? availableProducts.isEmpty
+                    ? StockMessage(
+                        icon: Icons.shopping_cart_outlined,
+                        text: 'pos_empty'.tr,
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                        itemCount: availableProducts.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
+                              child: Text(
+                                'stk_products'.tr,
+                                style: const TextStyle(
+                                  color: kStockNavy,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            );
+                          }
+                          final product = availableProducts[index - 1];
+                          return StockCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                ProductImage(
+                                  url: product.imageUrl,
+                                  size: 44,
+                                  radius: 10,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        product.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      Text(
+                                        'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton.filledTonal(
+                                  onPressed: () => _add(product, 1),
+                                  icon: const Icon(Icons.add),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                   itemCount: _cart.length,
@@ -1281,7 +1510,8 @@ class _PosPageState extends State<PosPage> {
   Widget _checkoutBar() {
     final barModeEnabled = BusinessAccessService.barModeEnabled.value;
     final isBarBartender = BusinessAccessService.isBarBartender;
-    final isOrderMode = _barOrderMode && barModeEnabled && !isBarBartender;
+    final isBarWaiter = BusinessAccessService.isBarWaiter;
+    final isOrderMode = barModeEnabled && isBarBartender;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -1293,7 +1523,7 @@ class _PosPageState extends State<PosPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (barModeEnabled && !isBarBartender)
+            if (barModeEnabled && !isBarBartender && !isBarWaiter)
               SegmentedButton<bool>(
                 showSelectedIcon: false,
                 segments: [
@@ -1404,6 +1634,19 @@ class _PosPageState extends State<PosPage> {
                     ],
                   ),
                 ),
+                if (!kIsWeb && !isOrderMode) ...[
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _saving || _listBusy || _cart.isEmpty
+                          ? null
+                          : () => _complete(printReceipt: true),
+                      icon: const Icon(Icons.print_outlined),
+                      label: Text('pos_complete_print'.tr),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 SizedBox(
                   height: 48,
                   child: FilledButton.icon(

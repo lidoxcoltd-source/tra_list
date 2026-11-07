@@ -30,9 +30,10 @@ class StaffService {
 
   static String staffAuthEmail({
     required String businessEmail,
-    required String password,
+    required String username,
   }) {
-    final identity = '${businessEmail.trim().toLowerCase()}|$password';
+    final identity =
+        '${businessEmail.trim().toLowerCase()}|${username.trim().toLowerCase()}';
     final digest = sha256.convert(utf8.encode(identity));
     return 'staff.$digest@$_staffAuthDomain';
   }
@@ -47,12 +48,21 @@ class StaffService {
     return 'staff.$digest@$_staffAuthDomain';
   }
 
+  static String legacyPasswordStaffAuthEmail({
+    required String businessEmail,
+    required String password,
+  }) {
+    final identity = '${businessEmail.trim().toLowerCase()}|$password';
+    final digest = sha256.convert(utf8.encode(identity));
+    return 'staff.$digest@$_staffAuthDomain';
+  }
+
   static CollectionReference<Map<String, dynamic>> get _memberships =>
       _firestore.collection('employeeMemberships');
 
   static Stream<List<StaffMember>> watchStaff() {
-    if (!BusinessAccessService.isOwner.value) {
-      throw StateError('Only the business owner can manage staff.');
+    if (!BusinessAccessService.canManageStaff) {
+      throw StateError('You do not have permission to manage staff.');
     }
     final businessUid = BusinessAccessService.businessId;
     final controller = StreamController<List<StaffMember>>();
@@ -70,24 +80,22 @@ class StaffService {
       controller.add(members.values.toList());
     }
 
-    if (businessUid == FirebaseAuth.instance.currentUser?.uid) {
-      legacySubscription = _memberships
-          .where('businessUid', isEqualTo: businessUid)
-          .snapshots()
-          .listen((snapshot) {
-            legacyStaff = snapshot.docs
-                .map(
-                  (document) => StaffMember(
-                    id: document.id,
-                    data: document.data(),
-                    isLegacy: true,
-                  ),
-                )
-                .where((member) => member.data['role'] != 'owner')
-                .toList();
-            emit();
-          }, onError: controller.addError);
-    }
+    legacySubscription = _memberships
+        .where('businessUid', isEqualTo: businessUid)
+        .snapshots()
+        .listen((snapshot) {
+          legacyStaff = snapshot.docs
+              .map(
+                (document) => StaffMember(
+                  id: document.id,
+                  data: document.data(),
+                  isLegacy: true,
+                ),
+              )
+              .where((member) => member.data['role'] != 'owner')
+              .toList();
+          emit();
+        }, onError: controller.addError);
     accountSubscription = _firestore
         .collection('businessMemberships')
         .doc(businessUid)
@@ -111,19 +119,18 @@ class StaffService {
   }
 
   static Future<List<StaffMember>> fetchStaff() async {
-    if (!BusinessAccessService.isOwner.value) {
-      throw StateError('Only the business owner can manage staff.');
+    if (!BusinessAccessService.canManageStaff) {
+      throw StateError('You do not have permission to manage staff.');
     }
     final businessUid = BusinessAccessService.businessId;
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
     final accountFuture = _firestore
         .collection('businessMemberships')
         .doc(businessUid)
         .collection('members')
         .get();
-    final legacyFuture = businessUid == currentUid
-        ? _memberships.where('businessUid', isEqualTo: businessUid).get()
-        : Future<QuerySnapshot<Map<String, dynamic>>?>.value(null);
+    final legacyFuture = _memberships
+        .where('businessUid', isEqualTo: businessUid)
+        .get();
     final accountSnapshot = await accountFuture;
     final legacySnapshot = await legacyFuture;
     final members = <String, StaffMember>{};
@@ -178,29 +185,65 @@ class StaffService {
     required String email,
     required String phone,
     required String shopNickname,
+    required String shopLocation,
+    required String shopId,
+    required String username,
     required String password,
     required Map<String, Map<String, bool>> permissions,
     required double dailyExpenseLimit,
     String barRole = 'waiter',
   }) async {
     _validateDailyExpenseLimit(dailyExpenseLimit);
-    if (!BusinessAccessService.isOwner.value) {
-      throw StateError('Only the business owner can add staff.');
+    if (!const {'staff', 'waiter', 'bartender', 'manager'}.contains(barRole)) {
+      throw ArgumentError.value(barRole, 'barRole', 'Unsupported bar role.');
+    }
+    if (barRole == 'manager' && !BusinessAccessService.isOwner.value) {
+      throw StateError('Only the owner can appoint a staff manager.');
+    }
+    if (!BusinessAccessService.canManageStaff) {
+      throw StateError('You do not have permission to add staff.');
     }
     final owner = FirebaseAuth.instance.currentUser;
     if (owner == null) {
       throw StateError('Sign in before adding staff.');
     }
-    final businessEmail = owner.email?.trim().toLowerCase() ?? '';
+    final businessProfile = await ProfileService.loadOrCreate();
+    final profileEmail = businessProfile['email']?.toString().trim() ?? '';
+    final fallbackEmail = BusinessAccessService.isOwner.value
+        ? owner.email?.trim() ?? ''
+        : '';
+    final businessEmail =
+        (profileEmail.isNotEmpty ? profileEmail : fallbackEmail).toLowerCase();
     if (businessEmail.isEmpty) {
       throw StateError('The business owner account does not have an email.');
     }
 
-    final businessProfile = await ProfileService.loadOrCreate();
     final businessName = businessProfile['name']?.toString().trim() ?? '';
     final assignedShopNickname = shopNickname.trim();
+    final assignedUsername = username.trim();
     if (assignedShopNickname.isEmpty) {
       throw StateError('Set a shop nickname before adding staff.');
+    }
+    if (assignedUsername.length < 3 || assignedUsername.length > 32) {
+      throw ArgumentError('Username must contain 3 to 32 characters.');
+    }
+    if (!RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(assignedUsername)) {
+      throw ArgumentError('Username may contain letters, numbers, . _ and -.');
+    }
+    final usernameKey = assignedUsername.toLowerCase();
+    final businessStaff = await _memberships
+        .where('businessUid', isEqualTo: BusinessAccessService.businessId)
+        .get();
+    if (businessStaff.docs.any((document) {
+      final data = document.data();
+      final existingKey = data['usernameKey']?.toString().toLowerCase();
+      final legacyKey = data['username']?.toString().toLowerCase();
+      final legacyShop = data['shopNickname']?.toString().toLowerCase();
+      return existingKey == usernameKey ||
+          legacyKey == usernameKey ||
+          (legacyKey == null && legacyShop == usernameKey);
+    })) {
+      throw StateError('staff_username_taken');
     }
     final existingApp = Firebase.apps.where(
       (app) => app.name == _secondaryAppName,
@@ -216,7 +259,10 @@ class StaffService {
     User? createdUser;
     try {
       final credential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: staffAuthEmail(businessEmail: businessEmail, password: password),
+        email: staffAuthEmail(
+          businessEmail: businessEmail,
+          username: assignedUsername,
+        ),
         password: password,
       );
       createdUser = credential.user;
@@ -231,7 +277,12 @@ class StaffService {
         'businessEmail': businessEmail,
         'businessName': businessName,
         'shopNickname': assignedShopNickname,
+        'shopLocation': shopLocation.trim(),
+        'shopId': shopId.trim(),
+        'username': assignedUsername,
+        'usernameKey': usernameKey,
         'name': name.trim(),
+        'photoUrl': '',
         'email': email.trim(),
         'phone': phone.trim(),
         'active': true,
@@ -268,6 +319,8 @@ class StaffService {
     required String email,
     required String phone,
     required String shopNickname,
+    required String shopLocation,
+    required String shopId,
     required Map<String, Map<String, bool>> permissions,
     required double dailyExpenseLimit,
     String? barRole,
@@ -279,6 +332,8 @@ class StaffService {
       'email': email.trim(),
       'phone': phone.trim(),
       'shopNickname': shopNickname.trim(),
+      'shopLocation': shopLocation.trim(),
+      'shopId': shopId.trim(),
       'permissions': permissions,
       'dailyExpenseLimit': dailyExpenseLimit,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -323,13 +378,24 @@ class StaffService {
   static Future<void> setBarRole({
     required String employeeUid,
     required String role,
+    bool preferLegacyMembership = false,
   }) async {
-    if (role != 'staff' && role != 'waiter' && role != 'bartender') {
+    if (!const {'staff', 'waiter', 'bartender', 'manager'}.contains(role)) {
       throw ArgumentError.value(role, 'role', 'Unsupported bar role.');
     }
-    final staffDocument = await _getManagedStaffDocument(employeeUid);
+    if (role == 'manager' && !BusinessAccessService.isOwner.value) {
+      throw StateError('Only the owner can appoint a staff manager.');
+    }
+    final staffDocument = await _getManagedStaffDocument(
+      employeeUid,
+      preferLegacyMembership: preferLegacyMembership,
+    );
+    final currentMembership = await staffDocument.get();
+    final currentBarRole = currentMembership.data()?['barRole'];
     await staffDocument.update({
       'barRole': role,
+      if (role == 'manager' || currentBarRole == 'manager')
+        'permissions.staff.manage': role == 'manager',
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -369,12 +435,15 @@ class StaffService {
   }
 
   static Future<DocumentReference<Map<String, dynamic>>>
-  _getManagedStaffDocument(String employeeUid) async {
-    if (!BusinessAccessService.isOwner.value) {
-      throw StateError('Only the business owner can manage staff access.');
+  _getManagedStaffDocument(
+    String employeeUid, {
+    bool preferLegacyMembership = false,
+  }) async {
+    if (!BusinessAccessService.canManageStaff) {
+      throw StateError('You do not have permission to manage staff access.');
     }
     if (employeeUid == FirebaseAuth.instance.currentUser?.uid) {
-      throw StateError('A business owner cannot modify their own membership.');
+      throw StateError('You cannot modify your own staff membership.');
     }
     final businessUid = BusinessAccessService.businessId;
     final accountDocument = _firestore
@@ -382,15 +451,25 @@ class StaffService {
         .doc(businessUid)
         .collection('members')
         .doc(employeeUid);
-    final accountMembership = await accountDocument.get();
-    if (accountMembership.data()?['businessUid'] == businessUid &&
-        accountMembership.data()?['role'] != 'owner') {
-      return accountDocument;
-    }
     final legacyDocument = _memberships.doc(employeeUid);
-    final legacyMembership = await legacyDocument.get();
-    if (legacyMembership.data()?['businessUid'] == businessUid) {
-      return legacyDocument;
+    final documents = preferLegacyMembership
+        ? [legacyDocument, accountDocument]
+        : [accountDocument, legacyDocument];
+    for (final document in documents) {
+      final membership = await document.get();
+      final targetPermissions = Map<String, dynamic>.from(
+        membership.data()?['permissions'] as Map? ?? const {},
+      );
+      final targetStaffPermissions = Map<String, dynamic>.from(
+        targetPermissions['staff'] as Map? ?? const {},
+      );
+      if (membership.data()?['businessUid'] == businessUid &&
+          membership.data()?['role'] != 'owner' &&
+          (BusinessAccessService.isOwner.value ||
+              (membership.data()?['barRole'] != 'manager' &&
+                  targetStaffPermissions['manage'] != true))) {
+        return document;
+      }
     }
     throw StateError('This staff account does not belong to this business.');
   }

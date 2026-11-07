@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -123,9 +126,94 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('bar_bill_paid'.tr),
-          content: Text(
-            '$number\nTZS ${formatMoney((receipt['total'] as num?) ?? 0)}',
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: kStockOk),
+              const SizedBox(width: 8),
+              Expanded(child: Text('bar_bill_paid'.tr)),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: kStockNavy,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'MEZA ${receipt['tableNumber'] ?? '—'}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Muhudumu: ${receipt['waiterName']?.toString().isNotEmpty == true ? receipt['waiterName'] : '—'}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        number,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        'TZS ${formatMoney((receipt['total'] as num?) ?? 0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Receipt preview',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                SizedBox(
+                  height: 420,
+                  child: FutureBuilder<Uint8List>(
+                    future: InvoicePdf.generateBytes(receipt),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError)
+                        return Center(
+                          child: Text(stockErrorText(snapshot.error!)),
+                        );
+                      if (!snapshot.hasData)
+                        return const Center(child: CircularProgressIndicator());
+                      return PdfPreview(
+                        build: (_) async => snapshot.data!,
+                        pdfFileName: 'Receipt_$number.pdf',
+                        canChangePageFormat: false,
+                        canChangeOrientation: false,
+                        allowPrinting: false,
+                        allowSharing: false,
+                        maxPageWidth: 380,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton.icon(
@@ -287,11 +375,22 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
     final id = order['id'].toString();
     final status = order['status']?.toString() ?? '';
     final isServed = status == 'served';
+    final isOwner = BusinessAccessService.isOwner.value;
+    final isWaiter = BusinessAccessService.isBarWaiter;
+    final isBartender = BusinessAccessService.isBarBartender;
+    final isOrderCreator =
+        order['createdBy'] == FirebaseAuth.instance.currentUser?.uid;
+    final canApprove = isOwner || isWaiter;
+    final canCancel = isOwner || isWaiter || (isBartender && isOrderCreator);
     final isSelected = _selected.contains(id);
     final selectedTable = selectedOrders.isEmpty
         ? ''
         : selectedOrders.first['tableNumber']?.toString() ?? '';
     final table = order['tableNumber']?.toString() ?? '';
+    final attendant =
+        (order['servedByName']?.toString().trim().isNotEmpty ?? false)
+        ? order['servedByName'].toString()
+        : (order['createdByName']?.toString() ?? '');
     final selectable =
         isServed && (selectedOrders.isEmpty || selectedTable == table);
     final items = (order['items'] as List? ?? const [])
@@ -303,46 +402,110 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
         ? createdAt.toDate().toLocal().toString().substring(0, 16)
         : '';
     return StockCard(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              if (isServed && !BusinessAccessService.isBarBartender)
-                Checkbox(
-                  value: isSelected,
-                  onChanged: !selectable && !isSelected
-                      ? null
-                      : (value) => setState(() {
-                          if (value == true) {
-                            _selected.add(id);
-                          } else {
-                            _selected.remove(id);
-                          }
-                        }),
-                )
-              else if (!isServed)
-                const Icon(Icons.pending_actions_outlined, color: kStockWarn),
-              Expanded(
-                child: Text(
-                  '${'bar_table'.tr}: $table',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [kStockNavy, Color(0xFF244A70)],
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Row(
+              children: [
+                if (isServed && !BusinessAccessService.isBarBartender)
+                  Checkbox(
+                    value: isSelected,
+                    activeColor: Colors.white,
+                    checkColor: kStockNavy,
+                    onChanged: !selectable && !isSelected
+                        ? null
+                        : (value) => setState(() {
+                            if (value == true) {
+                              _selected.add(id);
+                            } else {
+                              _selected.remove(id);
+                            }
+                          }),
+                  )
+                else
+                  Icon(
+                    isServed
+                        ? Icons.check_circle_outline
+                        : Icons.pending_actions_outlined,
+                    color: Colors.white,
+                    size: 27,
+                  ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'MEZA',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .72),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      Text(
+                        table.isEmpty ? '—' : table,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              Chip(
-                label: Text(
-                  (isServed ? 'bar_status_served' : 'bar_status_pending').tr,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    (isServed ? 'bar_status_served' : 'bar_status_pending').tr,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
+              ],
+            ),
           ),
           if ((order['customerName']?.toString() ?? '').isNotEmpty)
-            Text('${'pos_customer'.tr}: ${order['customerName']}'),
+            Padding(
+              padding: const EdgeInsets.only(top: 11),
+              child: _detailLine(
+                Icons.person_outline,
+                'Mteja',
+                order['customerName'].toString(),
+              ),
+            ),
+          if (attendant.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: _detailLine(
+                Icons.room_service_outlined,
+                isServed ? 'Amethibitisha' : 'Aliyeingiza oda',
+                attendant,
+                prominent: true,
+              ),
+            ),
           if (createdText.isNotEmpty)
             Text(
               createdText,
@@ -380,13 +543,14 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
                   ),
                 ),
               ),
-              if (!isServed) ...[
+              if (!isServed && canCancel)
                 TextButton(
                   onPressed: _busy
                       ? null
                       : () => _changeOrder(order, serve: false),
                   child: Text('stk_cancel'.tr),
                 ),
+              if (!isServed && canApprove) ...[
                 const SizedBox(width: 6),
                 FilledButton(
                   onPressed: _busy
@@ -401,4 +565,36 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
       ),
     );
   }
+
+  Widget _detailLine(
+    IconData icon,
+    String label,
+    String value, {
+    bool prominent = false,
+  }) => Row(
+    children: [
+      Icon(
+        icon,
+        size: prominent ? 19 : 16,
+        color: prominent ? kStockBlue : Colors.black54,
+      ),
+      const SizedBox(width: 7),
+      Text(
+        '$label: ',
+        style: TextStyle(fontSize: prominent ? 13 : 12, color: Colors.black54),
+      ),
+      Expanded(
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: prominent ? 15 : 13,
+            fontWeight: prominent ? FontWeight.w800 : FontWeight.w500,
+            color: kStockNavy,
+          ),
+        ),
+      ),
+    ],
+  );
 }

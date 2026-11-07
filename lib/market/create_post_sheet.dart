@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1166,6 +1165,7 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
                               key: ValueKey(_videoInfo.path ?? _videoInfo.url),
                               path: _videoInfo.path,
                               url: _videoInfo.url,
+                              thumbnail: _videoInfo.thumbnail,
                             ),
                           )
                         else if (!_useVideo &&

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 import 'market_media_route_observer.dart';
+import 'market_palette.dart';
 import 'market_video_trim_page.dart';
 
 const marketVideoMaxSeconds = 30;
@@ -20,6 +20,25 @@ String marketVideoContentType(String extension) => switch (extension) {
   'mov' => 'video/quicktime',
   _ => 'video/mp4',
 };
+
+/// Stable, branded media surface shown until an image or video poster loads.
+class MarketMediaPlaceholder extends StatelessWidget {
+  const MarketMediaPlaceholder({super.key, this.icon = Icons.image_outlined});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF24466E), MarketPalette.surfaceRaised],
+      ),
+    ),
+    child: Center(child: Icon(icon, color: Colors.white38, size: 34)),
+  );
+}
 
 class MarketVideoSelection {
   const MarketVideoSelection({
@@ -106,11 +125,13 @@ class MarketVideoView extends StatefulWidget {
     this.cover,
     this.fit = BoxFit.cover,
     this.paused,
+    this.preload = false,
     this.onTap,
   });
 
   final VoidCallback? onTap;
   final ValueListenable<bool>? paused;
+  final bool preload;
   final String url;
   final String visibilityKey;
   final Widget? cover;
@@ -133,6 +154,7 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
   void initState() {
     super.initState();
     widget.paused?.addListener(_onHoldChanged);
+    if (widget.preload) unawaited(_ensureController());
   }
 
   @override
@@ -141,6 +163,9 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
     if (oldWidget.paused != widget.paused) {
       oldWidget.paused?.removeListener(_onHoldChanged);
       widget.paused?.addListener(_onHoldChanged);
+    }
+    if (widget.preload && !oldWidget.preload) {
+      unawaited(_ensureController());
     }
   }
 
@@ -180,7 +205,6 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
     }
   }
 
-  Timer? _initTimer;
   Timer? _releaseTimer;
 
   Future<void> _ensureController() async {
@@ -215,20 +239,19 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
 
   void _onVisibility(VisibilityInfo info) {
     _visible = info.visibleFraction >= 0.6;
-    if (_visible) {
+    if (info.visibleFraction >= 0.05) {
       _releaseTimer?.cancel();
       final controller = _controller;
       if (controller == null) {
-        // Waiting a moment avoids starting decoders during fast flings.
-        _initTimer?.cancel();
-        _initTimer = Timer(const Duration(milliseconds: 250), () {
-          if (mounted && _visible) unawaited(_ensureController());
-        });
-      } else if (controller.value.isInitialized && !_held) {
-        unawaited(controller.play());
+        unawaited(_ensureController());
+      } else if (controller.value.isInitialized) {
+        if (_visible && !_held) {
+          unawaited(controller.play());
+        } else {
+          unawaited(controller.pause());
+        }
       }
     } else {
-      _initTimer?.cancel();
       unawaited(_controller?.pause());
       if (info.visibleFraction < 0.05) {
         _releaseTimer?.cancel();
@@ -246,7 +269,6 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
 
   @override
   void dispose() {
-    _initTimer?.cancel();
     _releaseTimer?.cancel();
     marketMediaRouteObserver.unsubscribe(this);
     widget.paused?.removeListener(_onHoldChanged);
@@ -267,7 +289,7 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (widget.cover != null) widget.cover!,
+            const MarketMediaPlaceholder(icon: Icons.play_circle_outline),
             if (ready)
               FittedBox(
                 fit: widget.fit,
@@ -278,13 +300,25 @@ class _MarketVideoViewState extends State<MarketVideoView> with RouteAware {
                   child: VideoPlayer(controller),
                 ),
               ),
-            if (!ready && !_failed)
-              const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+            if (!ready && widget.cover != null) widget.cover!,
+            if (ready)
+              ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: controller,
+                builder: (context, value, _) {
+                  final firstFramePlaying =
+                      value.position > const Duration(milliseconds: 120);
+                  return IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: firstFramePlaying ? 0 : 1,
+                      duration: const Duration(milliseconds: 180),
+                      child:
+                          widget.cover ??
+                          const MarketMediaPlaceholder(
+                            icon: Icons.play_circle_outline,
+                          ),
+                    ),
+                  );
+                },
               ),
             Positioned(
               right: 10,

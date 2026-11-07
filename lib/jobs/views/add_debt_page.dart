@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:tra_list/jobs/controllers/debt_controller.dart';
@@ -27,7 +26,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
-  final _controller = Get.find<DebtController>();
+  late final DebtController _controller;
   final _draftStorage = GetStorage();
 
   DebtDirection _direction = DebtDirection.customerOwesShop;
@@ -36,6 +35,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
   DateTime? _dueDate;
   bool _loadingShops = true;
   bool _saving = false;
+  String? _saveError;
   bool _draftRestored = false;
   bool _draftHasUserChanges = false;
   bool _draftSaveErrorShown = false;
@@ -50,6 +50,9 @@ class _AddDebtPageState extends State<AddDebtPage> {
   @override
   void initState() {
     super.initState();
+    _controller = Get.isRegistered<DebtController>()
+        ? Get.find<DebtController>()
+        : Get.put(DebtController());
     _nameController.addListener(_scheduleDraftSave);
     _phoneController.addListener(_scheduleDraftSave);
     _amountController.addListener(_scheduleDraftSave);
@@ -93,12 +96,16 @@ class _AddDebtPageState extends State<AddDebtPage> {
       return;
     }
 
+    var fallbackShop = BusinessAccessService.shopNickname.value.trim();
     try {
       final profile = await ProfileService.loadOrCreate();
       final ownShop =
           profile['shopNickname']?.toString().trim().isNotEmpty == true
           ? profile['shopNickname'].toString().trim()
-          : profile['name']?.toString().trim() ?? '';
+          : (profile['name']?.toString().trim().isNotEmpty == true
+                ? profile['name'].toString().trim()
+                : fallbackShop);
+      if (ownShop.isNotEmpty) fallbackShop = ownShop;
       final shops = <String>{
         if (ownShop.isNotEmpty) ownShop,
         if (widget.debt?.shopNickname.isNotEmpty == true)
@@ -107,7 +114,8 @@ class _AddDebtPageState extends State<AddDebtPage> {
       final memberships = await FirebaseFirestore.instance
           .collection('employeeMemberships')
           .where('businessUid', isEqualTo: BusinessAccessService.businessId)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 15));
       for (final membership in memberships.docs) {
         final shop = membership.data()['shopNickname']?.toString().trim() ?? '';
         if (shop.isNotEmpty) shops.add(shop);
@@ -128,6 +136,12 @@ class _AddDebtPageState extends State<AddDebtPage> {
       debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
       setState(() => _loadingShops = false);
+      if (fallbackShop.isNotEmpty) {
+        setState(() {
+          _shops = [fallbackShop];
+          _shopNickname = widget.debt?.shopNickname ?? fallbackShop;
+        });
+      }
       Get.snackbar('error'.tr, 'debt_shops_load_error'.tr);
     }
   }
@@ -182,8 +196,11 @@ class _AddDebtPageState extends State<AddDebtPage> {
     });
   }
 
-  Future<void> _persistDraft() async {
-    if (_isEditing || !_draftRestored || !_draftHasUserChanges || _saving) {
+  Future<void> _persistDraft({bool force = false}) async {
+    if (_isEditing ||
+        !_draftRestored ||
+        !_draftHasUserChanges ||
+        (_saving && !force)) {
       return;
     }
     try {
@@ -226,15 +243,21 @@ class _AddDebtPageState extends State<AddDebtPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_loadingShops) return;
+    if (_loadingShops) {
+      Get.snackbar('info'.tr, 'debt_shops_loading'.tr);
+      return;
+    }
     if (_shops.isEmpty || _shopNickname.isEmpty) {
       Get.snackbar('error'.tr, 'debt_shop_required'.tr);
       return;
     }
 
     _draftSaveTimer?.cancel();
-    await _persistDraft();
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    await _persistDraft(force: true);
     try {
       final existing = widget.debt;
       await _controller.save(
@@ -261,9 +284,28 @@ class _AddDebtPageState extends State<AddDebtPage> {
           debugPrintStack(stackTrace: stackTrace);
         }
       }
-      if (mounted) Get.back();
-    } catch (_) {
-      // The controller reports save errors to the user.
+      if (mounted) Navigator.of(context).pop();
+    } catch (error, stackTrace) {
+      debugPrint('Debt form save failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        setState(() => _saveError = error.toString());
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('error'.tr),
+            content: SingleChildScrollView(
+              child: SelectableText(error.toString()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text('close'.tr),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -275,369 +317,441 @@ class _AddDebtPageState extends State<AddDebtPage> {
     const brand = Color(0xFF0E5962);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F8),
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => Get.back(),
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: Text(
-          (_isEditing ? 'debt_edit_title' : 'debt_add_title').tr,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: ink,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
-      body: Form(
-        key: _formKey,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: ListView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0E5962), Color(0xFF247C78)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Material(
+              color: Colors.white,
+              child: SizedBox(
+                height: 56,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Get.back(),
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      color: ink,
                     ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: brand.withValues(alpha: 0.16),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Icon(
-                          _isEditing
-                              ? Icons.edit_note_rounded
-                              : Icons.account_balance_wallet_rounded,
-                          color: Colors.white,
-                          size: 25,
+                    Expanded(
+                      child: Text(
+                        (_isEditing ? 'debt_edit_title' : 'debt_add_title').tr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ink,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              (_isEditing
-                                      ? 'debt_edit_title'
-                                      : 'debt_add_title')
-                                  .tr,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Center(
+                    child: SizedBox(
+                      width: constraints.maxWidth > 760
+                          ? 760
+                          : constraints.maxWidth,
+                      height: constraints.maxHeight,
+                      child: ListView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                        children: [
+                          if (_saveError != null) ...[
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFEEEE),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE7B8B8),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'debt_form_intro'.tr,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.82),
-                                fontSize: 13,
+                              child: Text(
+                                'debt_save_error'.trParams({
+                                  'error': _saveError!,
+                                }),
+                                style: const TextStyle(
+                                  color: Color(0xFF8D2626),
+                                ),
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _sectionCard(
-                  context,
-                  icon: Icons.swap_horiz_rounded,
-                  title: 'debt_direction'.tr,
-                  subtitle: 'debt_direction_hint'.tr,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 430;
-                      final first = _directionOption(
-                        context,
-                        direction: DebtDirection.customerOwesShop,
-                        title: 'debt_customer_owes'.tr,
-                        icon: Icons.call_received_rounded,
-                        color: const Color(0xFF176C55),
-                      );
-                      final second = _directionOption(
-                        context,
-                        direction: DebtDirection.shopOwesOther,
-                        title: 'debt_shop_owes'.tr,
-                        icon: Icons.call_made_rounded,
-                        color: const Color(0xFF8C5A17),
-                      );
-                      if (isNarrow) {
-                        return Column(
-                          children: [first, const SizedBox(height: 10), second],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: first),
-                          const SizedBox(width: 12),
-                          Expanded(child: second),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _sectionCard(
-                  context,
-                  icon: Icons.person_outline_rounded,
-                  title: 'debt_person_section'.tr,
-                  subtitle: 'debt_person_section_hint'.tr,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _nameController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: _decoration(
-                          'debt_person_name'.tr,
-                          Icons.person_outline_rounded,
-                        ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? 'validation_required'.tr
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: _decoration(
-                          'phone_primary'.tr,
-                          Icons.phone_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _sectionCard(
-                  context,
-                  icon: Icons.payments_outlined,
-                  title: 'debt_details_section'.tr,
-                  subtitle: 'debt_details_section_hint'.tr,
-                  child: Column(
-                    children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final reason = DropdownButtonFormField<String>(
-                            initialValue: _reason,
-                            isExpanded: true,
-                            decoration: _decoration(
-                              'debt_reason'.tr,
-                              Icons.receipt_long_outlined,
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF0E5962), Color(0xFF247C78)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(22),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: brand.withValues(alpha: 0.16),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                             ),
-                            items: [
-                              for (final value in const [
-                                'advance',
-                                'goods_credit',
-                                'service',
-                                'other',
-                              ])
-                                DropdownMenuItem(
-                                  value: value,
-                                  child: Text(
-                                    'debt_reason_$value'.tr,
-                                    overflow: TextOverflow.ellipsis,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: Icon(
+                                    _isEditing
+                                        ? Icons.edit_note_rounded
+                                        : Icons.account_balance_wallet_rounded,
+                                    color: Colors.white,
+                                    size: 25,
                                   ),
                                 ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _reason = value);
-                                _scheduleDraftSave();
-                              }
-                            },
-                          );
-                          final amount = TextFormField(
-                            controller: _amountController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [ThousandsSeparatorFormatter()],
-                            decoration: _decoration(
-                              'debt_original_amount'.tr,
-                              Icons.payments_outlined,
-                            ).copyWith(suffixText: 'TZS'),
-                            validator: (value) {
-                              final amount =
-                                  double.tryParse(
-                                    (value ?? '').trim().replaceAll(',', ''),
-                                  ) ??
-                                  0;
-                              if (amount <= 0) {
-                                return 'validation_amount_positive'.tr;
-                              }
-                              if (_isEditing &&
-                                  amount < widget.debt!.amountPaid) {
-                                return 'debt_amount_below_paid'.tr;
-                              }
-                              return null;
-                            },
-                          );
-                          if (constraints.maxWidth < 520) {
-                            return Column(
-                              children: [
-                                reason,
-                                const SizedBox(height: 12),
-                                amount,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        (_isEditing
+                                                ? 'debt_edit_title'
+                                                : 'debt_add_title')
+                                            .tr,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'debt_form_intro'.tr,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: reason),
-                              const SizedBox(width: 12),
-                              Expanded(child: amount),
-                            ],
-                          );
-                        },
-                      ),
-                      if (_isEditing) ...[
-                        const SizedBox(height: 14),
-                        _buildExistingDebtSummary(ink, brand),
-                      ],
-                      if (BusinessAccessService.isOwner.value) ...[
-                        const SizedBox(height: 14),
-                        DropdownButtonFormField<String>(
-                          initialValue: _shops.contains(_shopNickname)
-                              ? _shopNickname
-                              : null,
-                          isExpanded: true,
-                          decoration: _decoration(
-                            'transactions_filter_shop'.tr,
-                            Icons.storefront_outlined,
+                            ),
                           ),
-                          items: [
-                            for (final shop in _shops)
-                              DropdownMenuItem(
-                                value: shop,
-                                child: Text(
-                                  shop,
-                                  overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 16),
+                          _sectionCard(
+                            context,
+                            icon: Icons.swap_horiz_rounded,
+                            title: 'debt_direction'.tr,
+                            subtitle: 'debt_direction_hint'.tr,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isNarrow = constraints.maxWidth < 430;
+                                final first = _directionOption(
+                                  context,
+                                  direction: DebtDirection.customerOwesShop,
+                                  title: 'debt_customer_owes'.tr,
+                                  icon: Icons.call_received_rounded,
+                                  color: const Color(0xFF176C55),
+                                );
+                                final second = _directionOption(
+                                  context,
+                                  direction: DebtDirection.shopOwesOther,
+                                  title: 'debt_shop_owes'.tr,
+                                  icon: Icons.call_made_rounded,
+                                  color: const Color(0xFF8C5A17),
+                                );
+                                if (isNarrow) {
+                                  return Column(
+                                    children: [
+                                      first,
+                                      const SizedBox(height: 10),
+                                      second,
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  children: [
+                                    Expanded(child: first),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: second),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionCard(
+                            context,
+                            icon: Icons.person_outline_rounded,
+                            title: 'debt_person_section'.tr,
+                            subtitle: 'debt_person_section_hint'.tr,
+                            child: Column(
+                              children: [
+                                TextFormField(
+                                  controller: _nameController,
+                                  textCapitalization: TextCapitalization.words,
+                                  decoration: _decoration(
+                                    'debt_person_name'.tr,
+                                    Icons.person_outline_rounded,
+                                  ),
+                                  validator: (value) =>
+                                      value == null || value.trim().isEmpty
+                                      ? 'validation_required'.tr
+                                      : null,
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: _decoration(
+                                    'phone_primary'.tr,
+                                    Icons.phone_outlined,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionCard(
+                            context,
+                            icon: Icons.payments_outlined,
+                            title: 'debt_details_section'.tr,
+                            subtitle: 'debt_details_section_hint'.tr,
+                            child: Column(
+                              children: [
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final reason =
+                                        DropdownButtonFormField<String>(
+                                          initialValue: _reason,
+                                          isExpanded: true,
+                                          decoration: _decoration(
+                                            'debt_reason'.tr,
+                                            Icons.receipt_long_outlined,
+                                          ),
+                                          items: [
+                                            for (final value in const [
+                                              'advance',
+                                              'goods_credit',
+                                              'service',
+                                              'other',
+                                            ])
+                                              DropdownMenuItem(
+                                                value: value,
+                                                child: Text(
+                                                  'debt_reason_$value'.tr,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
+                                          onChanged: (value) {
+                                            if (value != null) {
+                                              setState(() => _reason = value);
+                                              _scheduleDraftSave();
+                                            }
+                                          },
+                                        );
+                                    final amount = TextFormField(
+                                      controller: _amountController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      inputFormatters: [
+                                        ThousandsSeparatorFormatter(),
+                                      ],
+                                      decoration: _decoration(
+                                        'debt_original_amount'.tr,
+                                        Icons.payments_outlined,
+                                      ).copyWith(suffixText: 'TZS'),
+                                      validator: (value) {
+                                        final amount =
+                                            double.tryParse(
+                                              (value ?? '').trim().replaceAll(
+                                                ',',
+                                                '',
+                                              ),
+                                            ) ??
+                                            0;
+                                        if (amount <= 0) {
+                                          return 'validation_amount_positive'
+                                              .tr;
+                                        }
+                                        if (_isEditing &&
+                                            amount < widget.debt!.amountPaid) {
+                                          return 'debt_amount_below_paid'.tr;
+                                        }
+                                        return null;
+                                      },
+                                    );
+                                    if (constraints.maxWidth < 520) {
+                                      return Column(
+                                        children: [
+                                          reason,
+                                          const SizedBox(height: 12),
+                                          amount,
+                                        ],
+                                      );
+                                    }
+                                    return Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(child: reason),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: amount),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                if (_isEditing) ...[
+                                  const SizedBox(height: 14),
+                                  _buildExistingDebtSummary(ink, brand),
+                                ],
+                                if (BusinessAccessService.isOwner.value) ...[
+                                  const SizedBox(height: 14),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _shops.contains(_shopNickname)
+                                        ? _shopNickname
+                                        : null,
+                                    isExpanded: true,
+                                    decoration: _decoration(
+                                      'transactions_filter_shop'.tr,
+                                      Icons.storefront_outlined,
+                                    ),
+                                    items: [
+                                      for (final shop in _shops)
+                                        DropdownMenuItem(
+                                          value: shop,
+                                          child: Text(
+                                            shop,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                    onChanged: _loadingShops
+                                        ? null
+                                        : (shop) {
+                                            if (shop != null) {
+                                              setState(
+                                                () => _shopNickname = shop,
+                                              );
+                                              _scheduleDraftSave();
+                                            }
+                                          },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionCard(
+                            context,
+                            icon: Icons.event_outlined,
+                            title: 'debt_due_date_optional'.tr,
+                            subtitle: 'debt_due_date_hint'.tr,
+                            child: _buildDueDateTile(context),
+                          ),
+                          const SizedBox(height: 14),
+                          _sectionCard(
+                            context,
+                            icon: Icons.notes_rounded,
+                            title: 'debt_notes_optional'.tr,
+                            subtitle: 'debt_notes_hint'.tr,
+                            child: TextFormField(
+                              controller: _notesController,
+                              minLines: 3,
+                              maxLines: 5,
+                              textCapitalization: TextCapitalization.sentences,
+                              decoration: InputDecoration(
+                                hintText: 'debt_notes_placeholder'.tr,
+                                alignLabelWithHint: true,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
-                          ],
-                          onChanged: _loadingShops
-                              ? null
-                              : (shop) {
-                                  if (shop != null) {
-                                    setState(() => _shopNickname = shop);
-                                    _scheduleDraftSave();
-                                  }
-                                },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _sectionCard(
-                  context,
-                  icon: Icons.event_outlined,
-                  title: 'debt_due_date_optional'.tr,
-                  subtitle: 'debt_due_date_hint'.tr,
-                  child: _buildDueDateTile(context),
-                ),
-                const SizedBox(height: 14),
-                _sectionCard(
-                  context,
-                  icon: Icons.notes_rounded,
-                  title: 'debt_notes_optional'.tr,
-                  subtitle: 'debt_notes_hint'.tr,
-                  child: TextFormField(
-                    controller: _notesController,
-                    minLines: 3,
-                    maxLines: 5,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'debt_notes_placeholder'.tr,
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Color(0xFFE5EAEC))),
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 728),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: _saving || _loadingShops ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: brand,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(
-                          _isEditing ? Icons.check_rounded : Icons.add_rounded,
-                        ),
-                  label: Text(
-                    _saving
-                        ? 'debt_saving'.tr
-                        : (_isEditing
-                                  ? 'debt_update_action'
-                                  : 'debt_save_action')
-                              .tr,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
             ),
-          ),
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE5EAEC))),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 728),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: _saving || _loadingShops ? null : _save,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: brand,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        icon: _saving || _loadingShops
+                            ? const SizedBox(
+                                width: 19,
+                                height: 19,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                _isEditing
+                                    ? Icons.check_rounded
+                                    : Icons.add_rounded,
+                              ),
+                        label: Text(
+                          _loadingShops
+                              ? 'debt_shops_loading'.tr
+                              : _saving
+                              ? 'debt_saving'.tr
+                              : (_isEditing
+                                        ? 'debt_update_action'
+                                        : 'debt_save_action')
+                                    .tr,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

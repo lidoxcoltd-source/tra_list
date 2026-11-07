@@ -15,7 +15,7 @@ import 'package:tra_list/invoice/transaction_model.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 
-class TransactionForm extends StatelessWidget {
+class TransactionForm extends StatefulWidget {
   final AddTransactionController controller;
   final Future<void> Function(Future<void> Function() saveAction) onSave;
   final VoidCallback onCancel;
@@ -29,15 +29,25 @@ class TransactionForm extends StatelessWidget {
     required this.onCancel,
   });
 
+  @override
+  State<TransactionForm> createState() => _TransactionFormState();
+}
+
+class _TransactionFormState extends State<TransactionForm> {
+  final _formKey = GlobalKey<FormState>();
+
+  AddTransactionController get controller => widget.controller;
+  Future<void> Function(Future<void> Function() saveAction) get onSave =>
+      widget.onSave;
+  VoidCallback get onCancel => widget.onCancel;
+  bool get isSaving => widget.isSaving;
+
   Future<void> _save() async {
     debugPrint('TransactionForm._save called');
     if (_formKey.currentState?.validate() ?? false) {
       await onSave(controller.save);
     }
   }
-
-  // Use a final GlobalKey here for a StatelessWidget.
-  static final _formKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -402,509 +412,533 @@ class TransactionForm extends StatelessWidget {
     final categoriesRefresh = controller.loadCategories();
     try {
       await Get.bottomSheet(
-        DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.82,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (sheetContext, sheetScrollController) => SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF7F9F9),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD5DFE1),
-                      borderRadius: BorderRadius.circular(4),
+        LayoutBuilder(
+          builder: (sheetContext, constraints) {
+            final availableHeight = constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : MediaQuery.sizeOf(sheetContext).height;
+            return SizedBox(
+              height: availableHeight * 0.9,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF7F9F9),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(26),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
+                  child: Column(
                     children: [
                       Container(
-                        width: 46,
-                        height: 46,
+                        width: 38,
+                        height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE5F0F0),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: const Icon(
-                          Icons.category_rounded,
-                          color: Color(0xFF0E5962),
+                          color: const Color(0xFFD5DFE1),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'categories'.tr,
-                              style: const TextStyle(
-                                color: Color(0xFF19313A),
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5F0F0),
+                              borderRadius: BorderRadius.circular(15),
                             ),
-                            const SizedBox(height: 3),
-                            Obx(
-                              () => Text(
-                                controller.isExpense.value
-                                    ? 'expense'.tr
-                                    : 'income'.tr,
-                                style: const TextStyle(
-                                  color: Color(0xFF75838A),
-                                  fontSize: 13,
-                                ),
-                              ),
+                            child: const Icon(
+                              Icons.category_rounded,
+                              color: Color(0xFF0E5962),
                             ),
-                          ],
-                        ),
-                      ),
-                      Obx(
-                        () => IconButton(
-                          onPressed: controller.categoriesLoading.value
-                              ? null
-                              : controller.loadCategories,
-                          tooltip: 'categories_retry'.tr,
-                          icon: controller.categoriesLoading.value
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF0E5962),
+                          ),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'categories'.tr,
+                                  style: const TextStyle(
+                                    color: Color(0xFF19313A),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
                                   ),
-                                )
-                              : const Icon(Icons.refresh_rounded),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF0E5962),
+                                ),
+                                const SizedBox(height: 3),
+                                Obx(
+                                  () => Text(
+                                    controller.isExpense.value
+                                        ? 'expense'.tr
+                                        : 'income'.tr,
+                                    style: const TextStyle(
+                                      color: Color(0xFF75838A),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Obx(
+                            () => IconButton(
+                              onPressed: controller.categoriesLoading.value
+                                  ? null
+                                  : controller.loadCategories,
+                              tooltip: 'categories_retry'.tr,
+                              icon: controller.categoriesLoading.value
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF0E5962),
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh_rounded),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF0E5962),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: Get.back,
+                            tooltip: 'cancel'.tr,
+                            icon: const Icon(Icons.close_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF52656A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      TextField(
+                        controller: searchController,
+                        autofocus: true,
+                        onChanged: (value) => searchQuery.value = value.trim(),
+                        decoration: InputDecoration(
+                          labelText: '${'search'.tr} ${'categories'.tr}',
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF0E5962),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE1E8E9),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE1E8E9),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF0E5962),
+                              width: 1.4,
+                            ),
                           ),
                         ),
                       ),
-                      IconButton(
-                        onPressed: Get.back,
-                        tooltip: 'cancel'.tr,
-                        icon: const Icon(Icons.close_rounded),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF52656A),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              BusinessAccessService.can('categories', 'create')
+                              ? () async {
+                                  final name = await _showAddCategoryDialog();
+                                  if (name == null || name.isEmpty) return;
+                                  await controller.addNewCategory(name);
+                                  searchController.clear();
+                                  searchQuery.value = '';
+                                }
+                              : null,
+                          icon: const Icon(Icons.add_rounded),
+                          label: Text('add_category_title'.tr),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0E5962),
+                            backgroundColor: const Color(0xFFEAF2F2),
+                            minimumSize: const Size.fromHeight(48),
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: searchController,
-                    autofocus: true,
-                    onChanged: (value) => searchQuery.value = value.trim(),
-                    decoration: InputDecoration(
-                      labelText: '${'search'.tr} ${'categories'.tr}',
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        color: Color(0xFF0E5962),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: const BorderSide(color: Color(0xFFE1E8E9)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: const BorderSide(color: Color(0xFFE1E8E9)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF0E5962),
-                          width: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed:
-                          BusinessAccessService.can('categories', 'create')
-                          ? () async {
-                              final name = await _showAddCategoryDialog();
-                              if (name == null || name.isEmpty) return;
-                              await controller.addNewCategory(name);
-                              searchController.clear();
-                              searchQuery.value = '';
-                            }
-                          : null,
-                      icon: const Icon(Icons.add_rounded),
-                      label: Text('add_category_title'.tr),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0E5962),
-                        backgroundColor: const Color(0xFFEAF2F2),
-                        minimumSize: const Size.fromHeight(48),
-                        side: BorderSide.none,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: Obx(() {
-                      final categories = controller.isExpense.value
-                          ? controller.expenseCategories
-                          : controller.incomeCategories;
-                      final query = searchQuery.value.toLowerCase();
-                      final filteredCategories = categories
-                          .where(
-                            (category) =>
-                                category.name.toLowerCase().contains(query),
-                          )
-                          .toList();
-                      final availableNames = categories
-                          .map((category) => category.name)
-                          .toSet();
-                      final pinned = favoriteCategories
-                          .where(
-                            (name) =>
-                                availableNames.contains(name) &&
-                                name.toLowerCase().contains(query),
-                          )
-                          .toList();
-                      final popular = mostUsedCategories
-                          .where(
-                            (name) =>
-                                availableNames.contains(name) &&
-                                name.toLowerCase().contains(query),
-                          )
-                          .take(3)
-                          .toList();
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: Obx(() {
+                          final categories = controller.isExpense.value
+                              ? controller.expenseCategories
+                              : controller.incomeCategories;
+                          final query = searchQuery.value.toLowerCase();
+                          final filteredCategories = categories
+                              .where(
+                                (category) =>
+                                    category.name.toLowerCase().contains(query),
+                              )
+                              .toList();
+                          final availableNames = categories
+                              .map((category) => category.name)
+                              .toSet();
+                          final pinned = favoriteCategories
+                              .where(
+                                (name) =>
+                                    availableNames.contains(name) &&
+                                    name.toLowerCase().contains(query),
+                              )
+                              .toList();
+                          final popular = mostUsedCategories
+                              .where(
+                                (name) =>
+                                    availableNames.contains(name) &&
+                                    name.toLowerCase().contains(query),
+                              )
+                              .take(3)
+                              .toList();
 
-                      Widget quickPicks(
-                        String title,
-                        List<String> names,
-                        IconData icon,
-                      ) {
-                        if (query.isNotEmpty || names.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: const TextStyle(
-                                  color: Color(0xFF52656A),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                          Widget quickPicks(
+                            String title,
+                            List<String> names,
+                            IconData icon,
+                          ) {
+                            if (query.isNotEmpty || names.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      color: Color(0xFF52656A),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  SizedBox(
+                                    height: 38,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: names.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 8),
+                                      itemBuilder: (context, index) {
+                                        final name = names[index];
+                                        return ActionChip(
+                                          avatar: Icon(icon, size: 16),
+                                          label: Text(name),
+                                          onPressed: () {
+                                            controller.selectedCategory.value =
+                                                name;
+                                            Get.back();
+                                          },
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor: Colors.white,
+                                          side: const BorderSide(
+                                            color: Color(0xFFE1E8E9),
+                                          ),
+                                          labelStyle: const TextStyle(
+                                            color: Color(0xFF19313A),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          if (controller.categoriesLoading.value &&
+                              categories.isEmpty) {
+                            return const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF0E5962),
+                              ),
+                            );
+                          }
+
+                          if (filteredCategories.isEmpty) {
+                            final hasLoadError =
+                                controller.categoriesError.value.isNotEmpty;
+                            return Center(
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: const Color(0xFFE7ECEE),
+                                  ),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 58,
+                                      height: 58,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEAF2F2),
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      child: Icon(
+                                        hasLoadError
+                                            ? Icons.cloud_off_outlined
+                                            : Icons.sell_outlined,
+                                        size: 27,
+                                        color: const Color(0xFF0E5962),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      hasLoadError
+                                          ? controller.categoriesError.value
+                                          : query.isEmpty
+                                          ? 'categories_empty'.tr
+                                          : 'category_search_empty'.tr,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Color(0xFF52656A),
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                    if (hasLoadError) ...[
+                                      const SizedBox(height: 10),
+                                      TextButton.icon(
+                                        onPressed: controller.loadCategories,
+                                        icon: const Icon(Icons.refresh_rounded),
+                                        label: Text('categories_retry'.tr),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFF0E5962,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                height: 38,
+                            );
+                          }
+
+                          final sortedCategories = [...filteredCategories]
+                            ..sort((a, b) {
+                              final aPinned = favoriteCategories.contains(
+                                a.name,
+                              );
+                              final bPinned = favoriteCategories.contains(
+                                b.name,
+                              );
+                              if (aPinned == bPinned) {
+                                return a.name.compareTo(b.name);
+                              }
+                              return aPinned ? -1 : 1;
+                            });
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (controller.categoriesError.value.isNotEmpty)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    onPressed: controller.loadCategories,
+                                    icon: const Icon(
+                                      Icons.refresh_rounded,
+                                      size: 17,
+                                    ),
+                                    label: Text('categories_retry'.tr),
+                                  ),
+                                ),
+                              if (quickCategoriesLoading.value && query.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 8),
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                ),
+                              quickPicks(
+                                Get.locale?.languageCode == 'sw'
+                                    ? 'Kategoria pendwa'
+                                    : 'Favorites',
+                                pinned,
+                                Icons.push_pin_outlined,
+                              ),
+                              quickPicks(
+                                Get.locale?.languageCode == 'sw'
+                                    ? 'Zinazotumika zaidi'
+                                    : 'Most used',
+                                popular,
+                                Icons.local_fire_department_outlined,
+                              ),
+                              Expanded(
                                 child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: names.length,
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  itemCount: sortedCategories.length,
                                   separatorBuilder: (_, _) =>
-                                      const SizedBox(width: 8),
+                                      const SizedBox(height: 8),
                                   itemBuilder: (context, index) {
-                                    final name = names[index];
-                                    return ActionChip(
-                                      avatar: Icon(icon, size: 16),
-                                      label: Text(name),
-                                      onPressed: () {
-                                        controller.selectedCategory.value =
-                                            name;
-                                        Get.back();
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: Colors.white,
-                                      side: const BorderSide(
-                                        color: Color(0xFFE1E8E9),
-                                      ),
-                                      labelStyle: const TextStyle(
-                                        color: Color(0xFF19313A),
-                                        fontWeight: FontWeight.w600,
+                                    final category = sortedCategories[index];
+                                    final isSelected =
+                                        controller.selectedCategory.value ==
+                                        category.name;
+                                    final isFavorite = favoriteCategories
+                                        .contains(category.name);
+
+                                    return Material(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(15),
+                                      child: InkWell(
+                                        onTap: () {
+                                          controller.selectedCategory.value =
+                                              category.name;
+                                          Get.back();
+                                        },
+                                        onLongPress: () {
+                                          if (!BusinessAccessService.can(
+                                                'categories',
+                                                'edit',
+                                              ) &&
+                                              !BusinessAccessService.can(
+                                                'categories',
+                                                'delete',
+                                              )) {
+                                            return;
+                                          }
+                                          Get.back();
+                                          _showCategoryActions(category);
+                                        },
+                                        borderRadius: BorderRadius.circular(15),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: isSelected
+                                                  ? const Color(0xFF0E5962)
+                                                  : const Color(0xFFE7ECEE),
+                                              width: isSelected ? 1.4 : 1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              15,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 42,
+                                                height: 42,
+                                                decoration: BoxDecoration(
+                                                  color: isSelected
+                                                      ? const Color(0xFFE5F0F0)
+                                                      : const Color(0xFFF2F5F5),
+                                                  borderRadius:
+                                                      BorderRadius.circular(13),
+                                                ),
+                                                child: Icon(
+                                                  Icons.sell_outlined,
+                                                  color: isSelected
+                                                      ? const Color(0xFF0E5962)
+                                                      : const Color(0xFF75838A),
+                                                  size: 20,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Text(
+                                                  category.name,
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF19313A),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: isFavorite
+                                                    ? (Get.locale?.languageCode ==
+                                                              'sw'
+                                                          ? 'Ondoa kwenye pendwa'
+                                                          : 'Remove from favorites')
+                                                    : (Get.locale?.languageCode ==
+                                                              'sw'
+                                                          ? 'Bandika kwenye pendwa'
+                                                          : 'Pin to favorites'),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 40,
+                                                      minHeight: 40,
+                                                    ),
+                                                onPressed: () {
+                                                  unawaited(
+                                                    toggleFavorite(
+                                                      category.name,
+                                                    ),
+                                                  );
+                                                },
+                                                icon: Icon(
+                                                  isFavorite
+                                                      ? Icons.push_pin_rounded
+                                                      : Icons.push_pin_outlined,
+                                                  color: isFavorite
+                                                      ? const Color(0xFF1565C0)
+                                                      : const Color(0xFF9AA8AC),
+                                                  size: 19,
+                                                ),
+                                              ),
+                                              Icon(
+                                                isSelected
+                                                    ? Icons.check_circle_rounded
+                                                    : Icons
+                                                          .chevron_right_rounded,
+                                                color: isSelected
+                                                    ? const Color(0xFF0E5962)
+                                                    : const Color(0xFF9AA8AC),
+                                                size: 21,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     );
                                   },
                                 ),
                               ),
                             ],
-                          ),
-                        );
-                      }
-
-                      if (controller.categoriesLoading.value &&
-                          categories.isEmpty) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF0E5962),
-                          ),
-                        );
-                      }
-
-                      if (filteredCategories.isEmpty) {
-                        final hasLoadError =
-                            controller.categoriesError.value.isNotEmpty;
-                        return Center(
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(
-                                color: const Color(0xFFE7ECEE),
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 58,
-                                  height: 58,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEAF2F2),
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: Icon(
-                                    hasLoadError
-                                        ? Icons.cloud_off_outlined
-                                        : Icons.sell_outlined,
-                                    size: 27,
-                                    color: const Color(0xFF0E5962),
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  hasLoadError
-                                      ? controller.categoriesError.value
-                                      : query.isEmpty
-                                      ? 'categories_empty'.tr
-                                      : 'category_search_empty'.tr,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Color(0xFF52656A),
-                                    height: 1.4,
-                                  ),
-                                ),
-                                if (hasLoadError) ...[
-                                  const SizedBox(height: 10),
-                                  TextButton.icon(
-                                    onPressed: controller.loadCategories,
-                                    icon: const Icon(Icons.refresh_rounded),
-                                    label: Text('categories_retry'.tr),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: const Color(0xFF0E5962),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-
-                      final sortedCategories = [...filteredCategories]
-                        ..sort((a, b) {
-                          final aPinned = favoriteCategories.contains(a.name);
-                          final bPinned = favoriteCategories.contains(b.name);
-                          if (aPinned == bPinned) {
-                            return a.name.compareTo(b.name);
-                          }
-                          return aPinned ? -1 : 1;
-                        });
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (controller.categoriesError.value.isNotEmpty)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: controller.loadCategories,
-                                icon: const Icon(
-                                  Icons.refresh_rounded,
-                                  size: 17,
-                                ),
-                                label: Text('categories_retry'.tr),
-                              ),
-                            ),
-                          if (quickCategoriesLoading.value && query.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 8),
-                              child: LinearProgressIndicator(minHeight: 2),
-                            ),
-                          quickPicks(
-                            Get.locale?.languageCode == 'sw'
-                                ? 'Kategoria pendwa'
-                                : 'Favorites',
-                            pinned,
-                            Icons.push_pin_outlined,
-                          ),
-                          quickPicks(
-                            Get.locale?.languageCode == 'sw'
-                                ? 'Zinazotumika zaidi'
-                                : 'Most used',
-                            popular,
-                            Icons.local_fire_department_outlined,
-                          ),
-                          Expanded(
-                            child: ListView.separated(
-                              controller: sheetScrollController,
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              itemCount: sortedCategories.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final category = sortedCategories[index];
-                                final isSelected =
-                                    controller.selectedCategory.value ==
-                                    category.name;
-                                final isFavorite = favoriteCategories.contains(
-                                  category.name,
-                                );
-
-                                return Material(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: InkWell(
-                                    onTap: () {
-                                      controller.selectedCategory.value =
-                                          category.name;
-                                      Get.back();
-                                    },
-                                    onLongPress: () {
-                                      if (!BusinessAccessService.can(
-                                            'categories',
-                                            'edit',
-                                          ) &&
-                                          !BusinessAccessService.can(
-                                            'categories',
-                                            'delete',
-                                          )) {
-                                        return;
-                                      }
-                                      Get.back();
-                                      _showCategoryActions(category);
-                                    },
-                                    borderRadius: BorderRadius.circular(15),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? const Color(0xFF0E5962)
-                                              : const Color(0xFFE7ECEE),
-                                          width: isSelected ? 1.4 : 1,
-                                        ),
-                                        borderRadius: BorderRadius.circular(15),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 42,
-                                            height: 42,
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? const Color(0xFFE5F0F0)
-                                                  : const Color(0xFFF2F5F5),
-                                              borderRadius:
-                                                  BorderRadius.circular(13),
-                                            ),
-                                            child: Icon(
-                                              Icons.sell_outlined,
-                                              color: isSelected
-                                                  ? const Color(0xFF0E5962)
-                                                  : const Color(0xFF75838A),
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              category.name,
-                                              style: const TextStyle(
-                                                color: Color(0xFF19313A),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            tooltip: isFavorite
-                                                ? (Get.locale?.languageCode ==
-                                                          'sw'
-                                                      ? 'Ondoa kwenye pendwa'
-                                                      : 'Remove from favorites')
-                                                : (Get.locale?.languageCode ==
-                                                          'sw'
-                                                      ? 'Bandika kwenye pendwa'
-                                                      : 'Pin to favorites'),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 40,
-                                              minHeight: 40,
-                                            ),
-                                            onPressed: () {
-                                              unawaited(
-                                                toggleFavorite(category.name),
-                                              );
-                                            },
-                                            icon: Icon(
-                                              isFavorite
-                                                  ? Icons.push_pin_rounded
-                                                  : Icons.push_pin_outlined,
-                                              color: isFavorite
-                                                  ? const Color(0xFF1565C0)
-                                                  : const Color(0xFF9AA8AC),
-                                              size: 19,
-                                            ),
-                                          ),
-                                          Icon(
-                                            isSelected
-                                                ? Icons.check_circle_rounded
-                                                : Icons.chevron_right_rounded,
-                                            color: isSelected
-                                                ? const Color(0xFF0E5962)
-                                                : const Color(0xFF9AA8AC),
-                                            size: 21,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
+                          );
+                        }),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
         isScrollControlled: true,
         backgroundColor: Colors.transparent,

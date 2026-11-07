@@ -1075,14 +1075,25 @@ class _MarketStatusViewerState extends State<MarketStatusViewer>
                       ? MarketVideoView(
                           url: group.statuses[index].videoUrl,
                           visibilityKey: 'status-${group.statuses[index].id}',
+                          preload: (index - _index).abs() == 1,
                           fit: BoxFit.contain,
                           paused: _videoHeld,
-                          cover: group.statuses[index].images.isEmpty
-                              ? null
-                              : CachedNetworkImage(
-                                  imageUrl: group.statuses[index].images.first,
+                          cover: group.statuses[index].videoThumb.isNotEmpty ||
+                                  group.statuses[index].images.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl:
+                                      group.statuses[index].videoThumb.isNotEmpty
+                                      ? group.statuses[index].videoThumb
+                                      : group.statuses[index].images.first,
                                   fit: BoxFit.contain,
-                                ),
+                                  placeholder: (_, _) =>
+                                      const MarketMediaPlaceholder(),
+                                  errorWidget: (_, _, _) =>
+                                      const MarketMediaPlaceholder(),
+                                  fadeInDuration:
+                                      const Duration(milliseconds: 120),
+                                )
+                              : null,
                         )
                       : group.statuses[index].images.isEmpty
                       ? MarketTextCard(
@@ -1097,6 +1108,10 @@ class _MarketStatusViewerState extends State<MarketStatusViewer>
                           child: CachedNetworkImage(
                             imageUrl: group.statuses[index].images.first,
                             fit: BoxFit.contain,
+                            memCacheHeight: 1600,
+                            placeholder: (_, _) =>
+                                const MarketMediaPlaceholder(),
+                            fadeInDuration: const Duration(milliseconds: 120),
                             errorWidget: (_, _, _) => const Icon(
                               Icons.broken_image_outlined,
                               color: Colors.white54,

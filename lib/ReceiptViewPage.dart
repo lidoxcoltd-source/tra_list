@@ -5,6 +5,7 @@ import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/LocalStorageService.dart';
 import 'package:flutter/services.dart';
 import 'package:tra_list/QRCodeService.dart';
+import 'package:tra_list/services/business_access_service.dart';
 
 class ReceiptViewController extends GetxController {
   final isLoading = true.obs;
@@ -69,7 +70,79 @@ class ReceiptViewController extends GetxController {
     } catch (e) {
       print('Failed to load from Firestore: $e');
     }
+
+    // POS invoices are scoped under their business instead of /receipts.
+    final businessId =
+        (Get.parameters['businessId'] ?? BusinessAccessService.businessId)
+            .trim();
+    if (businessId.isNotEmpty) {
+      try {
+        final invoice = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(businessId)
+            .collection('invoices')
+            .doc(receiptId)
+            .get()
+            .timeout(const Duration(seconds: 5));
+        if (invoice.exists) return _mapPosInvoiceToReceipt(invoice.data()!);
+      } catch (e) {
+        print('Failed to load POS invoice from Firestore: $e');
+      }
+    }
     return null;
+  }
+
+  ReceiptData _mapPosInvoiceToReceipt(Map<String, dynamic> data) {
+    Map<String, dynamic> map(Object? value) =>
+        value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+    final company = map(data['company']);
+    final client = map(data['client']);
+    final invoice = map(data['invoice']);
+    final total = (data['total'] as num?)?.toDouble() ?? 0;
+    final items = (data['items'] as List? ?? const []).whereType<Map>().map((
+      raw,
+    ) {
+      final item = Map<String, dynamic>.from(raw);
+      return LineItem(
+        description: (item['description'] ?? item['name'] ?? '').toString(),
+        qty: (item['qty'] as num?)?.round() ?? 1,
+        amount: (item['amount'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+
+    return ReceiptData(
+      company: CompanyInfo(
+        name: (company['name'] ?? '').toString(),
+        addressLine: (company['addressLine'] ?? company['address'] ?? '')
+            .toString(),
+        mobile: (company['mobile'] ?? company['phone'] ?? '').toString(),
+        tin: (company['tin'] ?? '').toString(),
+        vrn: (company['vrn'] ?? '').toString(),
+        serialNo: (company['serialNo'] ?? '').toString(),
+        uim: (company['uim'] ?? '').toString(),
+        taxOffice: (company['taxOffice'] ?? '').toString(),
+      ),
+      customer: CustomerInfo(
+        name: (client['name'] ?? '').toString(),
+        idType: '',
+        idNo: '',
+        mobile: '',
+        vrn: '',
+      ),
+      meta: ReceiptMeta(
+        receiptNo: (invoice['number'] ?? data['id'] ?? '').toString(),
+        zNumber: '',
+        receiptDate: (invoice['issueDate'] ?? '').toString(),
+        receiptTime: '',
+      ),
+      items: items,
+      totalExclTax: total,
+      tax: 0,
+      totalInclTax: total,
+      verificationCode: (data['id'] ?? invoice['number'] ?? '').toString(),
+      servedBy: (data['cashierName'] ?? '').toString(),
+    );
   }
 
   Future<ReceiptData?> _loadFromLocalStorage(String receiptId) async {
@@ -131,6 +204,7 @@ class ReceiptViewController extends GetxController {
       totalInclTax: (data['totalInclTax'] as num?)?.toDouble() ?? 0.0,
       verificationCode: data['verificationCode'] ?? '',
       qr: const AssetImage('assets/frame.png'),
+      servedBy: (data['cashierName'] ?? data['servedBy'] ?? '').toString(),
     );
   }
 

@@ -90,7 +90,7 @@ class StockDashboardPage extends StatelessWidget {
                     bool primary,
                   })
                 >[
-                  if (BusinessAccessService.can('invoices', 'create'))
+                  if (BusinessAccessService.canUseBarPos)
                     (
                       label: 'pos_title'.tr,
                       icon: Icons.qr_code_scanner,
@@ -98,7 +98,7 @@ class StockDashboardPage extends StatelessWidget {
                       primary: true,
                     ),
                   if (BusinessAccessService.barModeEnabled.value &&
-                      BusinessAccessService.can('invoices', 'create'))
+                      BusinessAccessService.canUseBarPos)
                     (
                       label: 'bar_orders'.tr,
                       icon: Icons.room_service_outlined,

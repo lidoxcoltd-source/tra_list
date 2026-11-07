@@ -22,6 +22,7 @@ dependencies:
     sdk: flutter
   flutter_colorpicker: ^1.1.0
   flutter_speed_dial: ^7.0.0
+  flutter_pos_printer_platform_image_3: ^1.2.4
   get: ^4.6.6
   get_storage: ^2.1.1
   image_picker: ^1.2.0
@@ -59,6 +60,7 @@ dependencies:
   video_compress: ^3.1.4
   record: ^6.2.1
   record_web: ^1.3.0
+  flutter_webrtc: ^1.6.3
   flutter_contacts: ^2.1.0
 dev_dependencies:
   flutter_lints: ^5.0.0
@@ -70,19 +72,28 @@ dev_dependencies:
   fake_cloud_firestore:
     path: packages/fake_cloud_firestore
 
+dependency_overrides:
+  # The local fake_cloud_firestore fork requires 0.28; this printer plugin
+  # declares 0.27, while the APIs it uses remain compatible with 0.28.
+  rxdart: ^0.28.0
+
 flutter_launcher_icons:
   image_path: "assets/mjas.png"
   android: "ic_launcher"
+  ios: true
   remove_alpha_ios: true
   web:
     generate: true
     image_path: "assets/mjas.png"
-    background_color: "#002868"
-    theme_color: "#002868"
+    background_color: "#012A62"
+    theme_color: "#012A62"
   windows:
     generate: true
     image_path: "assets/mjas.png"
     icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/mjas.png"
 
 flutter:
   uses-material-design: true

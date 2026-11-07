@@ -18,6 +18,7 @@ import 'market_palette.dart';
 import 'market_post_page.dart';
 import 'market_profile_page.dart';
 import 'market_service.dart' hide MarketPostPage;
+import 'market_video.dart';
 
 /// Full-screen, swipe-up video viewer (like reels).
 class MarketReelsPage extends StatefulWidget {
@@ -111,7 +112,6 @@ class _MarketReelsPageState extends State<MarketReelsPage> {
     initialPage: widget.initialIndex,
   );
   late int _index = widget.initialIndex;
-  int _readyIndex = -1;
 
   @override
   void initState() {
@@ -156,18 +156,10 @@ class _MarketReelsPageState extends State<MarketReelsPage> {
               key: ValueKey(widget.posts[index].id),
               post: widget.posts[index],
               active: index == _index,
-              // On web the next reel loads only once the current one plays,
-              // so the two downloads never compete for bandwidth.
-              preload: kIsWeb
-                  ? index == _index + 1 && _readyIndex == _index
-                  : (index - _index).abs() == 1,
-              onReady: () {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && index == _index && _readyIndex != index) {
-                    setState(() => _readyIndex = index);
-                  }
-                });
-              },
+              // Keep the adjacent reel initialized so a swipe can start it
+              // immediately. The player buffers the stream; we don't wait for
+              // a full file download before preparing the next page.
+              preload: (index - _index).abs() == 1,
             ),
           ),
           if (!widget.embedded)
@@ -257,13 +249,11 @@ class _ReelItem extends StatefulWidget {
     required this.post,
     required this.active,
     this.preload = false,
-    this.onReady,
   });
 
   final MarketPost post;
   final bool active;
   final bool preload;
-  final VoidCallback? onReady;
 
   @override
   State<_ReelItem> createState() => _ReelItemState();
@@ -302,9 +292,13 @@ class _ReelItemState extends State<_ReelItem> {
     if (widget.active) {
       final controller = _controller;
       if (controller != null && controller.value.isInitialized) {
-        unawaited(controller.seekTo(Duration.zero));
-        unawaited(controller.play());
-        widget.onReady?.call();
+        if (controller.value.position > const Duration(milliseconds: 250)) {
+          unawaited(
+            controller.seekTo(Duration.zero).then((_) => controller.play()),
+          );
+        } else {
+          unawaited(controller.play());
+        }
       }
     } else {
       unawaited(_controller?.pause());
@@ -330,15 +324,13 @@ class _ReelItemState extends State<_ReelItem> {
         cached = await DefaultCacheManager().getFileFromCache(url);
       } catch (_) {}
     }
-    if (!mounted || _controller != null) return;
-    // Neighbouring reels are fully downloaded first so they start instantly.
-    if (cached == null && !kIsWeb && !widget.active) {
-      try {
-        cached = await DefaultCacheManager().downloadFile(url);
-      } catch (_) {}
-      if (!mounted || _controller != null) return;
-      if (!widget.active && !widget.preload) return;
+    if (!mounted ||
+        _controller != null ||
+        (!widget.active && !widget.preload)) {
+      return;
     }
+    // Start network buffering immediately. Waiting for downloadFile here
+    // blocks adjacent reels until the entire clip has downloaded.
     final controller = cached != null
         ? VideoPlayerController.file(cached.file)
         : VideoPlayerController.networkUrl(Uri.parse(url));
@@ -353,17 +345,19 @@ class _ReelItemState extends State<_ReelItem> {
       await controller.setLooping(true);
       await controller.setVolume(_muted ? 0 : 1);
       controller.addListener(_loopGuard);
-      if (!mounted) return;
+      if (!mounted || !identical(_controller, controller)) return;
       setState(() {});
       if (widget.active) {
         unawaited(controller.play());
-        widget.onReady?.call();
       }
     } catch (error) {
       debugPrint('Reel video failed to load: $error');
-      _controller = null;
-      await controller.dispose();
-      if (mounted) setState(() => _failed = true);
+      controller.removeListener(_loopGuard);
+      if (identical(_controller, controller)) {
+        _controller = null;
+        await controller.dispose();
+        if (mounted) setState(() => _failed = true);
+      }
     }
   }
 
@@ -578,6 +572,26 @@ class _ReelItemState extends State<_ReelItem> {
     );
   }
 
+  Widget _videoPoster() {
+    final posterUrl = post.videoThumb.isNotEmpty
+        ? post.videoThumb
+        : post.images.isNotEmpty
+        ? post.images.first
+        : '';
+    if (posterUrl.isEmpty) {
+      return const MarketMediaPlaceholder(icon: Icons.play_circle_outline);
+    }
+    return CachedNetworkImage(
+      imageUrl: posterUrl,
+      fit: BoxFit.contain,
+      memCacheWidth: 1000,
+      placeholder: (_, _) => const MarketMediaPlaceholder(),
+      fadeInDuration: const Duration(milliseconds: 100),
+      errorWidget: (_, _, _) =>
+          const MarketMediaPlaceholder(icon: Icons.play_circle_outline),
+    );
+  }
+
   Widget _actionColumn() {
     final compact = NumberFormat.compact();
     return StreamBuilder<MarketPost?>(
@@ -764,14 +778,8 @@ class _ReelItemState extends State<_ReelItem> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (post.images.isNotEmpty || post.videoThumb.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: post.images.isNotEmpty
-                      ? post.images.first
-                      : post.videoThumb,
-                  fit: BoxFit.contain,
-                  errorWidget: (_, _, _) => const SizedBox(),
-                ),
+              const MarketMediaPlaceholder(icon: Icons.play_circle_outline),
+              if (!ready) _videoPoster(),
               if (ready)
                 Center(
                   child: AspectRatio(
@@ -779,8 +787,21 @@ class _ReelItemState extends State<_ReelItem> {
                     child: VideoPlayer(controller),
                   ),
                 ),
-              if (!ready && !_failed)
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              if (ready)
+                ValueListenableBuilder<VideoPlayerValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) {
+                    final firstFramePlaying =
+                        value.position > const Duration(milliseconds: 120);
+                    return IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: firstFramePlaying ? 0 : 1,
+                        duration: const Duration(milliseconds: 180),
+                        child: _videoPoster(),
+                      ),
+                    );
+                  },
+                ),
               if (_failed)
                 const Center(
                   child: Icon(

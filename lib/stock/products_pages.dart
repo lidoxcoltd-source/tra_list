@@ -882,6 +882,7 @@ class ProductDetailsPage extends StatelessWidget {
         }
         final canEdit = BusinessAccessService.can('stock', 'edit');
         final canCreate = BusinessAccessService.can('stock', 'create');
+        final canSell = BusinessAccessService.canUseBarPos;
         return StockScaffold(
           title: p.name,
           maxWidth: 1060,
@@ -958,6 +959,7 @@ class ProductDetailsPage extends StatelessWidget {
               final metrics = _ProductMetrics(product: p);
               final actions = _ProductQuickActions(
                 product: p,
+                canSell: canSell,
                 canCreate: canCreate,
                 canEdit: canEdit,
               );
@@ -1169,11 +1171,13 @@ class _ProductMetric extends StatelessWidget {
 class _ProductQuickActions extends StatelessWidget {
   const _ProductQuickActions({
     required this.product,
+    required this.canSell,
     required this.canCreate,
     required this.canEdit,
   });
 
   final Product product;
+  final bool canSell;
   final bool canCreate;
   final bool canEdit;
 
@@ -1184,7 +1188,7 @@ class _ProductQuickActions extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        if (product.active && canCreate)
+        if (product.active && canSell)
           FilledButton.icon(
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 42),

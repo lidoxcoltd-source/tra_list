@@ -9,6 +9,7 @@ import 'package:tra_list/invoice/add_transaction_page.dart';
 import 'package:tra_list/stock/stock_dashboard_page.dart';
 import 'package:tra_list/stock/pos_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
+import 'package:tra_list/business_intelligence/business_intelligence_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';
 import 'package:tra_list/jobs/views/archived_jobs_page.dart';
 import 'package:tra_list/subscription_page.dart';
@@ -162,6 +163,7 @@ class AppRoutes {
   static const String stock = '/stock';
   static const String pos = '/pos';
   static const String analytics = '/analytics';
+  static const String businessIntelligence = '/business-intelligence';
   static const String jobs = '/jobs';
   static const String jobsArchive = '/jobs-archive';
   static const String quotation = '/quotation';
@@ -421,6 +423,12 @@ class AppRoutes {
     GetPage(
       name: analytics,
       page: () => const AnalyticsPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: businessIntelligence,
+      page: () => const BusinessIntelligencePage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
