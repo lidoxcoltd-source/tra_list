@@ -51,6 +51,39 @@ void main() {
     expect(find.byIcon(Icons.graphic_eq_rounded), findsNothing);
   });
 
+  testWidgets('AI shortcuts work in a narrow scrollable dialog', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var chats = 0;
+    var voices = 0;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('en', 'US'),
+        home: Scaffold(
+          body: Center(
+            child: AlertDialog(
+              content: SingleChildScrollView(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AiShortcutsBar(
+                    onAiChat: () => chats++,
+                    onAiVoice: () => voices++,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Chat'));
+    await tester.tap(find.byTooltip('Call'));
+    expect(chats, 1);
+    expect(voices, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('actions use a grid and dialog labels have no underline', (
     tester,
   ) async {

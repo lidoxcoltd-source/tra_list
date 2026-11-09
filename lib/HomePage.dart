@@ -766,6 +766,28 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ],
+                if (BusinessAccessService.can('analytics', 'view')) ...[
+                  const SizedBox(height: _Spacing.lg),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(_Radius.md),
+                    child: AiShortcutsBar(
+                      onAiChat: () {
+                        Navigator.of(dialogContext).pop();
+                        _openRestrictedRoute(
+                          AppRoutes.businessIntelligence,
+                          arguments: 'chat',
+                        );
+                      },
+                      onAiVoice: () {
+                        Navigator.of(dialogContext).pop();
+                        _openRestrictedRoute(
+                          AppRoutes.businessIntelligence,
+                          arguments: 'voice',
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

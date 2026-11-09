@@ -152,42 +152,9 @@ class QuickActionsPanel extends StatelessWidget {
                   ),
                 ),
                 if (onAiChat != null || onAiVoice != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF161A50),
-                          Color(0xFF38236F),
-                          Color(0xFF24205B),
-                        ],
-                      ),
-                      border: Border(
-                        top: BorderSide(color: Color(0xFF8271D1)),
-                      ),
-                    ),
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 36,
-                      runSpacing: 12,
-                      children: [
-                        if (onAiChat != null)
-                          _AiShortcut(
-                            label: 'bi_tab_chat'.tr,
-                            icon: Icons.chat_bubble_outline_rounded,
-                            onTap: onAiChat!,
-                          ),
-                        if (onAiVoice != null)
-                          _AiShortcut(
-                            label: 'bi_tab_call'.tr,
-                            icon: Icons.graphic_eq_rounded,
-                            onTap: onAiVoice!,
-                          ),
-                      ],
-                    ),
+                  AiShortcutsBar(
+                    onAiChat: onAiChat,
+                    onAiVoice: onAiVoice,
                   ),
               ],
             ),
@@ -201,6 +168,46 @@ class QuickActionsPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+class AiShortcutsBar extends StatelessWidget {
+  const AiShortcutsBar({super.key, this.onAiChat, this.onAiVoice});
+
+  final VoidCallback? onAiChat;
+  final VoidCallback? onAiVoice;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF161A50), Color(0xFF38236F), Color(0xFF24205B)],
+      ),
+      border: Border(top: BorderSide(color: Color(0xFF8271D1))),
+    ),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 36,
+      runSpacing: 12,
+      children: [
+        if (onAiChat != null)
+          _AiShortcut(
+            label: 'bi_tab_chat'.tr,
+            icon: Icons.chat_bubble_outline_rounded,
+            onTap: onAiChat!,
+          ),
+        if (onAiVoice != null)
+          _AiShortcut(
+            label: 'bi_tab_call'.tr,
+            icon: Icons.graphic_eq_rounded,
+            onTap: onAiVoice!,
+          ),
+      ],
+    ),
+  );
 }
 
 class _AiShortcut extends StatelessWidget {

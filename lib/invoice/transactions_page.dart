@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:tra_list/business_intelligence/isher_brand_mark.dart';
+import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'add_transaction_page.dart';
 import 'transaction_model.dart';
 import 'transaction_service.dart';
@@ -49,6 +51,26 @@ class TransactionsPage extends StatefulWidget {
 
 class _TransactionsPageState extends State<TransactionsPage> {
   final TransactionsController controller = Get.put(TransactionsController());
+  bool _openingAi = false;
+
+  Future<void> _openAi({required bool voice}) async {
+    if (_openingAi || !BusinessAccessService.hasBusinessAccess) return;
+    final businessId = BusinessAccessService.businessUid.value;
+    _openingAi = true;
+    try {
+      await openIsherAssistant(
+        context: context,
+        businessId: businessId,
+        isCurrent: () =>
+            mounted &&
+            BusinessAccessService.hasBusinessAccess &&
+            BusinessAccessService.businessUid.value == businessId,
+        voice: voice,
+      );
+    } finally {
+      _openingAi = false;
+    }
+  }
 
   @override
   void initState() {
@@ -151,7 +173,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       isScrollControlled: true,
       backgroundColor: MjasiColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
@@ -1153,88 +1175,134 @@ class _TransactionsPageState extends State<TransactionsPage> {
             color: MjasiColors.background,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: FutureBuilder<_FocusData>(
-            future: future,
-            builder: (ctx, snap) {
-              final Widget body;
-              if (snap.connectionState != ConnectionState.done) {
-                body = const Padding(
-                  padding: EdgeInsets.all(48),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              } else if (snap.hasError) {
-                body = Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _sw
-                        ? 'Imeshindwa kupakia data: ${snap.error}'
-                        : 'Could not load data: ${snap.error}',
-                    style: const TextStyle(color: MjasiColors.error),
-                  ),
-                );
-              } else {
-                final data = snap.data!;
-                body = _insightBody(
-                  focus
-                      ? _buildFocusReport(data, cat, start, end, dayMode)
-                      : _buildInsightReport(data.list),
-                );
-              }
-              return ListView(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: MjasiColors.border,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: MjasiColors.primaryNavy,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.auto_awesome,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                child: FutureBuilder<_FocusData>(
+                  future: future,
+                  builder: (ctx, snap) {
+                    final Widget body;
+                    if (snap.connectionState != ConnectionState.done) {
+                      body = const Padding(
+                        padding: EdgeInsets.all(48),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    } else if (snap.hasError) {
+                      body = Padding(
+                        padding: const EdgeInsets.all(24),
                         child: Text(
-                          _sw ? 'Uchambuzi na Ushauri' : 'Insights & Advice',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: MjasiColors.textPrimary,
+                          _sw
+                              ? 'Imeshindwa kupakia data: ${snap.error}'
+                              : 'Could not load data: ${snap.error}',
+                          style: const TextStyle(color: MjasiColors.error),
+                        ),
+                      );
+                    } else {
+                      final data = snap.data!;
+                      body = _insightBody(
+                        focus
+                            ? _buildFocusReport(data, cat, start, end, dayMode)
+                            : _buildInsightReport(data.list),
+                      );
+                    }
+                    return ListView(
+                      controller: scroll,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: MjasiColors.border,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.bar_chart_rounded),
-                        tooltip: 'Analytics'.tr,
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          Get.to(() => const AnalyticsPage());
-                        },
-                      ),
-                    ],
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            const IsherBrandMark(size: 44),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Isher AI',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: MjasiColors.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _sw
+                                        ? 'Uchambuzi na ushauri wa biashara'
+                                        : 'Business insights and advice',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: MjasiColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.bar_chart_rounded),
+                              tooltip: 'Analytics'.tr,
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                Get.to(() => const AnalyticsPage());
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        body,
+                      ],
+                    );
+                  },
+                ),
+              ),
+              Obx(() {
+                if (!BusinessAccessService.hasBusinessAccess ||
+                    !BusinessAccessService.can('analytics', 'view')) {
+                  return const SizedBox.shrink();
+                }
+                return SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _IsherFooterButton(
+                            label: 'bi_tab_chat'.tr,
+                            icon: Icons.chat_bubble_outline_rounded,
+                            onTap: () {
+                              Navigator.of(ctx).pop();
+                              _openAi(voice: false);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _IsherFooterButton(
+                            label: 'bi_tab_call'.tr,
+                            icon: Icons.graphic_eq_rounded,
+                            onTap: () {
+                              Navigator.of(ctx).pop();
+                              _openAi(voice: true);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  body,
-                ],
-              );
-            },
+                );
+              }),
+            ],
           ),
         ),
       ),
@@ -1444,7 +1512,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       builder: (context, constraints) {
         // Use a Column layout on narrow screens
         final incomeCard = Obx(
-          () => _SummaryCard(
+          () => TransactionSummaryCard(
             title: 'income'.tr,
             value:
                 'TSH ${TransactionsController.money(controller.currentIncome.value)}',
@@ -1455,7 +1523,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         );
 
         final expenseCard = Obx(
-          () => _SummaryCard(
+          () => TransactionSummaryCard(
             title: 'expenses'.tr,
             value:
                 'TSH ${TransactionsController.money(controller.currentExpense.value)}',
@@ -1469,7 +1537,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           final netValue = controller.currentNet.value;
           final netString =
               'TSH ${TransactionsController.money(netValue.abs())}';
-          return _SummaryCard(
+          return TransactionSummaryCard(
             title: 'net'.tr,
             value: (netValue >= 0 ? '' : '-') + netString,
             accent: netValue >= 0 ? MjasiColors.success : MjasiColors.warning,
@@ -1696,17 +1764,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
     // Card height is roughly 100px (16*2 padding + content).
     // Title + padding + summary row(s).
     // One compact row of cards (~64px) plus title and spacing.
-    const summaryHeight = 68.0;
-    final topContentHeight =
-        14.0 + 12.0 + summaryHeight; // Title + spacing + summary
-    final totalPadding =
-        MediaQuery.of(context).padding.top +
-        kToolbarHeight +
-        8.0; // Top and bottom padding
-    final adaptiveHeight = totalPadding + topContentHeight;
-
-    return Obx(
-      () => SliverAppBar(
+    return Obx(() {
+      final scaler = MediaQuery.textScalerOf(context);
+      final textGrowth =
+          (scaler.scale(14) - 14).clamp(0.0, double.infinity) +
+          (scaler.scale(11.5) - 11.5).clamp(0.0, double.infinity) +
+          (scaler.scale(15) - 15).clamp(0.0, double.infinity);
+      final summaryHeight = 68.0 + textGrowth * 1.5;
+      final topContentHeight = 14.0 + 12.0 + summaryHeight;
+      final totalPadding =
+          MediaQuery.of(context).padding.top + kToolbarHeight + 8.0;
+      final adaptiveHeight = totalPadding + topContentHeight;
+      return SliverAppBar(
         pinned: true,
         floating: true,
         snap: true,
@@ -1746,9 +1815,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 ),
                 child: SafeArea(
                   child: Padding(
-                    // Use MediaQuery to get status bar height + toolbar height for accurate top padding
                     padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top + kToolbarHeight,
+                      top: kToolbarHeight,
                       left: 16,
                       right: 16,
                       bottom: 8, // Add some bottom padding
@@ -1776,8 +1844,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ],
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   List<Widget> _buildAppBarActions() {
@@ -2337,9 +2405,86 @@ class _SliverHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+class _IsherFooterButton extends StatelessWidget {
+  const _IsherFooterButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF155CC8), Color(0xFF5334A5)],
+      ),
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x334A45B9),
+          blurRadius: 12,
+          offset: Offset(0, 5),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const IsherBrandMark(size: 36),
+                  Positioned(
+                    right: -3,
+                    bottom: -3,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF178EFF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, size: 12, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  'Isher $label',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Compact solid-colour summary card. Selection is shown with a deeper fill.
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
+@visibleForTesting
+class TransactionSummaryCard extends StatelessWidget {
+  const TransactionSummaryCard({
+    super.key,
     required this.title,
     required this.value,
     required this.accent,
