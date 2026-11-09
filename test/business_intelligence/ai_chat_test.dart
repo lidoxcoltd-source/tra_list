@@ -242,6 +242,10 @@ void main() {
 
   test('resource limit messages distinguish quota, rate and report limits', () {
     expect(
+      aiResourceLimitMessageKey('package-quota-exhausted'),
+      'isher_package_exhausted_notice',
+    );
+    expect(
       aiResourceLimitMessageKey('quota-exhausted'),
       'bi_chat_quota_exhausted',
     );
@@ -961,21 +965,83 @@ void main() {
     expect(provider.sends, 3);
   });
 
-  testWidgets('edits a message without resending and deletes after confirmation', (
+  testWidgets(
+    'edits a message without resending and deletes after confirmation',
+    (tester) async {
+      final provider = FakeProvider();
+      final original = newAiChatMessage('user', 'Chambua mauzo');
+      final document = newAiChatMessage(
+        'user',
+        encodeDocumentHistoryEvent('tengeneza invoice'),
+      );
+      final history = FakeHistory()
+        ..messages.addAll([
+          original,
+          newAiChatMessage('assistant', 'Jibu la awali'),
+          document,
+        ]);
+      final business = BusinessContext(
+        businessId: 'business',
+        businessName: 'Duka',
+        period: ReportingPeriod(DateTime(2024), DateTime(2024, 2)),
+        updatedAt: DateTime(2024),
+        income: 100,
+        expenses: 10,
+        transactionCount: 1,
+        expenseCategories: const {},
+        lowStock: null,
+        receivable: null,
+        payable: null,
+        limitations: const [],
+      );
+      await tester.pumpWidget(
+        GetMaterialApp(
+          translations: AppTranslations(),
+          locale: const Locale('sw', 'TZ'),
+          home: Scaffold(
+            body: BusinessAiChat(
+              businessContext: business,
+              isCurrent: () => true,
+              provider: provider,
+              historyRepository: history,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final editButtons = find.byTooltip('Hariri ujumbe');
+      expect(editButtons, findsOneWidget);
+      await tester.tap(editButtons.first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        'Chambua matumizi',
+      );
+      await tester.tap(find.text('Hifadhi mabadiliko'));
+      await tester.pumpAndSettle();
+      expect(provider.sends, 0);
+      expect(history.messages.first.id, original.id);
+      expect(history.messages.first.content, 'Chambua matumizi');
+      await tester.tap(find.byTooltip('Futa ujumbe').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Futa ujumbe').last);
+      await tester.pumpAndSettle();
+      expect(
+        history.messages.any((message) => message.id == original.id),
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets('swiping right replies with the selected message', (
     tester,
   ) async {
     final provider = FakeProvider();
-    final original = newAiChatMessage('user', 'Chambua mauzo');
-    final document = newAiChatMessage(
-      'user',
-      encodeDocumentHistoryEvent('tengeneza invoice'),
-    );
-    final history = FakeHistory()
-      ..messages.addAll([
-        original,
-        newAiChatMessage('assistant', 'Jibu la awali'),
-        document,
-      ]);
+    final original = newAiChatMessage('assistant', 'Mauzo ni 100');
+    final history = FakeHistory()..messages.add(original);
     final business = BusinessContext(
       businessId: 'business',
       businessName: 'Duka',
@@ -1005,57 +1071,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final editButtons = find.byTooltip('Hariri ujumbe');
-    expect(editButtons, findsOneWidget);
-    await tester.tap(editButtons.first);
-    await tester.pumpAndSettle();
-    await tester.enterText(find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    ), 'Chambua matumizi');
-    await tester.tap(find.text('Hifadhi mabadiliko'));
-    await tester.pumpAndSettle();
-    expect(provider.sends, 0);
-    expect(history.messages.first.id, original.id);
-    expect(history.messages.first.content, 'Chambua matumizi');
-    await tester.tap(find.byTooltip('Futa ujumbe').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Futa ujumbe').last);
-    await tester.pumpAndSettle();
-    expect(history.messages.any((message) => message.id == original.id), isFalse);
-  });
-
-  testWidgets('swiping right replies with the selected message', (tester) async {
-    final provider = FakeProvider();
-    final original = newAiChatMessage('assistant', 'Mauzo ni 100');
-    final history = FakeHistory()..messages.add(original);
-    final business = BusinessContext(
-      businessId: 'business',
-      businessName: 'Duka',
-      period: ReportingPeriod(DateTime(2024), DateTime(2024, 2)),
-      updatedAt: DateTime(2024),
-      income: 100,
-      expenses: 10,
-      transactionCount: 1,
-      expenseCategories: const {},
-      lowStock: null,
-      receivable: null,
-      payable: null,
-      limitations: const [],
+    await tester.fling(
+      find.byKey(ValueKey('ai_message_${original.id}')),
+      const Offset(250, 0),
+      600,
     );
-    await tester.pumpWidget(GetMaterialApp(
-      translations: AppTranslations(),
-      locale: const Locale('sw', 'TZ'),
-      home: Scaffold(body: BusinessAiChat(
-        businessContext: business,
-        isCurrent: () => true,
-        provider: provider,
-        historyRepository: history,
-      )),
-    ));
-    await tester.pumpAndSettle();
-    await tester.fling(find.byKey(ValueKey('ai_message_${original.id}')),
-        const Offset(250, 0), 600);
     await tester.pumpAndSettle();
     expect(find.text('Jibu: Mauzo ni 100'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Eleza zaidi');

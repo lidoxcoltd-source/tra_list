@@ -2,6 +2,25 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const voice = require("./gemini_voice");
 
+test("instruction answers business identity questions from supplied context", () => {
+  const context = {
+    businessName: "Duka la Asha",
+    transactions: { income: 120000, expenses: 30000, count: 8 },
+    limitations: ["Customer history is unavailable."],
+  };
+  const prompt = voice.instruction("Swahili", context);
+  assert.match(prompt, /Duka la Asha/);
+  assert.match(prompt, /Never say you do not know the business/);
+  assert.match(prompt, /120000/);
+  assert.match(prompt, /Customer history is unavailable/);
+});
+
+test("instruction does not invent a business name missing from context", () => {
+  const prompt = voice.instruction("English", { transactions: { count: 3 } });
+  assert.match(prompt, /business name is not present in this snapshot/);
+  assert.match(prompt, /"count":3/);
+});
+
 test("enabledProviders defaults to both and filters invalid values", () => {
   assert.deepEqual(voice.enabledProviders(undefined), ["openai", "gemini"]);
   assert.deepEqual(voice.enabledProviders({ voiceProviders: ["gemini", "x", "gemini"] }), ["gemini"]);

@@ -20,6 +20,7 @@ import 'package:tra_list/business_intelligence/ai_provider.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/chat_period.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
+import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/business_intelligence/isher_thinking_indicator.dart';
 import 'package:tra_list/invoice/InvoicePage.dart';
@@ -34,6 +35,7 @@ import 'package:tra_list/stock/stock_ui.dart';
 
 @visibleForTesting
 String aiResourceLimitMessageKey(String? message) => switch (message) {
+  'package-quota-exhausted' => 'isher_package_exhausted_notice',
   'quota-exhausted' => 'bi_chat_quota_exhausted',
   'rate-limited' => 'bi_chat_rate_limited',
   'Report preparation limit reached. Try again later.' =>
@@ -783,6 +785,13 @@ class BusinessAiChatState extends State<BusinessAiChat> {
       debugPrint('Business AI request failed: $e');
       debugPrintStack(stackTrace: stack);
       if (mounted && widget.isCurrent()) {
+        if (e is FirebaseFunctionsException &&
+            e.code == 'resource-exhausted' &&
+            aiResourceLimitMessageKey(e.message) ==
+                'isher_package_exhausted_notice') {
+          showIsherPackageQuotaNotice(context);
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1329,7 +1338,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
         children: [
           Expanded(
             child: _loading && _messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const SizedBox.shrink()
                 : _historyError != null && _messages.isEmpty
                 ? Center(
                     child: Column(
@@ -1738,20 +1747,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
               icon: const Icon(Icons.cloud_upload_outlined),
               label: Text('bi_retry_save'.tr),
             ),
-          if ((_busy && !_awaitingResponse) ||
-              (_loading && _messages.isNotEmpty))
-            const LinearProgressIndicator(
-              color: Color(0xFFB9A4FF),
-              backgroundColor: Color(0xFF241D3A),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'bi_chat_data_notice'.tr,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
-            ),
-          ),
           if (_replyTo case final AiChatMessage reply)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),

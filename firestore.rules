@@ -163,15 +163,10 @@ service cloud.firestore {
     }
 
     function hasPrivilegedRole(role) {
-      return role in [
-        'admin',
-        'Admin',
-        'ADMIN',
-        'superadmin',
-        'super_admin',
-        'super-admin',
-        'Super Admin'
-      ];
+      return role is string && (
+        role.lower().matches('[^a-z0-9]*a[^a-z0-9]*d[^a-z0-9]*m[^a-z0-9]*i[^a-z0-9]*n[^a-z0-9]*')
+        || role.lower().matches('[^a-z0-9]*s[^a-z0-9]*u[^a-z0-9]*p[^a-z0-9]*e[^a-z0-9]*r[^a-z0-9]*a[^a-z0-9]*d[^a-z0-9]*m[^a-z0-9]*i[^a-z0-9]*n[^a-z0-9]*')
+      );
     }
 
     function membershipPath(employeeUid) {

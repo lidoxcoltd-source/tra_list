@@ -8,7 +8,12 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:just_audio/just_audio.dart';
 
 abstract class IsherGreetingVoice {
-  Future<void> speak(String text, String language, bool Function() isCurrent);
+  Future<void> speak(
+    String text,
+    String language,
+    bool Function() isCurrent, {
+    required int greetingVariant,
+  });
   Future<void> stop();
 }
 
@@ -58,7 +63,9 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
   Future<void> speak(
     String text,
     String language,
-    bool Function() isCurrent,
+    bool Function() isCurrent, {
+    required int greetingVariant,
+  }
   ) async {
     try {
       final id = businessId();
@@ -70,7 +77,11 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
       } else {
         final response = await FirebaseFunctions.instance
             .httpsCallable('generateIsherGreeting')
-            .call({'businessUid': id, 'language': language});
+            .call({
+              'businessUid': id,
+              'language': language,
+              'greetingVariant': greetingVariant,
+            });
         final data = response.data;
         if (data is! Map || data['audio'] is! String) {
           throw StateError('Invalid greeting audio');
@@ -97,7 +108,12 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
       debugPrintStack(stackTrace: stack);
       if (!isCurrent()) return;
       onFallback();
-      await _device.speak(text, language, isCurrent);
+      await _device.speak(
+        text,
+        language,
+        isCurrent,
+        greetingVariant: greetingVariant,
+      );
     }
   }
 
@@ -117,7 +133,9 @@ class DeviceIsherGreetingVoice implements IsherGreetingVoice {
   Future<void> speak(
     String text,
     String language,
-    bool Function() isCurrent,
+    bool Function() isCurrent, {
+    required int greetingVariant,
+  }
   ) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       throw UnsupportedError('Offline greeting voice is not supported');

@@ -46,6 +46,7 @@ import 'package:tra_list/home/widgets/home_debt_metrics.dart';
 import 'package:tra_list/home/widgets/home_staff_summary.dart';
 import 'package:tra_list/home/widgets/bar_sales_live_summary.dart';
 import 'package:tra_list/home/widgets/business_wallet_preview.dart';
+import 'package:tra_list/home/widgets/home_isher_wake_word_control.dart';
 import 'package:tra_list/home/staff_sales_history_page.dart';
 import 'package:tra_list/home/widgets/home_bottom_bar.dart';
 
@@ -1168,6 +1169,23 @@ class _HomePageState extends State<HomePage> {
                   !mobileBusinessDashboard &&
                   !walletSwipePage)
                 _buildHeader(context),
+              if (_activeDestination == _HomeDestination.dashboard &&
+                  !_isPersonalMode &&
+                  BusinessAccessService.can('analytics', 'view'))
+                HomeIsherWakeWordControl(
+                  onChat: () => unawaited(
+                    Get.toNamed(
+                      AppRoutes.businessIntelligence,
+                      arguments: 'chat',
+                    ),
+                  ),
+                  onVoice: () => unawaited(
+                    Get.toNamed(
+                      AppRoutes.businessIntelligence,
+                      arguments: 'voice',
+                    ),
+                  ),
+                ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {

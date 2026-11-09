@@ -46,7 +46,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Record voice messages to send in your business team chat.</string>
+	<string>Listen for the Isher or Aisha wake word on the Home screen and record voice messages for your business team chat.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Recognize the Isher or Aisha wake word and your Chat or Call choice while the Home screen voice assistant is enabled.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos to share with your business team in chat.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

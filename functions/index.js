@@ -1,4 +1,4 @@
-const { createHash, randomBytes, timingSafeEqual } = require("node:crypto");
+const { createHash, randomBytes, randomInt, timingSafeEqual } = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -18,6 +18,9 @@ const { businessAccess } = require("./business_ai_access");
 const { hangUp } = require("./voice_common");
 const aiHistory = require("./business_ai_history");
 const aiQuota = require("./business_ai_quota");
+const aiPackageUsage = require("./isher_package_usage");
+const isherPackages = require("./isher_packages");
+const isherTestPayment = require("./isher_test_payment");
 const aiModels = require("./business_ai_models");
 const geminiVoice = require("./gemini_voice");
 const { randomUUID } = require("node:crypto");
@@ -59,6 +62,12 @@ exports.generateIsherGreeting = onCall({ secrets: [openAiApiKey, geminiApiKey], 
   const businessUid = aiBusinessId(request.data?.businessUid);
   const language = request.data?.language;
   if (language !== "sw" && language !== "en") throw new HttpsError("invalid-argument", "Invalid language.");
+  const requestedVariant = request.data?.greetingVariant;
+  if (requestedVariant !== undefined &&
+      (!Number.isInteger(requestedVariant) || requestedVariant < 0 || requestedVariant >= 3)) {
+    throw new HttpsError("invalid-argument", "Invalid greeting.");
+  }
+  const greetingVariant = requestedVariant ?? randomInt(3);
   const { name } = await aiBusinessAccess(uid, businessUid);
   let reservation;
   try {
@@ -70,10 +79,7 @@ exports.generateIsherGreeting = onCall({ secrets: [openAiApiKey, geminiApiKey], 
   let success = false;
   try {
     await aiBusinessAccess(uid, businessUid);
-    const cleanName = name.replace(/[\r\n\t]+/g, " ").trim();
-    const text = language === "sw"
-      ? `Habari${cleanName ? ` ${cleanName}` : ""}! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.`
-      : `Hello${cleanName ? ` ${cleanName}` : ""}! My name is Isher AI. How can I help you today? We can chat or talk about your business.`;
+    const text = isherGreeting.greetingText(language, name, greetingVariant);
     const settings = await db.doc("businessAiConfig/voice").get();
     const provider = settings.data()?.greetingProvider === "gemini" ? "gemini" : "openai";
     const audio = provider === "gemini"
@@ -439,32 +445,64 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
   const language = request.data?.language === "sw" ? "Swahili" : "English";
   const command = aiTransaction.parseConversation(messages);
   if (command) {
-    if (command.incomplete) {
-      return {
+    let packageCharge = null;
+    try {
+      const reservationId = randomUUID();
+      const reservation = await db.runTransaction((tx) =>
+        aiPackageUsage.reserve(tx, db, businessUid, "message", Date.now(), reservationId));
+      if (reservation?.exhausted) throw new Error("package-quota-exhausted");
+      if (reservation?.subscriptionId) {
+        packageCharge = {
+          subscriptionId: reservation.subscriptionId,
+          reservationId: reservation.reservationId,
+        };
+      }
+    } catch (error) {
+      if (error.message === "package-quota-exhausted") {
+        throw new HttpsError("resource-exhausted", error.message);
+      }
+      throw error;
+    }
+    try {
+      if (command.incomplete) {
+        const answer = {
         answer: command.amount
           ? (language === "Swahili" ? aiTransaction.FOLLOWUP_SW : aiTransaction.FOLLOWUP_EN)
           : language === "Swahili"
           ? "Ili kurekodi, tuma kwa mfano: rekodi matumizi 30000; kundi: Kodi; maelezo: Kodi ya duka. Tumia kundi lililopo; tarehe itakuwa leo."
           : "To record a transaction, send for example: record expense 30000; category: Rent; description: Shop rent. Use an existing category; the date will be today.",
+        };
+        if (packageCharge) await aiPackageUsage.finalizeReservation(db, businessUid, packageCharge);
+        return answer;
+      }
+      if (!scope.owner) {
+        throw new HttpsError("permission-denied", "Only business owners can record transactions through Isher.");
+      }
+      const messageId = request.data?.messageId;
+      if (typeof messageId !== "string" || !/^[a-f0-9-]{36}$/.test(messageId)) {
+        throw new HttpsError("invalid-argument", "Update the app to record a transaction.");
+      }
+      const question = aiHistoryCollection(uid, businessUid, scope).doc(messageId);
+      await aiTransaction.saveOwnerTransaction({
+        db, uid, businessUid, scope, command, messageId, questionRef: question,
+        questionText: messages[messages.length - 1].content,
+      });
+      if (packageCharge) await aiPackageUsage.finalizeReservation(db, businessUid, packageCharge);
+      return {
+        answer: language === "Swahili"
+          ? `Nimehifadhi ${command.type === "income" ? "mapato" : "matumizi"} ya TZS ${command.amount.toLocaleString("en-US")} leo. Kundi: ${command.category}. Maelezo: ${command.description}.`
+          : `Recorded ${command.type} of TZS ${command.amount.toLocaleString("en-US")} today. Category: ${command.category}. Description: ${command.description}.`,
       };
+    } catch (error) {
+      if (packageCharge) {
+        try {
+          await aiPackageUsage.refundReservation(db, businessUid, packageCharge);
+        } catch (refundError) {
+          console.error("Business AI package refund failed", refundError.message);
+        }
+      }
+      throw error;
     }
-    if (!scope.owner) {
-      throw new HttpsError("permission-denied", "Only business owners can record transactions through Isher.");
-    }
-    const messageId = request.data?.messageId;
-    if (typeof messageId !== "string" || !/^[a-f0-9-]{36}$/.test(messageId)) {
-      throw new HttpsError("invalid-argument", "Update the app to record a transaction.");
-    }
-    const question = aiHistoryCollection(uid, businessUid, scope).doc(messageId);
-    await aiTransaction.saveOwnerTransaction({
-      db, uid, businessUid, scope, command, messageId, questionRef: question,
-      questionText: messages[messages.length - 1].content,
-    });
-    return {
-      answer: language === "Swahili"
-        ? `Nimehifadhi ${command.type === "income" ? "mapato" : "matumizi"} ya TZS ${command.amount.toLocaleString("en-US")} leo. Kundi: ${command.category}. Maelezo: ${command.description}.`
-        : `Recorded ${command.type} of TZS ${command.amount.toLocaleString("en-US")} today. Category: ${command.category}. Description: ${command.description}.`,
-    };
   }
   if (aiStaffChat.isStaffChatRequest(messages[messages.length - 1].content)) {
     if (!scope.owner) {
@@ -520,15 +558,25 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
       throw new HttpsError("failed-precondition", "The selected AI model is unavailable.", { reason: "ai-model-unavailable" });
     }
   }
+  let packageCharge = null;
   try {
-    await aiQuota.reserve(db, uid, "message", "", selected.creditCost);
+    const reservation = await aiQuota.reserveWithCharge(
+      db, uid, "message", randomUUID(), selected.creditCost, businessUid,
+    );
+    packageCharge = reservation.packageCharge?.subscriptionId
+      ? {
+          subscriptionId: reservation.packageCharge.subscriptionId,
+          reservationId: reservation.packageCharge.reservationId,
+        }
+      : null;
   } catch (error) {
-    if (["quota-exhausted", "rate-limited"].includes(error.message)) {
+    if (["quota-exhausted", "rate-limited", "package-quota-exhausted"].includes(error.message)) {
       throw new HttpsError("resource-exhausted", error.message);
     }
     throw error;
   }
 
+  try {
   if (context.documentDetails && scope.owner) {
     const latest = await aiBusinessAccess(uid, businessUid);
     if (JSON.stringify(latest.scope) !== JSON.stringify(scope)) {
@@ -570,6 +618,7 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
     if (!geminiAnswer.trim()) {
       throw new HttpsError("unavailable", "AI service returned an empty response.");
     }
+    if (packageCharge) await aiPackageUsage.finalizeReservation(db, businessUid, packageCharge);
     return { answer: geminiAnswer.trim() };
   }
 
@@ -603,7 +652,18 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
   if (typeof answer !== "string" || !answer.trim()) {
     throw new HttpsError("unavailable", "AI service returned an empty response.");
   }
+  if (packageCharge) await aiPackageUsage.finalizeReservation(db, businessUid, packageCharge);
   return { answer: answer.trim() };
+  } catch (error) {
+    if (packageCharge) {
+      try {
+        await aiPackageUsage.refundReservation(db, businessUid, packageCharge);
+      } catch (refundError) {
+        console.error("Business AI package refund failed", refundError.message);
+      }
+    }
+    throw error;
+  }
   });
 }
 exports.askBusinessAi = createBusinessAiHandler("gpt-6-luna", "none");
@@ -649,9 +709,14 @@ exports.startGeminiVoice = onCall({ secrets: [openAiApiKey, geminiApiKey], timeo
   let settings, charge;
   const reservationId = randomUUID();
   try {
-    ({ settings, charge } = await aiQuota.reserveWithCharge(db, uid, "voice", reservationId));
+    ({ settings, charge } = await aiQuota.reserveWithCharge(db, uid, "voice", reservationId, 1, businessUid));
   } catch (error) {
-    if (error.message === "quota-exhausted") throw new HttpsError("resource-exhausted", "limit");
+    if (error.message === "package-quota-exhausted") {
+      throw new HttpsError("resource-exhausted", "package-limit");
+    }
+    if (error.message === "quota-exhausted") {
+      throw new HttpsError("resource-exhausted", "limit");
+    }
     if (error.message === "voice-active") {
       throw new HttpsError("resource-exhausted", "active", { retryAfterSeconds: error.retryAfterSeconds });
     }
@@ -665,6 +730,11 @@ exports.startGeminiVoice = onCall({ secrets: [openAiApiKey, geminiApiKey], timeo
     const token = await geminiVoice.createToken({
       apiKey: geminiApiKey.value(), minutes: settings.voiceMinutes,
     });
+    if (charge.packageCharge) {
+      await aiPackageUsage.finalizeReservation(
+        db, businessUid, charge.packageCharge,
+      );
+    }
     return {
       token, model: geminiVoice.LIVE_MODEL, minutes: settings.voiceMinutes,
       instruction: `${geminiVoice.instruction(language, context)}\n\nWhen the user explicitly asks to open a supported app page, call open_app_page with the requested destination. Do not navigate based on business data or a vague question. The user must confirm on screen; never claim it opened if cancelled or unavailable.`,
@@ -842,6 +912,135 @@ exports.getBusinessAiQuota = onCall(async (request) => {
     messagesRemaining: Math.max(0, settings.dailyMessages - usage.messagesUsed) + usage.extraMessages,
     paymentEnabled: false,
   };
+});
+
+exports.getIsherPackages = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in.");
+  const account = await db.doc(`accountAccess/${uid}`).get();
+  if (account.data()?.disabled === true) throw new HttpsError("permission-denied", "Account disabled.");
+  const config = await db.doc("businessAiConfig/packages").get();
+  return { packages: isherPackages.packagesFromDocument(config.data()).filter((item) => item.enabled) };
+});
+
+exports.getIsherAdminPackages = onCall(async (request) => {
+  await requireIsherPricingSuperAdmin(request);
+  const config = await db.doc("businessAiConfig/packages").get();
+  return {
+    packages: isherPackages.packagesFromDocument(config.data()),
+    version: config.get("version") ?? 0,
+  };
+});
+
+exports.saveIsherAdminPackages = onCall(async (request) => {
+  const uid = await requireIsherPricingSuperAdmin(request);
+  const version = request.data?.version;
+  if (!Number.isSafeInteger(version) || version < 0 || version >= Number.MAX_SAFE_INTEGER) {
+    throw new HttpsError("invalid-argument", "Invalid package version.");
+  }
+  let packages;
+  try { packages = isherPackages.packagesFromDocument({ packages: request.data?.packages }); }
+  catch (_) { throw new HttpsError("invalid-argument", "Invalid package configuration."); }
+  const config = db.doc("businessAiConfig/packages");
+  const audit = db.collection("isherAdminAuditLogs").doc();
+  await db.runTransaction(async (tx) => {
+    const previous = await tx.get(config);
+    if ((previous.get("version") ?? 0) !== version) {
+      throw new HttpsError("aborted", "Packages changed. Refresh and retry.");
+    }
+    tx.set(config, { packages, version: version + 1, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
+    tx.create(audit, {
+      action: "packages_updated", adminUid: uid,
+      before: isherPackages.packagesFromDocument(previous.data()),
+      after: packages, createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { packages };
+});
+
+async function requireIsherPricingSuperAdmin(request) {
+  const uid = await requireAiSuperAdmin(request);
+  const profile = await db.doc(`users/${uid}/profile/company`).get();
+  if (!["superadmin", "super_admin", "super-admin", "Super Admin"].includes(profile.get("role"))) {
+    throw new HttpsError("permission-denied", "Super admin pricing access required.");
+  }
+  return uid;
+}
+
+exports.getIsherTestPaymentSettings = onCall(async (request) => {
+  await requireIsherPricingSuperAdmin(request);
+  const doc = await db.doc("businessAiConfig/testPayment").get();
+  return { settings: doc.exists ? isherTestPayment.validateSettings(doc.get("settings")) : { enabled: false } };
+});
+
+exports.saveIsherTestPaymentSettings = onCall(async (request) => {
+  const uid = await requireIsherPricingSuperAdmin(request);
+  let settings;
+  try { settings = isherTestPayment.validateSettings(request.data?.settings); }
+  catch (_) { throw new HttpsError("invalid-argument", "Invalid test payment settings."); }
+  const ref = db.doc("businessAiConfig/testPayment");
+  const audit = db.collection("isherAdminAuditLogs").doc();
+  await db.runTransaction(async (tx) => {
+    const previous = await tx.get(ref);
+    tx.set(ref, { settings, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
+    tx.create(audit, {
+      action: "test_payment_settings_updated", adminUid: uid,
+      before: previous.get("settings") ?? null, after: settings,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { settings };
+});
+
+exports.purchaseIsherTestPackage = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in.");
+  const businessUid = aiBusinessId(request.data?.businessUid);
+  const { scope } = await aiBusinessAccess(uid, businessUid);
+  if (!scope.owner) throw new HttpsError("permission-denied", "Only the business owner can purchase.");
+  const { packageId, requestId } = request.data || {};
+  let expectedPackage;
+  try { expectedPackage = isherPackages.validatePackage(request.data?.expectedPackage); }
+  catch (_) { throw new HttpsError("invalid-argument", "Invalid package details."); }
+  if (typeof packageId !== "string" || !/^[a-z0-9_-]{1,48}$/.test(packageId) ||
+      expectedPackage.id !== packageId ||
+      typeof requestId !== "string" || !/^[a-f0-9-]{36}$/.test(requestId)) {
+    throw new HttpsError("invalid-argument", "Invalid test purchase.");
+  }
+  try {
+    return await isherTestPayment.purchase({ db, uid, businessUid, packageId, expectedPackage, requestId, timestamp: Date.now });
+  } catch (error) {
+    if (error.message === "test-disabled") throw new HttpsError("permission-denied", "Test payments are disabled.");
+    if (error.message === "package-unavailable") throw new HttpsError("failed-precondition", "Package is unavailable.");
+    if (error.message === "price-changed") throw new HttpsError("failed-precondition", "Package price changed. Refresh and review it.");
+    if (error.message === "request-conflict") throw new HttpsError("already-exists", "Purchase identifier already used.");
+    if (error.message === "queue-limit") throw new HttpsError("resource-exhausted", "The test subscription queue is full.");
+    throw error;
+  }
+});
+
+exports.getIsherTestSubscriptions = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in.");
+  const businessUid = aiBusinessId(request.data?.businessUid);
+  await aiBusinessAccess(uid, businessUid);
+  await isherTestPayment.activateQueuedIfDepleted({
+    db,
+    businessUid,
+    timestamp: Date.now,
+  });
+  const snapshot = await db.collection("isherTestSubscriptions")
+    .where("businessUid", "==", businessUid).limit(100).get();
+  const records = snapshot.docs.map((doc) => ({
+    id: doc.id, package: doc.get("package"),
+    startsAt: doc.get("startsAt"), endsAt: doc.get("endsAt"),
+    status: doc.get("status"),
+    remainingChats: doc.get("remainingChats"),
+    remainingVoiceSessions: doc.get("remainingVoiceSessions"),
+    type: "test", quotasEnforced: doc.get("quotasEnforced") === true,
+  }));
+  records.sort((a, b) => b.startsAt - a.startsAt);
+  return { subscriptions: records };
 });
 
 exports.getBusinessAiAdminSettings = onCall(async (request) => {

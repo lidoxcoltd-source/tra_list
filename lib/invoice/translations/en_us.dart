@@ -4,35 +4,47 @@ const Map<String, String> enUsTranslations = {
   ...stockTranslationsEn,
   'bi_staff_review_title': 'Review staff chat',
   'bi_staff_review_more': 'Load older items',
-  'bi_staff_review_choose': 'Choose one message or attachment to review. Showing up to 50 recent chats and 100 messages per chat.',
+  'bi_staff_review_choose':
+      'Choose one message or attachment to review. Showing up to 50 recent chats and 100 messages per chat.',
   'bi_staff_review_chat': 'Staff chat',
   'bi_staff_review_no_chats': 'No chats found.',
   'bi_staff_review_no_messages': 'No messages found.',
-  'bi_staff_review_load_error': 'Could not load this content. Check your connection and permissions.',
+  'bi_staff_review_load_error':
+      'Could not load this content. Check your connection and permissions.',
   'bi_staff_review_file': 'Attachment',
   'bi_staff_review_preview': 'Review content',
-  'bi_staff_review_unsupported': 'Unsupported format or larger than 5 MB. Only JPEG, PNG, WebP and PDF are supported; PDF previews are limited to 20 pages.',
-  'bi_staff_review_warning': 'Only the selected item and your question will be sent to OpenAI. Review all content and PDF pages. PDFs can also contain hidden text or metadata. Do not send files unless their complete contents are safe; never send passwords, tokens, private keys, payment credentials, or unnecessary personal information.',
-  'bi_staff_review_confirm': 'I reviewed the entire content, confirmed it contains no sensitive information, and agree to send it to OpenAI.',
+  'bi_staff_review_unsupported':
+      'Unsupported format or larger than 5 MB. Only JPEG, PNG, WebP and PDF are supported; PDF previews are limited to 20 pages.',
+  'bi_staff_review_warning':
+      'Only the selected item and your question will be sent to OpenAI. Review all content and PDF pages. PDFs can also contain hidden text or metadata. Do not send files unless their complete contents are safe; never send passwords, tokens, private keys, payment credentials, or unnecessary personal information.',
+  'bi_staff_review_confirm':
+      'I reviewed the entire content, confirmed it contains no sensitive information, and agree to send it to OpenAI.',
   'bi_staff_review_question': 'What should Isher analyze?',
   'bi_staff_review_question_required': 'Enter a question first.',
-  'bi_staff_review_prepare_error': 'Unable to prepare this item. It may contain flagged credentials, be unavailable, or exceed the supported file or PDF preview limits.',
-  'bi_staff_review_expired': 'The review expired or the content changed. Review it again before sending.',
-  'bi_staff_review_send_error': 'Could not analyze this item. Check your connection and try again.',
+  'bi_staff_review_prepare_error':
+      'Unable to prepare this item. It may contain flagged credentials, be unavailable, or exceed the supported file or PDF preview limits.',
+  'bi_staff_review_expired':
+      'The review expired or the content changed. Review it again before sending.',
+  'bi_staff_review_send_error':
+      'Could not analyze this item. Check your connection and try again.',
   'bi_staff_review_retry': 'Review again',
   'bi_staff_review_send': 'Send to Isher',
-  'bi_staff_review_not_saved': 'This answer is shown here only and is not saved in Isher chat history.',
+  'bi_staff_review_not_saved':
+      'This answer is shown here only and is not saved in Isher chat history.',
   'bi_title': 'Isher AI',
   'bi_chat_reply': 'Reply',
   'bi_chat_reply_context': 'Replying to',
   'bi_chat_edit_title': 'Edit message',
-  'bi_chat_edit_notice': 'Editing does not send a new question or change earlier AI answers. Messages linked to documents or saved transactions cannot be edited.',
+  'bi_chat_edit_notice':
+      'Editing does not send a new question or change earlier AI answers. Messages linked to documents or saved transactions cannot be edited.',
   'bi_chat_edit_save': 'Save changes',
   'bi_chat_edit_invalid': 'Enter a message of up to 2,000 characters.',
   'bi_chat_delete': 'Delete message',
   'bi_chat_delete_title': 'Delete this message?',
-  'bi_chat_delete_notice': 'This removes the message from chat history, not any saved business records.',
-  'bi_chat_change_error': 'Could not change this message. It may be linked to a saved transaction, or access may have changed. Please try again.',
+  'bi_chat_delete_notice':
+      'This removes the message from chat history, not any saved business records.',
+  'bi_chat_change_error':
+      'Could not change this message. It may be linked to a saved transaction, or access may have changed. Please try again.',
   'bi_navigation_transactions': 'Transactions',
   'bi_navigation_invoices': 'Invoices',
   'bi_navigation_receipts': 'Receipts',
@@ -43,11 +55,15 @@ const Map<String, String> enUsTranslations = {
   'bi_navigation_staff': 'Staff',
   'bi_navigation_pos': 'POS',
   'bi_navigation_confirm_title': 'Open app page?',
-  'bi_navigation_confirm_message': 'Isher wants to open @page. Confirm to continue.',
-  'bi_navigation_gemini_notice': 'Voice will pause and attempt to resume when you return.',
-  'bi_navigation_openai_notice': 'OpenAI voice will end. Start it again when you return.',
+  'bi_navigation_confirm_message':
+      'Isher wants to open @page. Confirm to continue.',
+  'bi_navigation_gemini_notice':
+      'Voice will pause and attempt to resume when you return.',
+  'bi_navigation_openai_notice':
+      'OpenAI voice will end. Start it again when you return.',
   'bi_navigation_open': 'Open page',
-  'bi_navigation_unknown': 'Page not supported. Try “open invoices” or “open tasks”.',
+  'bi_navigation_unknown':
+      'Page not supported. Try “open invoices” or “open tasks”.',
   'bi_navigation_error': 'Could not open the page. Please try again.',
   'bi_period': 'Reporting period',
   'bi_period_today': 'Today',
@@ -69,48 +85,66 @@ const Map<String, String> enUsTranslations = {
   'bi_coverage': 'Data coverage and limitations',
   'bi_share': 'Share Business Context',
   'bi_review': 'Review business report',
-  'bi_privacy': 'Review this report before copying or sharing it. Its contents leave MJASI if you share or paste them elsewhere. Product names and expense categories may contain sensitive information. The AI websites open without the report: copy and paste it yourself, then review and send.',
+  'bi_privacy':
+      'Review this report before copying or sharing it. Its contents leave MJASI if you share or paste them elsewhere. Product names and expense categories may contain sensitive information. The AI websites open without the report: copy and paste it yourself, then review and send.',
   'bi_copy': 'Copy Business Report',
   'bi_copied': 'Report copied. Paste and review it before sending.',
-  'bi_paste': 'Copy the report, then paste and review it on the provider website.',
+  'bi_paste':
+      'Copy the report, then paste and review it on the provider website.',
   'bi_share_sheet': 'Share via device',
   'bi_questions': 'Questions to explore',
-  'bi_questions_help': 'Use these questions with the report on an external AI service.',
-  'bi_question_performance': 'How is my recorded income and expense cash flow performing?',
+  'bi_questions_help':
+      'Use these questions with the report on an external AI service.',
+  'bi_question_performance':
+      'How is my recorded income and expense cash flow performing?',
   'bi_question_expenses': 'What expense categories should I examine?',
-  'bi_question_stock': 'Which low-stock products should I review for purchasing?',
+  'bi_question_stock':
+      'Which low-stock products should I review for purchasing?',
   'bi_question_products': 'Which POS products generated the most sales value?',
-  'bi_chat_intro': 'Ask in English or Swahili. Each message and the business summary must be reviewed before sending to OpenAI.',
+  'bi_chat_intro':
+      'Ask in English or Swahili. Each message and the business summary must be reviewed before sending to OpenAI.',
   'bi_chat_hint': 'Ask a business question',
   'bi_chat_edit_resend': 'Edit and resend as a new message',
   'bi_chat_edit_replace_title': 'Replace your draft?',
-  'bi_chat_edit_replace_notice': 'Your current unsent text will be replaced by the selected message.',
+  'bi_chat_edit_replace_notice':
+      'Your current unsent text will be replaced by the selected message.',
   'bi_chat_edit_replace': 'Replace draft',
   'bi_chat_review': 'Review what will be sent to OpenAI',
-  'bi_chat_data_notice': 'Messages and business summaries are sent to the selected AI provider (OpenAI or Google Gemini). Owner requests may include invoice or receipt details and customer names.',
+  'bi_chat_data_notice':
+      'Messages and business summaries are sent to the selected AI provider (OpenAI or Google Gemini). Owner requests may include invoice or receipt details and customer names.',
   'bi_document_review_title': 'Review document data',
-  'bi_document_review_notice': 'The data below, your question, recent conversation and business summary will be sent to the selected AI provider (OpenAI or Google Gemini). Customer names are included for customer questions. Check the coverage and all details before sending.',
+  'bi_document_review_notice':
+      'The data below, your question, recent conversation and business summary will be sent to the selected AI provider (OpenAI or Google Gemini). Customer names are included for customer questions. Check the coverage and all details before sending.',
   'bi_document_review_send': 'Send reviewed data',
   'bi_draft_title': 'Review a new document',
-  'bi_draft_notice': 'The existing form opens as a draft. Review and complete all details before saving. Items entered here are not linked to stock; select stock products in the form if stock must be updated. Choose the correct document type when generating.',
-  'bi_draft_receipt_notice': 'The existing receipt form opens as a draft. Review all company, receipt and tax details before saving. This does not issue or verify a fiscal receipt.',
-  'bi_draft_receipt_requested_amount': 'Requested amount: TZS @amount. Enter the correct amount and tax in the form; they have not been filled automatically.',
+  'bi_draft_notice':
+      'The existing form opens as a draft. Review and complete all details before saving. Items entered here are not linked to stock; select stock products in the form if stock must be updated. Choose the correct document type when generating.',
+  'bi_draft_receipt_notice':
+      'The existing receipt form opens as a draft. Review all company, receipt and tax details before saving. This does not issue or verify a fiscal receipt.',
+  'bi_draft_receipt_requested_amount':
+      'Requested amount: TZS @amount. Enter the correct amount and tax in the form; they have not been filled automatically.',
   'bi_draft_open': 'Open form',
   'bi_invoice_guide_title': 'Prepare an invoice',
   'bi_invoice_guide_customer': 'What is the customer name?',
   'bi_invoice_guide_name': 'Short invoice name? (optional)',
-  'bi_invoice_guide_number': 'Invoice number? Skip to use the app-generated number.',
-  'bi_invoice_guide_issue': 'Issue date? Enter day/month/year or skip to use today.',
-  'bi_invoice_guide_due': 'Due date? Enter day/month/year or skip to use today.',
+  'bi_invoice_guide_number':
+      'Invoice number? Skip to use the app-generated number.',
+  'bi_invoice_guide_issue':
+      'Issue date? Enter day/month/year or skip to use today.',
+  'bi_invoice_guide_due':
+      'Due date? Enter day/month/year or skip to use today.',
   'bi_invoice_guide_item': 'Product or service name?',
   'bi_invoice_guide_quantity': 'Product or service quantity?',
   'bi_invoice_guide_price': 'Price per item (TZS)?',
   'bi_invoice_guide_more': 'Would you like to add another item?',
   'bi_invoice_guide_item_count': 'Items added: @count',
   'bi_invoice_guide_terms': 'Invoice terms? Skip to leave them out.',
-  'bi_invoice_guide_invalid': 'Enter a non-empty answer within the length limit.',
-  'bi_invoice_guide_date_invalid': 'Enter a valid date, for example 08/11/2026.',
-  'bi_invoice_guide_number_invalid': 'Enter a valid number no greater than 1,000,000,000,000.',
+  'bi_invoice_guide_invalid':
+      'Enter a non-empty answer within the length limit.',
+  'bi_invoice_guide_date_invalid':
+      'Enter a valid date, for example 08/11/2026.',
+  'bi_invoice_guide_number_invalid':
+      'Enter a valid number no greater than 1,000,000,000,000.',
   'bi_invoice_guide_add': 'Add item',
   'bi_invoice_guide_done': 'No more items',
   'bi_invoice_guide_skip': 'Skip',
@@ -126,90 +160,177 @@ const Map<String, String> enUsTranslations = {
   'bi_invoice_summary_default_date': 'Today when the form opens',
   'bi_invoice_summary_total': 'Total',
   'bi_invoice_summary_terms': 'Terms',
-  'bi_invoice_summary_stock_notice': 'These items are not linked to stock. Select them in the form to deduct stock.',
+  'bi_invoice_summary_stock_notice':
+      'These items are not linked to stock. Select them in the form to deduct stock.',
   'bi_invoice_choose_stock': 'Choose a stock product',
   'bi_invoice_stock_selected': 'Stock product selected.',
   'bi_invoice_stock_invalid': 'This product has invalid details.',
-  'bi_invoice_stock_error': 'Could not load stock products. Check your connection and permissions.',
+  'bi_invoice_stock_error':
+      'Could not load stock products. Check your connection and permissions.',
   'bi_invoice_stock_item': 'stock',
   'bi_invoice_manual_item': 'no stock',
-  'bi_invoice_stock_effect': 'Stock items deduct inventory; manually entered items do not.',
+  'bi_invoice_stock_effect':
+      'Stock items deduct inventory; manually entered items do not.',
   'bi_invoice_save': 'Save invoice',
-  'bi_invoice_save_instruction': 'Type save or hifadhi and submit, or select Save invoice.',
-  'bi_invoice_save_error': 'Save not confirmed. Check the invoice list before starting another; retry here when connected.',
+  'bi_invoice_save_instruction':
+      'Type save or hifadhi and submit, or select Save invoice.',
+  'bi_invoice_save_error':
+      'Save not confirmed. Check the invoice list before starting another; retry here when connected.',
   'bi_invoice_saved': 'Invoice saved.',
   'bi_invoice_pdf_preview': 'Open PDF',
   'bi_invoice_pdf_save': 'Save PDF to device',
   'bi_invoice_pdf_saved': 'PDF saved',
-  'bi_invoice_pdf_error': 'Could not open or save the PDF. Check your connection, access and device storage, then try again.',
+  'bi_invoice_pdf_error':
+      'Could not open or save the PDF. Check your connection, access and device storage, then try again.',
   'bi_invoice_edit_saved': 'Edit invoice',
   'bi_invoice_save_changes': 'Save changes',
   'bi_invoice_changes_saved': 'Invoice changes saved.',
-  'bi_invoice_changes_error': 'Could not save changes. Check your access and the invoice, then try again.',
-  'bi_invoice_stock_edit_unavailable': 'Editing stock-linked invoices is not yet available here because stock adjustments are not supported.',
-  'bi_document_form_opened': 'The document form was opened for completion. Saving is not confirmed here.',
-  'bi_document_history_truncated': 'The history summary was shortened. Open the invoice to see all details.',
+  'bi_invoice_changes_error':
+      'Could not save changes. Check your access and the invoice, then try again.',
+  'bi_invoice_stock_edit_unavailable':
+      'Editing stock-linked invoices is not yet available here because stock adjustments are not supported.',
+  'bi_document_form_opened':
+      'The document form was opened for completion. Saving is not confirmed here.',
+  'bi_document_history_truncated':
+      'The history summary was shortened. Open the invoice to see all details.',
   'bi_invoice_open_saved': 'Open invoice',
-  'bi_invoice_open_error': 'Could not open the invoice. Check your connection and permissions.',
-  'bi_draft_invalid': 'Use: create invoice; customer: Name; item: Product; quantity: 2; price: 5000. Provide all item fields together. For advance use subtotal, tax and advance. No record was saved.',
-  'bi_transaction_category_error': 'Transaction not saved. Choose an existing category of the matching type.',
-  'bi_transaction_suggestion_prompt': 'Choose a category below and add a description to record this transaction.',
+  'bi_invoice_open_error':
+      'Could not open the invoice. Check your connection and permissions.',
+  'bi_draft_invalid':
+      'Use: create invoice; customer: Name; item: Product; quantity: 2; price: 5000. Provide all item fields together. For advance use subtotal, tax and advance. No record was saved.',
+  'bi_transaction_category_error':
+      'Transaction not saved. Choose an existing category of the matching type.',
+  'bi_transaction_suggestion_prompt':
+      'Choose a category below and add a description to record this transaction.',
   'bi_transaction_suggestion_amount': '@type: TZS @amount',
-  'bi_transaction_suggestion_date': 'Today on this device: @date. The server records the actual time when saved.',
+  'bi_transaction_suggestion_date':
+      'Today on this device: @date. The server records the actual time when saved.',
   'bi_transaction_suggestion_choose': 'Choose an existing category',
   'bi_transaction_suggestion_search': 'Search categories',
   'bi_transaction_suggestion_no_match': 'No matching category',
   'bi_transaction_suggestion_description': 'Description',
   'bi_transaction_suggestion_use_category': 'Use category as description',
-  'bi_transaction_suggestion_invalid': 'Choose a category and enter a description without semicolons or line breaks.',
-  'bi_transaction_suggestion_load_error': 'Could not load categories. Check your connection and access.',
-  'bi_transaction_suggestion_empty': 'No matching categories found. Add one in Categories first.',
+  'bi_transaction_suggestion_invalid':
+      'Choose a category and enter a description without semicolons or line breaks.',
+  'bi_transaction_suggestion_load_error':
+      'Could not load categories. Check your connection and access.',
+  'bi_transaction_suggestion_empty':
+      'No matching categories found. Add one in Categories first.',
   'bi_transaction_suggestion_save': 'Record transaction',
-  'bi_transaction_uncertain': 'The result is uncertain. Check your transactions before sending the command again.',
-  'bi_chat_disclosure': 'The data below, your question and recent conversation will leave MJASI and be sent to OpenAI. Your question and answer will also be saved in Firebase chat history. Product names, categories and messages may contain sensitive information. Do not include personal customer information, passwords or payment credentials. Review carefully before sending. The summary uses a server snapshot.',
+  'bi_transaction_uncertain':
+      'The result is uncertain. Check your transactions before sending the command again.',
+  'bi_chat_disclosure':
+      'The data below, your question and recent conversation will leave MJASI and be sent to OpenAI. Your question and answer will also be saved in Firebase chat history. Product names, categories and messages may contain sensitive information. Do not include personal customer information, passwords or payment credentials. Review carefully before sending. The summary uses a server snapshot.',
   'bi_chat_history': 'Conversation being sent',
   'bi_chat_choose_period': 'Select the reporting dates for this question',
   'bi_chat_selected_period': 'Reporting period: @start to @end (inclusive)',
-  'bi_date_comparison_unsupported': 'Comparing separate periods is not yet supported. Ask about one period at a time.',
+  'bi_date_comparison_unsupported':
+      'Comparing separate periods is not yet supported. Ask about one period at a time.',
   'bi_chat_user': 'You',
   'bi_chat_assistant': 'Assistant',
   'bi_chat_send_confirm': 'Send to selected AI provider',
   'bi_chat_too_long': 'Your question must be at most 2,000 characters.',
-  'bi_chat_access_error': 'Sign in and check your business access and permissions.',
+  'bi_chat_access_error':
+      'Sign in and check your business access and permissions.',
   'bi_chat_period_error': 'Choose a reporting period of at most 366 days.',
-  'bi_chat_snapshot_error': 'The report expired or access changed. Prepare and review it again.',
-  'bi_chat_model_unavailable': 'The selected model is no longer available. Open the model picker and choose an available model.',
-  'bi_chat_limit_error': 'The request or record limit was reached. Check AI usage, try later or choose a shorter period.',
-  'bi_chat_quota_exhausted': 'Not enough AI message credits for this model. Check AI usage or choose a model with a lower credit cost.',
-  'bi_chat_rate_limited': 'Please wait 10 seconds between AI messages, then try again.',
-  'bi_chat_preparation_limited': 'Too many report preparation requests. Wait a little and try again; if the daily limit was reached, try tomorrow.',
-  'bi_chat_report_too_large': 'The business report is too large. Choose a shorter reporting period and try again.',
+  'bi_chat_snapshot_error':
+      'The report expired or access changed. Prepare and review it again.',
+  'bi_chat_model_unavailable':
+      'The selected model is no longer available. Open the model picker and choose an available model.',
+  'bi_chat_limit_error':
+      'The request or record limit was reached. Check AI usage, try later or choose a shorter period.',
+  'bi_chat_quota_exhausted':
+      'Not enough AI message credits for this model. Check AI usage or choose a model with a lower credit cost.',
+  'isher_package_exhausted_notice':
+      'Your Isher AI package is finished. Add balance by choosing a package to continue chatting or using voice.',
+  'isher_add_balance': 'Add balance',
+  'bi_chat_rate_limited':
+      'Please wait 10 seconds between AI messages, then try again.',
+  'bi_chat_preparation_limited':
+      'Too many report preparation requests. Wait a little and try again; if the daily limit was reached, try tomorrow.',
+  'bi_chat_report_too_large':
+      'The business report is too large. Choose a shorter reporting period and try again.',
   'bi_chat_not_configured': 'AI chat is not configured on the server.',
-  'bi_chat_server_error': 'AI chat is unavailable. Check server configuration and try again.',
+  'bi_chat_server_error':
+      'AI chat is unavailable. Check server configuration and try again.',
   'bi_chat': 'Ask anything',
   'bi_open_assistant': 'Open Isher AI',
   'bi_tab_chat': 'Chat',
   'bi_tab_call': 'Call',
+  'isher_packages_title': 'Isher AI packages',
+  'isher_packages_unavailable':
+      'Package payments and monthly allowances are not available yet.',
+  'isher_packages_error': 'Unable to load packages. Please try again.',
+  'isher_package_edit': 'Package details',
+  'isher_package_id': 'Package ID (lowercase letters, digits, - or _)',
+  'isher_package_name': 'Package name',
+  'isher_package_price': 'Monthly price (TZS)',
+  'isher_package_chats': 'Chats',
+  'isher_package_voiceMinutes': 'Max minutes per call',
+  'isher_package_voiceSessions': 'Voice calls',
+  'isher_package_chats_remaining': 'Chats left',
+  'isher_package_voice_remaining': 'Voice calls left',
+  'isher_package_active': 'Active',
+  'isher_package_queued': 'Queued',
+  'isher_package_exhausted': 'Used up',
+  'isher_package_expired': 'Expired',
+  'isher_package_analyses': 'Business analyses',
+  'isher_package_research': 'Market research',
+  'isher_package_credits': 'Credits',
+  'isher_package_enabled': 'Enabled',
+  'isher_package_disabled': 'Disabled',
+  'isher_test_mode': 'TEST MODE',
+  'isher_test_admin_desc':
+      'Simulated payments only. Any signed-in business owner can test while enabled. No money is collected.',
+  'isher_test_notice':
+      'TEST MODE: No real payment is made. Active package chats and voice calls deduct their package quotas.',
+  'isher_test_confirm_title': 'Confirm TEST payment',
+  'isher_test_confirm_body':
+      'Simulate payment of TZS @price for @name? No money will be charged. Package quotas are not yet applied to AI usage.',
+  'isher_test_pay': 'TEST pay TZS @price',
+  'isher_test_success': 'Test package purchase successful',
+  'isher_package_status_active': 'active',
+  'isher_package_status_queued': 'queued',
+  'isher_test_success_body':
+      '@name is @status from @start to @end. No money was collected. Package usage limits apply to AI chat and voice.',
+  'isher_test_period': '@start – @end · TEST only',
+  'isher_test_denied':
+      'TEST MODE is disabled or this account cannot purchase a package.',
+  'isher_test_changed':
+      'Package details changed or are unavailable. Refresh and review the package.',
+  'isher_test_error':
+      'Test payment could not be confirmed. Retry the same package to check the result.',
+  'isher_test_pending':
+      'Retry the previous test payment for the same business and package before choosing another.',
+  'isher_test_retry': 'Check or retry previous test payment',
   'bi_chat_empty': 'Ask Isher about your business, or choose a question below.',
   'bi_chat_emoji': 'Add emoji',
   'bi_chat_thinking': 'Isher is preparing a response...',
-  'bi_history_error': 'Chat history could not be loaded. Check your connection and permissions, then try again.',
-  'bi_answer_unsaved': 'The answer could not be saved. Retry before continuing; it may be lost if you leave.',
-  'bi_question_unsaved': 'The question could not be saved. It was not sent to the AI provider; retry with the same question.',
+  'bi_history_error':
+      'Chat history could not be loaded. Check your connection and permissions, then try again.',
+  'bi_answer_unsaved':
+      'The answer could not be saved. Retry before continuing; it may be lost if you leave.',
+  'bi_question_unsaved':
+      'The question could not be saved. It was not sent to the AI provider; retry with the same question.',
   'bi_retry_save': 'Retry saving answer',
   'bi_load_older': 'Load older messages',
   'bi_voice_android_only': 'Live voice is currently available only on Android.',
   'bi_voice_title': 'Live voice conversation',
   'bi_voice_welcome': 'Talk to your business assistant',
   'bi_voice_session_title': 'Voice conversation',
-  'bi_voice_idle_prompt': 'Tap the microphone to review and start a voice session.',
+  'bi_voice_idle_prompt':
+      'Tap the microphone to review and start a voice session.',
   'bi_voice_connecting': 'Preparing your voice session...',
-  'bi_voice_intro': 'Talk to the AI in English or Swahili. Check AI usage for your limits. Switching to chat pauses Gemini voice and ends OpenAI voice.',
+  'bi_voice_intro':
+      'Talk to the AI in English or Swahili. Check AI usage for your limits. Switching to chat pauses Gemini voice and ends OpenAI voice.',
   'bi_voice_review': 'Review and start voice conversation',
-  'bi_voice_privacy': 'The business summary below and your live microphone audio will be sent to @provider until you mute, pause or end the session. During the session, requested summaries and invoice or receipt details, including customer names when requested, may also be sent without another review, within your business permissions. Speech is sent without reviewing each sentence. Only share customer names when necessary and authorized; do not speak passwords, contact details or private payment information. Opening a document pauses Gemini voice or ends OpenAI voice and does not save it. A paused Gemini connection remains open until its time limit and may incur charges. The voice is AI-generated. Provider usage may incur service charges for MJASI. Voice conversations are separate from text chat.',
-  'bi_voice_draft_unavailable': 'The document form could not be opened. Finish or retry the current chat operation and try again.',
+  'bi_voice_privacy':
+      'The business summary below and your live microphone audio will be sent to @provider until you mute, pause or end the session. During the session, requested summaries and invoice or receipt details, including customer names when requested, may also be sent without another review, within your business permissions. Speech is sent without reviewing each sentence. Only share customer names when necessary and authorized; do not speak passwords, contact details or private payment information. Opening a document pauses Gemini voice or ends OpenAI voice and does not save it. A paused Gemini connection remains open until its time limit and may incur charges. The voice is AI-generated. Provider usage may incur service charges for MJASI. Voice conversations are separate from text chat.',
+  'bi_voice_draft_unavailable':
+      'The document form could not be opened. Finish or retry the current chat operation and try again.',
   'bi_voice_transaction_review': 'Review transaction draft',
-  'bi_voice_transaction_not_saved': 'The transaction is not saved. Open chat, review and send it yourself to save. The category must already exist in the business.',
+  'bi_voice_transaction_not_saved':
+      'The transaction is not saved. Open chat, review and send it yourself to save. The category must already exist in the business.',
   'bi_voice_transaction_type': 'Type',
   'bi_voice_transaction_income': 'Income',
   'bi_voice_transaction_expense': 'Expense',
@@ -220,33 +341,61 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_transaction_chat': 'Continue in chat',
   'bi_voice_consent': 'Agree and start',
   'bi_voice_start': 'Start voice',
-  'bi_voice_live': 'Microphone is live. Your speech is being sent to @provider.',
+  'bi_voice_live':
+      'Microphone is live. Your speech is being sent to @provider.',
   'bi_voice_muted': 'Microphone muted.',
-  'bi_voice_paused': 'Voice paused. The microphone is off; the Gemini connection remains open until its time limit and may incur charges. You can return to this assistant and resume while the connection remains available.',
+  'bi_voice_paused':
+      'Voice paused. The microphone is off; the Gemini connection remains open until its time limit and may incur charges. You can return to this assistant and resume while the connection remains available.',
   'bi_voice_pause': 'Pause voice',
   'bi_voice_resume': 'Resume voice',
-  'bi_voice_level_unavailable': 'Microphone level is unavailable on this device.',
+  'bi_voice_level_unavailable':
+      'Microphone level is unavailable on this device.',
   'bi_voice_mute': 'Mute',
   'bi_voice_unmute': 'Unmute',
   'bi_voice_end': 'End voice',
   'bi_voice_ended': 'Voice session ended.',
-  'bi_voice_limit': 'Voice session limit reached. Try after midnight Tanzania time or contact an administrator.',
-  'bi_voice_active': 'Another voice session is active or still closing. Please try again later.',
-  'bi_voice_active_wait': 'Another voice session is active or still closing. Try again in @seconds seconds.',
-  'bi_voice_microphone_permission': 'Allow microphone access in device settings, then try again.',
-  'bi_voice_plugin_missing': 'Voice audio is unavailable in this app installation. Install a freshly built app and restart it.',
+  'bi_voice_limit':
+      'Voice session limit reached. Try after midnight Tanzania time or contact an administrator.',
+  'bi_voice_active':
+      'Another voice session is active or still closing. Please try again later.',
+  'bi_voice_active_wait':
+      'Another voice session is active or still closing. Try again in @seconds seconds.',
+  'bi_voice_microphone_permission':
+      'Allow microphone access in device settings, then try again.',
+  'bi_voice_plugin_missing':
+      'Voice audio is unavailable in this app installation. Install a freshly built app and restart it.',
   'bi_quota_title': 'AI usage',
   'isher_usage': 'Usage',
   'isher_loading': 'Preparing your business...',
   'isher_welcome_title': 'Welcome to Isher AI',
   'isher_welcome_subtitle': 'Your intelligent business companion',
+  'isher_wake_listening': 'Listening for “Isher” or “Aisha” — tap to turn off',
+  'isher_wake_waiting_choice':
+      'Yes, hello! Would you like to chat or make a call?',
+  'isher_wake_responding': 'Isher is responding...',
+  'isher_wake_off': 'Tap to enable Isher listening on this page',
+  'isher_wake_unavailable': 'Speech recognition unavailable — tap to retry',
+  'isher_wake_privacy':
+      'Home only; your browser or device speech service may process audio.',
   'isher_capability_insights': 'Analyze your business',
   'isher_capability_documents': 'Draft documents',
   'isher_capability_transactions': 'Record transactions',
-  'isher_personal_greeting': 'Hello @name! My name is Isher AI. How can I help you today? We can chat or talk about your business.',
-  'isher_personal_greeting_no_name': 'Hello! My name is Isher AI. How can I help you today? We can chat or talk about your business.',
-  'isher_greeting_voice_error': 'Voice unavailable. Install an offline voice in speech settings.',
-  'isher_greeting_voice_unavailable': 'Voice unavailable. Please try again later.',
+  'isher_personal_greeting_1':
+      'Hello @name! My name is Isher AI. How can I help you today? We can chat or talk about your business.',
+  'isher_personal_greeting_2':
+      "Welcome @name! I'm Isher AI. What would you like to explore about your business today?",
+  'isher_personal_greeting_3':
+      "Hi @name! I'm here to help. What would you like to work on in your business today?",
+  'isher_personal_greeting_no_name_1':
+      'Hello! My name is Isher AI. How can I help you today? We can chat or talk about your business.',
+  'isher_personal_greeting_no_name_2':
+      "Welcome! I'm Isher AI. What would you like to explore about your business today?",
+  'isher_personal_greeting_no_name_3':
+      "Hi! I'm here to help. What would you like to work on in your business today?",
+  'isher_greeting_voice_error':
+      'Voice unavailable. Install an offline voice in speech settings.',
+  'isher_greeting_voice_unavailable':
+      'Voice unavailable. Please try again later.',
   'isher_speech_settings': 'Speech settings',
   'bi_models_title': 'Choose AI model',
   'bi_models_greeting_provider': 'Greeting voice',
@@ -266,13 +415,18 @@ const Map<String, String> enUsTranslations = {
   'bi_models_generic_provider': 'Isher AI @number',
   'bi_models_generic_version': 'Version @number',
   'bi_models_voice_load_error': 'Could not load voice engines.',
-  'isher_speech_settings_general': 'Find Text-to-speech output in device settings.',
-  'isher_speech_settings_failed': 'Could not open settings. Open Settings and search for Text-to-speech output.',
-  'isher_greeting_cloud_disclosure': 'AI voice: business name is sent to OpenAI.',
-  'isher_greeting_cloud_fallback': 'OpenAI voice unavailable or daily limit of 3 reached; using device voice.',
+  'isher_speech_settings_general':
+      'Find Text-to-speech output in device settings.',
+  'isher_speech_settings_failed':
+      'Could not open settings. Open Settings and search for Text-to-speech output.',
+  'isher_greeting_cloud_disclosure':
+      'AI voice: business name is sent to OpenAI.',
+  'isher_greeting_cloud_fallback':
+      'OpenAI voice unavailable or daily limit of 3 reached; using device voice.',
   'isher_greeting_replay': 'Play greeting',
   'isher_welcome_greeting': "Hello! I'm Isher.",
-  'isher_welcome_description': "I'm here to help you manage your business, understand your numbers and make smarter decisions.",
+  'isher_welcome_description':
+      "I'm here to help you manage your business, understand your numbers and make smarter decisions.",
   'isher_start_chat': 'Start Chatting',
   'isher_talk': 'Talk to Isher',
   'isher_powered': 'Powered by MJASI',
@@ -285,38 +439,50 @@ const Map<String, String> enUsTranslations = {
   'bi_view_report': 'View business report',
   'bi_quota_admin_title': 'Isher AI settings',
   'isher_language_title': 'Isher voice language examples',
-  'isher_language_intro': 'Upload UTF-8 CSV with number,spoken columns, up to 50 examples and 16 KB. Use numbers without thousands separators and Swahili number words only. Do not include private data. This guides voice; it does not train the model.',
+  'isher_language_intro':
+      'Upload UTF-8 CSV with number,spoken columns, up to 50 examples and 16 KB. Use numbers without thousands separators and Swahili number words only. Do not include private data. This guides voice; it does not train the model.',
   'isher_language_pick': 'Choose CSV file',
   'isher_language_download': 'Download sample CSV',
-  'isher_language_sample_instructions': 'Download the sample, edit the number and spoken columns, save it as UTF-8 CSV, then choose the file below. Review every row before saving and activating.',
+  'isher_language_sample_instructions':
+      'Download the sample, edit the number and spoken columns, save it as UTF-8 CSV, then choose the file below. Review every row before saving and activating.',
   'isher_language_download_saved': 'Sample CSV saved.',
-  'isher_language_download_started': 'Sample CSV download started in your browser.',
-  'isher_language_download_error': 'Could not download the sample CSV. Please try again.',
+  'isher_language_download_started':
+      'Sample CSV download started in your browser.',
+  'isher_language_download_error':
+      'Could not download the sample CSV. Please try again.',
   'isher_language_name': 'Version name',
-  'isher_language_review': 'Review every value and its words carefully before saving and activating.',
+  'isher_language_review':
+      'Review every value and its words carefully before saving and activating.',
   'isher_language_test': 'Test a number in this preview',
   'isher_language_no_match': 'No matching example in this file.',
   'isher_language_save': 'Save version',
   'isher_language_saved': 'Version saved. It is not active yet.',
   'isher_language_versions': 'Versions',
-  'isher_language_voice_test': 'Tap a version to inspect it. Test pronunciation in a new Isher voice session; preview does not produce audio.',
+  'isher_language_voice_test':
+      'Tap a version to inspect it. Test pronunciation in a new Isher voice session; preview does not produce audio.',
   'isher_language_default': 'Built-in examples only',
   'isher_language_active': 'Active',
   'isher_language_activate': 'Activate',
-  'isher_language_confirm': 'Activate @name for new Swahili voice sessions? Existing sessions are unchanged.',
+  'isher_language_confirm':
+      'Activate @name for new Swahili voice sessions? Existing sessions are unchanged.',
   'isher_language_activated': 'Active version updated for new sessions.',
   'isher_language_limited': 'Showing the latest 50 versions.',
-  'isher_language_load_error': 'Could not load versions. Check your access and connection.',
-  'isher_language_file_error': 'Could not read the file. Choose a UTF-8 CSV no larger than 16 KB.',
+  'isher_language_load_error':
+      'Could not load versions. Check your access and connection.',
+  'isher_language_file_error':
+      'Could not read the file. Choose a UTF-8 CSV no larger than 16 KB.',
   'isher_language_invalid': 'Invalid examples',
   'isher_language_name_error': 'Enter a version name and choose a valid file.',
-  'isher_language_save_error': 'Could not save the change. Check your access and connection.',
+  'isher_language_save_error':
+      'Could not save the change. Check your access and connection.',
   'bi_quota_admin_desc': 'Set limits and prices; grant test credits.',
-  'bi_quota_explanation': 'Limits are per user and reset at midnight Tanzania time. AI requests count when sent, even if the service fails. Extra credits do not expire at the end of the day.',
+  'bi_quota_explanation':
+      'Limits are per user and reset at midnight Tanzania time. AI requests count when sent, even if the service fails. Extra credits do not expire at the end of the day.',
   'bi_quota_load_error': 'Could not load AI usage. Please try again.',
   'bi_quota_invalid': 'Enter valid numbers and required information.',
   'bi_quota_saved': 'AI settings saved.',
-  'bi_quota_save_error': 'Could not save. Check the values are within the allowed limits.',
+  'bi_quota_save_error':
+      'Could not save. Check the values are within the allowed limits.',
   'bi_quota_dailyVoice': 'Voice sessions per day',
   'bi_quota_dailyMessages': 'Messages per day',
   'bi_quota_voiceMinutes': 'Minutes per session (1–30)',
@@ -328,49 +494,88 @@ const Map<String, String> enUsTranslations = {
   'bi_quota_extra_voice': 'Extra sessions',
   'bi_quota_extra_messages': 'Extra messages',
   'bi_quota_grant': 'Grant credits',
-  'bi_quota_grant_confirm': 'Grant @voice sessions and @messages messages to user @uid? No payment will be processed.',
+  'bi_quota_grant_confirm':
+      'Grant @voice sessions and @messages messages to user @uid? No payment will be processed.',
   'bi_quota_granted': 'Test credits granted.',
-  'bi_quota_grant_error': 'Could not confirm the grant. Retry without changing the details, or contact an administrator.',
+  'bi_quota_grant_error':
+      'Could not confirm the grant. Retry without changing the details, or contact an administrator.',
   'bi_quota_voice_remaining': 'Sessions remaining: @count',
   'bi_quota_messages_remaining': 'Messages remaining: @count',
   'bi_quota_minutes_value': 'Maximum session length: @count minutes',
-  'bi_quota_prices': 'Configured prices: TZS @voice per session, TZS @message per message.',
-  'bi_quota_payment_later': 'Payment and automatic top-ups are not enabled. Contact an administrator for test credits.',
+  'bi_quota_prices':
+      'Configured prices: TZS @voice per session, TZS @message per message.',
+  'bi_quota_payment_later':
+      'Payment and automatic top-ups are not enabled. Contact an administrator for test credits.',
+  'bi_quota_business': 'Your business',
+  'bi_quota_business_greeting': 'Hello @name',
+  'bi_quota_no_package': 'No package yet',
+  'bi_quota_no_active_package':
+      'There is no active Isher AI package for this business. Choose a package to get started.',
+  'bi_quota_inactive_package':
+      'This package is not active. Choose an active package or review its status.',
+  'bi_quota_waiting_package':
+      'This package is queued and will start after the current package ends.',
+  'bi_quota_package_explanation':
+      'Your Isher AI package is shared across this business. Chat and voice usage are checked against the remaining package allowance.',
+  'bi_quota_package_chats': 'AI chat messages left',
+  'bi_quota_package_voice': 'Voice minutes available',
+  'bi_quota_voice_calls_left': '@count calls left',
+  'bi_quota_voice_duration_note':
+      'Each remaining voice call can last up to @minutes minutes. Total minutes shown are the maximum available, not a pooled timer.',
+  'bi_quota_daily_limits':
+      'Daily safety limits per user: @messages AI chats and @voice voice sessions. Package limits also apply.',
   'bi_voice_not_configured': 'Voice is not configured on this app.',
-  'bi_voice_connection_error': 'Voice could not connect or was interrupted. Check microphone permission, internet and service configuration.',
-  'bi_chat_disabled': 'In-app AI chat is unavailable until an AI provider is configured. You can share the report with an external service instead.',
+  'bi_voice_connection_error':
+      'Voice could not connect or was interrupted. Check microphone permission, internet and service configuration.',
+  'bi_chat_disabled':
+      'In-app AI chat is unavailable until an AI provider is configured. You can share the report with an external service instead.',
   'bi_access_error': 'Business access or analytics permission is unavailable.',
   'bi_load_error': 'Could not load the business report: @error',
   'bi_action_error': 'Could not complete the action: @error',
-  'bi_limit_income': 'Recorded transaction income may not include POS sales or all invoices.',
-  'bi_limit_profit': 'Net cash flow is not gross or net profit; cost of goods sold and accounting adjustments are not calculated.',
-  'bi_limit_modules': 'Customers, staff, jobs and non-POS invoice/receipt totals are not included.',
+  'bi_limit_income':
+      'Recorded transaction income may not include POS sales or all invoices.',
+  'bi_limit_profit':
+      'Net cash flow is not gross or net profit; cost of goods sold and accounting adjustments are not calculated.',
+  'bi_limit_modules':
+      'Customers, staff, jobs and non-POS invoice/receipt totals are not included.',
   'bi_purchases': 'Received stock purchases (period)',
   'bi_purchase_count': 'Received purchases (period)',
   'bi_tasks': 'Task overview',
-  'bi_tasks_summary': 'Open now: @open\nAwaiting review now: @review\nApproved in period: @approved',
+  'bi_tasks_summary':
+      'Open now: @open\nAwaiting review now: @review\nApproved in period: @approved',
   'bi_question_tasks': 'What does the current task workload summary suggest?',
-  'bi_limit_purchases': 'Received purchases are business-wide and grouped by purchase date, not necessarily paid expenses; they may overlap recorded expenses and must not be added to them. Purchases without valid dates are excluded.',
-  'bi_limit_invalid_purchases': '@count purchases had incomplete or unsupported data.',
-  'bi_limit_purchases_unavailable': 'Purchase data is unavailable to this account.',
-  'bi_limit_tasks': 'Tasks cover all tasks visible with tasks view permission. Open and review counts are current; approved count uses approval date within the period.',
-  'bi_limit_invalid_tasks': '@count tasks had missing or unsupported status or approval dates.',
+  'bi_limit_purchases':
+      'Received purchases are business-wide and grouped by purchase date, not necessarily paid expenses; they may overlap recorded expenses and must not be added to them. Purchases without valid dates are excluded.',
+  'bi_limit_invalid_purchases':
+      '@count purchases had incomplete or unsupported data.',
+  'bi_limit_purchases_unavailable':
+      'Purchase data is unavailable to this account.',
+  'bi_limit_tasks':
+      'Tasks cover all tasks visible with tasks view permission. Open and review counts are current; approved count uses approval date within the period.',
+  'bi_limit_invalid_tasks':
+      '@count tasks had missing or unsupported status or approval dates.',
   'bi_limit_tasks_unavailable': 'Task data is unavailable to this account.',
   'bi_income_trend': 'Recorded income by day (UTC)',
-  'bi_limit_pos': 'POS sales are shown separately from recorded income and may overlap it. Bar orders, refunds and deleted invoices are not included; product values are before any invoice-level adjustments.',
-  'bi_limit_pos_unavailable': 'POS sales and product performance are unavailable for this account.',
+  'bi_limit_pos':
+      'POS sales are shown separately from recorded income and may overlap it. Bar orders, refunds and deleted invoices are not included; product values are before any invoice-level adjustments.',
+  'bi_limit_pos_unavailable':
+      'POS sales and product performance are unavailable for this account.',
   'bi_limit_invalid_pos': '@count POS sales or items had incomplete data.',
   'bi_pos_sales': 'POS sales (separate)',
   'bi_top_products': 'Best-selling POS products by value',
   'bi_limit_type': 'Business type is not available in the company profile.',
   'bi_limit_dates': 'Transactions without a valid date are not included.',
-  'bi_limit_shop': 'Transactions and debts are limited to the assigned shop; stock is business-wide.',
-  'bi_limit_invalid_transactions': '@count invalid transaction records were excluded.',
+  'bi_limit_shop':
+      'Transactions and debts are limited to the assigned shop; stock is business-wide.',
+  'bi_limit_invalid_transactions':
+      '@count invalid transaction records were excluded.',
   'bi_limit_invalid_stock': '@count products had incomplete stock data.',
-  'bi_limit_stock_current': 'Stock levels are current, not historical at the end of the reporting period.',
+  'bi_limit_stock_current':
+      'Stock levels are current, not historical at the end of the reporting period.',
   'bi_limit_stock_permission': 'Stock data is unavailable to this account.',
   'bi_limit_invalid_debts': '@count debts had incomplete data.',
-  'bi_limit_debt_current': 'Debt balances are current, not historical at the end of the reporting period.',
+  'bi_limit_debt_current':
+      'Debt balances are current, not historical at the end of the reporting period.',
   'bi_limit_debt_permission': 'Debt data is unavailable to this account.',
   // General
   'save': 'Save',

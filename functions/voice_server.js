@@ -33,7 +33,7 @@ async function release(uid, id) {
 }
 
 sockets.on("connection", (socket) => {
-  let started = false, closed = false, callId, uid, id;
+  let started = false, closed = false, callId, uid, id, reservationCharge, sessionStarted = false;
   let timer, accessTimer;
   let alive = true;
   const heartbeat = setInterval(() => {
@@ -84,8 +84,15 @@ sockets.on("connection", (socket) => {
         }
       }
       id = randomUUID();
-      const settings = await aiQuota.reserve(db, uid, "voice", id);
-      if (closed) { await release(uid, id); return; }
+      const reservation = await aiQuota.reserveWithCharge(
+        db, uid, "voice", id, 1, request.businessUid,
+      );
+      const settings = reservation.settings;
+      reservationCharge = reservation.charge;
+      if (closed) {
+        await aiQuota.rollbackVoiceReservation(db, uid, id, reservationCharge);
+        return;
+      }
       const form = new FormData();
       form.set("sdp", request.sdp);
       form.set("session", JSON.stringify({
@@ -114,6 +121,7 @@ sockets.on("connection", (socket) => {
         .enqueue({ callId }, { scheduleTime: new Date(deadline), dispatchDeadlineSeconds: 60 });
       if (closed || socket.readyState !== WebSocket.OPEN) {
         await hangUp(callId, apiKey);
+        await aiQuota.rollbackVoiceReservation(db, uid, id, reservationCharge);
         return;
       }
       timer = setTimeout(() => socket.close(1000, "time limit"), Math.max(0, deadline - Date.now() - 5000));
@@ -127,13 +135,20 @@ sockets.on("connection", (socket) => {
           socket.close(1008, "access changed");
         }
       }, 15000);
+      if (reservationCharge?.packageCharge) {
+        await require("./isher_package_usage").finalizeReservation(
+          db, request.businessUid, reservationCharge.packageCharge,
+        );
+      }
       socket.send(JSON.stringify({ type: "answer", sdp: answer }));
+      sessionStarted = true;
     } catch (error) {
       console.error("Voice session failed", error.message);
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type: "error",
-          code: error.message === "quota-exhausted" ? "limit" :
+          code: error.message === "package-quota-exhausted" ? "package-limit" :
+            error.message === "quota-exhausted" ? "limit" :
             error.message === "voice-active" ? "active" : "unavailable",
         }));
         socket.close(1011, "session failed");
@@ -141,6 +156,13 @@ sockets.on("connection", (socket) => {
       if (closed && callId) {
         try { await hangUp(callId, apiKey); }
         catch (hangupError) { console.error("Voice hangup failed", hangupError.message); }
+      }
+      if (uid && id && reservationCharge && !sessionStarted) {
+        try {
+          await aiQuota.rollbackVoiceReservation(db, uid, id, reservationCharge);
+        } catch (refundError) {
+          console.error("Voice quota refund failed", refundError.message);
+        }
       }
       await cleanup();
     }

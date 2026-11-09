@@ -26,6 +26,16 @@ test("three successful greetings per user, failures release reservations", async
   await greeting.reserve(db, "another-user");
 });
 
+test("greeting variants are localized, personalized, and distinct", () => {
+  const sw = [0, 1, 2].map((variant) => greeting.greetingText("sw", "Duka Asha", variant));
+  const en = [0, 1, 2].map((variant) => greeting.greetingText("en", "Duka Asha", variant));
+  assert.equal(new Set(sw).size, 3);
+  assert.equal(new Set(en).size, 3);
+  assert.ok(sw.every((text) => text.includes("Duka Asha")));
+  assert.ok(en.every((text) => text.includes("Duka Asha")));
+  assert.throws(() => greeting.greetingText("sw", "", 3), /invalid-greeting/);
+});
+
 test("outstanding reservations count toward the daily limit", async () => {
   const db = database();
   for (let i = 0; i < 3; i++) await greeting.reserve(db, "user");

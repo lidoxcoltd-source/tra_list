@@ -4,35 +4,47 @@ const Map<String, String> swTzTranslations = {
   ...stockTranslationsSw,
   'bi_staff_review_title': 'Kagua chat za wafanyakazi',
   'bi_staff_review_more': 'Onyesha za zamani zaidi',
-  'bi_staff_review_choose': 'Chagua ujumbe au kiambatisho kimoja ukikague. Zinaonyeshwa chat 50 na ujumbe 100 za hivi karibuni kwa kila chat.',
+  'bi_staff_review_choose':
+      'Chagua ujumbe au kiambatisho kimoja ukikague. Zinaonyeshwa chat 50 na ujumbe 100 za hivi karibuni kwa kila chat.',
   'bi_staff_review_chat': 'Chat ya wafanyakazi',
   'bi_staff_review_no_chats': 'Hakuna chat zilizopatikana.',
   'bi_staff_review_no_messages': 'Hakuna ujumbe uliopatikana.',
-  'bi_staff_review_load_error': 'Imeshindikana kupakia taarifa. Kagua mtandao na ruhusa zako.',
+  'bi_staff_review_load_error':
+      'Imeshindikana kupakia taarifa. Kagua mtandao na ruhusa zako.',
   'bi_staff_review_file': 'Kiambatisho',
   'bi_staff_review_preview': 'Kagua maudhui',
-  'bi_staff_review_unsupported': 'Aina hii haitumiki au faili ni kubwa kuliko MB 5. JPEG, PNG, WebP na PDF pekee zinatumika; ukaguzi wa PDF ni hadi kurasa 20.',
-  'bi_staff_review_warning': 'Ujumbe au faili uliyochagua na swali lako vitatumwa kwa OpenAI. Kagua maudhui na kurasa zote za PDF. PDF inaweza pia kuwa na maandishi au metadata zilizofichika. Usitume faili bila kuhakikisha maudhui yake yote ni salama; usitume nywila, tokeni, funguo binafsi, taarifa za malipo au taarifa binafsi zisizo muhimu.',
-  'bi_staff_review_confirm': 'Nimekagua maudhui yote, nimethibitisha hayana taarifa nyeti, na nakubali kuyatuma kwa OpenAI.',
+  'bi_staff_review_unsupported':
+      'Aina hii haitumiki au faili ni kubwa kuliko MB 5. JPEG, PNG, WebP na PDF pekee zinatumika; ukaguzi wa PDF ni hadi kurasa 20.',
+  'bi_staff_review_warning':
+      'Ujumbe au faili uliyochagua na swali lako vitatumwa kwa OpenAI. Kagua maudhui na kurasa zote za PDF. PDF inaweza pia kuwa na maandishi au metadata zilizofichika. Usitume faili bila kuhakikisha maudhui yake yote ni salama; usitume nywila, tokeni, funguo binafsi, taarifa za malipo au taarifa binafsi zisizo muhimu.',
+  'bi_staff_review_confirm':
+      'Nimekagua maudhui yote, nimethibitisha hayana taarifa nyeti, na nakubali kuyatuma kwa OpenAI.',
   'bi_staff_review_question': 'Isher achambue nini?',
   'bi_staff_review_question_required': 'Andika swali kwanza.',
-  'bi_staff_review_prepare_error': 'Imeshindikana kuandaa taarifa. Huenda zina nywila, hazipatikani, au zinazidi mipaka ya faili au ukaguzi wa PDF.',
-  'bi_staff_review_expired': 'Muda wa ukaguzi umeisha au maudhui yamebadilika. Kagua tena kabla ya kutuma.',
-  'bi_staff_review_send_error': 'Imeshindikana kuchambua taarifa. Kagua mtandao ujaribu tena.',
+  'bi_staff_review_prepare_error':
+      'Imeshindikana kuandaa taarifa. Huenda zina nywila, hazipatikani, au zinazidi mipaka ya faili au ukaguzi wa PDF.',
+  'bi_staff_review_expired':
+      'Muda wa ukaguzi umeisha au maudhui yamebadilika. Kagua tena kabla ya kutuma.',
+  'bi_staff_review_send_error':
+      'Imeshindikana kuchambua taarifa. Kagua mtandao ujaribu tena.',
   'bi_staff_review_retry': 'Kagua tena',
   'bi_staff_review_send': 'Tuma kwa Isher',
-  'bi_staff_review_not_saved': 'Jibu linaonyeshwa hapa tu na halihifadhiwi kwenye historia ya chat ya Isher.',
+  'bi_staff_review_not_saved':
+      'Jibu linaonyeshwa hapa tu na halihifadhiwi kwenye historia ya chat ya Isher.',
   'bi_title': 'Isher AI',
   'bi_chat_reply': 'Jibu',
   'bi_chat_reply_context': 'Ninajibu ujumbe',
   'bi_chat_edit_title': 'Hariri ujumbe',
-  'bi_chat_edit_notice': 'Kuhariri hakutumi swali jipya wala kubadilisha majibu ya AI yaliyotangulia. Ujumbe wa hati au muamala uliohifadhiwa hauwezi kuhaririwa.',
+  'bi_chat_edit_notice':
+      'Kuhariri hakutumi swali jipya wala kubadilisha majibu ya AI yaliyotangulia. Ujumbe wa hati au muamala uliohifadhiwa hauwezi kuhaririwa.',
   'bi_chat_edit_save': 'Hifadhi mabadiliko',
   'bi_chat_edit_invalid': 'Andika ujumbe usiozidi herufi 2,000.',
   'bi_chat_delete': 'Futa ujumbe',
   'bi_chat_delete_title': 'Futa ujumbe huu?',
-  'bi_chat_delete_notice': 'Ujumbe utaondolewa kwenye historia ya chat, si rekodi za biashara zilizohifadhiwa.',
-  'bi_chat_change_error': 'Ujumbe haukurekebishwa. Huenda umeunganishwa na muamala uliohifadhiwa au ruhusa imebadilika. Jaribu tena.',
+  'bi_chat_delete_notice':
+      'Ujumbe utaondolewa kwenye historia ya chat, si rekodi za biashara zilizohifadhiwa.',
+  'bi_chat_change_error':
+      'Ujumbe haukurekebishwa. Huenda umeunganishwa na muamala uliohifadhiwa au ruhusa imebadilika. Jaribu tena.',
   'bi_navigation_transactions': 'Miamala',
   'bi_navigation_invoices': 'Invoice',
   'bi_navigation_receipts': 'Risiti',
@@ -43,11 +55,15 @@ const Map<String, String> swTzTranslations = {
   'bi_navigation_staff': 'Wafanyakazi',
   'bi_navigation_pos': 'POS',
   'bi_navigation_confirm_title': 'Fungua ukurasa?',
-  'bi_navigation_confirm_message': 'Isher anataka kufungua @page. Thibitisha kuendelea.',
-  'bi_navigation_gemini_notice': 'Sauti itasitishwa na kujaribu kuendelea utakaporudi.',
-  'bi_navigation_openai_notice': 'Sauti ya OpenAI itaisha. Iwashe tena utakaporudi.',
+  'bi_navigation_confirm_message':
+      'Isher anataka kufungua @page. Thibitisha kuendelea.',
+  'bi_navigation_gemini_notice':
+      'Sauti itasitishwa na kujaribu kuendelea utakaporudi.',
+  'bi_navigation_openai_notice':
+      'Sauti ya OpenAI itaisha. Iwashe tena utakaporudi.',
   'bi_navigation_open': 'Fungua ukurasa',
-  'bi_navigation_unknown': 'Ukurasa hautumiki. Jaribu “fungua invoice” au “fungua kazi”.',
+  'bi_navigation_unknown':
+      'Ukurasa hautumiki. Jaribu “fungua invoice” au “fungua kazi”.',
   'bi_navigation_error': 'Ukurasa haukufunguka. Tafadhali jaribu tena.',
   'bi_period': 'Kipindi cha ripoti',
   'bi_period_today': 'Leo',
@@ -69,48 +85,66 @@ const Map<String, String> swTzTranslations = {
   'bi_coverage': 'Wigo na mipaka ya taarifa',
   'bi_share': 'Shiriki taarifa za biashara',
   'bi_review': 'Kagua ripoti ya biashara',
-  'bi_privacy': 'Kagua ripoti kabla ya kunakili au kushiriki. Taarifa hizi zitatoka MJASI ukizishiriki au kuzibandika kwingine. Majina ya bidhaa na makundi ya matumizi yanaweza kuwa na taarifa nyeti. Tovuti za AI hufunguka bila ripoti: nakili na ubandike mwenyewe, kisha kagua kabla ya kutuma.',
+  'bi_privacy':
+      'Kagua ripoti kabla ya kunakili au kushiriki. Taarifa hizi zitatoka MJASI ukizishiriki au kuzibandika kwingine. Majina ya bidhaa na makundi ya matumizi yanaweza kuwa na taarifa nyeti. Tovuti za AI hufunguka bila ripoti: nakili na ubandike mwenyewe, kisha kagua kabla ya kutuma.',
   'bi_copy': 'Nakili ripoti ya biashara',
   'bi_copied': 'Ripoti imenakiliwa. Bandika na ukague kabla ya kutuma.',
-  'bi_paste': 'Nakili ripoti, kisha ibandike na kuikagua kwenye tovuti ya huduma.',
+  'bi_paste':
+      'Nakili ripoti, kisha ibandike na kuikagua kwenye tovuti ya huduma.',
   'bi_share_sheet': 'Shiriki kupitia kifaa',
   'bi_questions': 'Maswali ya kuchunguza',
-  'bi_questions_help': 'Tumia maswali haya pamoja na ripoti kwenye huduma ya nje ya AI.',
-  'bi_question_performance': 'Mapato na matumizi yangu yaliyorekodiwa yanaendeleaje?',
+  'bi_questions_help':
+      'Tumia maswali haya pamoja na ripoti kwenye huduma ya nje ya AI.',
+  'bi_question_performance':
+      'Mapato na matumizi yangu yaliyorekodiwa yanaendeleaje?',
   'bi_question_expenses': 'Ni makundi gani ya matumizi ninayopaswa kuchunguza?',
-  'bi_question_stock': 'Ni bidhaa gani zenye akiba ndogo ninazopaswa kufikiria kununua?',
-  'bi_question_products': 'Ni bidhaa gani za POS zilileta thamani kubwa ya mauzo?',
-  'bi_chat_intro': 'Uliza kwa Kiswahili au Kiingereza. Kagua kila ujumbe na muhtasari wa biashara kabla ya kutuma kwa OpenAI.',
+  'bi_question_stock':
+      'Ni bidhaa gani zenye akiba ndogo ninazopaswa kufikiria kununua?',
+  'bi_question_products':
+      'Ni bidhaa gani za POS zilileta thamani kubwa ya mauzo?',
+  'bi_chat_intro':
+      'Uliza kwa Kiswahili au Kiingereza. Kagua kila ujumbe na muhtasari wa biashara kabla ya kutuma kwa OpenAI.',
   'bi_chat_hint': 'Uliza swali la biashara',
   'bi_chat_edit_resend': 'Hariri na utume kama ujumbe mpya',
   'bi_chat_edit_replace_title': 'Badilisha rasimu yako?',
-  'bi_chat_edit_replace_notice': 'Maandishi yako ambayo hayajatumwa yatabadilishwa na ujumbe uliochagua.',
+  'bi_chat_edit_replace_notice':
+      'Maandishi yako ambayo hayajatumwa yatabadilishwa na ujumbe uliochagua.',
   'bi_chat_edit_replace': 'Badilisha rasimu',
   'bi_chat_review': 'Kagua taarifa zitakazotumwa kwa OpenAI',
-  'bi_chat_data_notice': 'Ujumbe na muhtasari wa biashara hutumwa kwa AI uliyochagua (OpenAI au Google Gemini). Mmiliki akiuliza invoice au risiti, maelezo na majina ya wateja yanaweza kutumwa.',
+  'bi_chat_data_notice':
+      'Ujumbe na muhtasari wa biashara hutumwa kwa AI uliyochagua (OpenAI au Google Gemini). Mmiliki akiuliza invoice au risiti, maelezo na majina ya wateja yanaweza kutumwa.',
   'bi_document_review_title': 'Kagua taarifa za nyaraka',
-  'bi_document_review_notice': 'Taarifa hapa chini, swali lako, mazungumzo ya karibuni na muhtasari wa biashara vitatumwa kwa AI uliyochagua (OpenAI au Google Gemini). Maswali ya wateja yanajumuisha majina yao. Kagua mipaka na taarifa zote kabla ya kutuma.',
+  'bi_document_review_notice':
+      'Taarifa hapa chini, swali lako, mazungumzo ya karibuni na muhtasari wa biashara vitatumwa kwa AI uliyochagua (OpenAI au Google Gemini). Maswali ya wateja yanajumuisha majina yao. Kagua mipaka na taarifa zote kabla ya kutuma.',
   'bi_document_review_send': 'Tuma taarifa zilizokaguliwa',
   'bi_draft_title': 'Kagua nyaraka mpya',
-  'bi_draft_notice': 'Fomu ya app itafunguka bila kuhifadhi. Kagua na kamilisha taarifa kabla ya kuhifadhi. Bidhaa zilizoandikwa hapa hazijaunganishwa na stock; chagua bidhaa kwenye fomu ikiwa stock inapaswa kupungua. Chagua aina sahihi ya nyaraka wakati wa kutengeneza.',
-  'bi_draft_receipt_notice': 'Fomu ya risiti itafunguka bila kuhifadhi. Kagua taarifa zote za kampuni, risiti na kodi kabla ya kuhifadhi. Hii haitoi wala kuthibitisha risiti ya kikodi.',
-  'bi_draft_receipt_requested_amount': 'Kiasi ulichotaja: TZS @amount. Weka kiasi na kodi sahihi kwenye fomu; havijaingizwa moja kwa moja.',
+  'bi_draft_notice':
+      'Fomu ya app itafunguka bila kuhifadhi. Kagua na kamilisha taarifa kabla ya kuhifadhi. Bidhaa zilizoandikwa hapa hazijaunganishwa na stock; chagua bidhaa kwenye fomu ikiwa stock inapaswa kupungua. Chagua aina sahihi ya nyaraka wakati wa kutengeneza.',
+  'bi_draft_receipt_notice':
+      'Fomu ya risiti itafunguka bila kuhifadhi. Kagua taarifa zote za kampuni, risiti na kodi kabla ya kuhifadhi. Hii haitoi wala kuthibitisha risiti ya kikodi.',
+  'bi_draft_receipt_requested_amount':
+      'Kiasi ulichotaja: TZS @amount. Weka kiasi na kodi sahihi kwenye fomu; havijaingizwa moja kwa moja.',
   'bi_draft_open': 'Fungua fomu',
   'bi_invoice_guide_title': 'Tuandae invoice',
   'bi_invoice_guide_customer': 'Jina la mteja ni nani?',
   'bi_invoice_guide_name': 'Jina fupi la invoice? (si lazima)',
   'bi_invoice_guide_number': 'Namba ya invoice? Ruka kutumia namba ya app.',
-  'bi_invoice_guide_issue': 'Tarehe ya invoice? Andika siku/mwezi/mwaka au ruka kutumia leo.',
-  'bi_invoice_guide_due': 'Tarehe ya mwisho ya malipo? Andika siku/mwezi/mwaka au ruka kutumia leo.',
+  'bi_invoice_guide_issue':
+      'Tarehe ya invoice? Andika siku/mwezi/mwaka au ruka kutumia leo.',
+  'bi_invoice_guide_due':
+      'Tarehe ya mwisho ya malipo? Andika siku/mwezi/mwaka au ruka kutumia leo.',
   'bi_invoice_guide_item': 'Jina la bidhaa au huduma?',
   'bi_invoice_guide_quantity': 'Idadi ya bidhaa au huduma?',
   'bi_invoice_guide_price': 'Bei ya kila moja (TZS)?',
   'bi_invoice_guide_more': 'Unataka kuongeza bidhaa nyingine?',
   'bi_invoice_guide_item_count': 'Bidhaa zilizoongezwa: @count',
-  'bi_invoice_guide_terms': 'Masharti ya invoice? Ruka ikiwa hutaki kuyaongeza.',
-  'bi_invoice_guide_invalid': 'Weka jibu lisilo tupu na ndani ya urefu unaoruhusiwa.',
+  'bi_invoice_guide_terms':
+      'Masharti ya invoice? Ruka ikiwa hutaki kuyaongeza.',
+  'bi_invoice_guide_invalid':
+      'Weka jibu lisilo tupu na ndani ya urefu unaoruhusiwa.',
   'bi_invoice_guide_date_invalid': 'Weka tarehe sahihi, mfano 08/11/2026.',
-  'bi_invoice_guide_number_invalid': 'Weka namba sahihi isiyozidi 1,000,000,000,000.',
+  'bi_invoice_guide_number_invalid':
+      'Weka namba sahihi isiyozidi 1,000,000,000,000.',
   'bi_invoice_guide_add': 'Ongeza bidhaa',
   'bi_invoice_guide_done': 'Hakuna nyingine',
   'bi_invoice_guide_skip': 'Ruka',
@@ -126,90 +160,178 @@ const Map<String, String> swTzTranslations = {
   'bi_invoice_summary_default_date': 'Leo wakati wa kufungua fomu',
   'bi_invoice_summary_total': 'Jumla',
   'bi_invoice_summary_terms': 'Masharti',
-  'bi_invoice_summary_stock_notice': 'Bidhaa hizi hazijaunganishwa na stock. Zichague kwenye fomu ili stock ipungue.',
+  'bi_invoice_summary_stock_notice':
+      'Bidhaa hizi hazijaunganishwa na stock. Zichague kwenye fomu ili stock ipungue.',
   'bi_invoice_choose_stock': 'Chagua bidhaa kutoka stock',
   'bi_invoice_stock_selected': 'Bidhaa imechaguliwa kutoka stock.',
   'bi_invoice_stock_invalid': 'Bidhaa hii haina taarifa sahihi.',
-  'bi_invoice_stock_error': 'Imeshindikana kupata bidhaa za stock. Angalia mtandao na ruhusa.',
+  'bi_invoice_stock_error':
+      'Imeshindikana kupata bidhaa za stock. Angalia mtandao na ruhusa.',
   'bi_invoice_stock_item': 'stock',
   'bi_invoice_manual_item': 'bila stock',
-  'bi_invoice_stock_effect': 'Bidhaa za stock zitapunguza akiba; bidhaa zilizoandikwa hazipunguzi stock.',
+  'bi_invoice_stock_effect':
+      'Bidhaa za stock zitapunguza akiba; bidhaa zilizoandikwa hazipunguzi stock.',
   'bi_invoice_save': 'Hifadhi invoice',
-  'bi_invoice_save_instruction': 'Andika save au hifadhi na utume, au bonyeza Hifadhi invoice.',
-  'bi_invoice_save_error': 'Uhifadhi haujathibitishwa. Angalia orodha ya invoice kabla ya kuanzisha nyingine; jaribu tena hapa ukiwa na mtandao.',
+  'bi_invoice_save_instruction':
+      'Andika save au hifadhi na utume, au bonyeza Hifadhi invoice.',
+  'bi_invoice_save_error':
+      'Uhifadhi haujathibitishwa. Angalia orodha ya invoice kabla ya kuanzisha nyingine; jaribu tena hapa ukiwa na mtandao.',
   'bi_invoice_saved': 'Invoice imehifadhiwa.',
   'bi_invoice_pdf_preview': 'Fungua PDF',
   'bi_invoice_pdf_save': 'Hifadhi PDF kwenye kifaa',
   'bi_invoice_pdf_saved': 'PDF imehifadhiwa',
-  'bi_invoice_pdf_error': 'PDF haikufunguka au kuhifadhiwa. Hakiki mtandao, ruhusa na nafasi kwenye kifaa, kisha ujaribu tena.',
+  'bi_invoice_pdf_error':
+      'PDF haikufunguka au kuhifadhiwa. Hakiki mtandao, ruhusa na nafasi kwenye kifaa, kisha ujaribu tena.',
   'bi_invoice_edit_saved': 'Hariri invoice',
   'bi_invoice_save_changes': 'Hifadhi mabadiliko',
   'bi_invoice_changes_saved': 'Mabadiliko ya invoice yamehifadhiwa.',
-  'bi_invoice_changes_error': 'Mabadiliko hayakuhifadhiwa. Hakiki ruhusa na invoice kisha ujaribu tena.',
-  'bi_invoice_stock_edit_unavailable': 'Kuhariri invoice yenye stock bado hakupatikani hapa kwa sababu marekebisho ya stock hayajawezeshwa.',
-  'bi_document_form_opened': 'Fomu ya nyaraka imefunguliwa kwa ajili ya kujaza. Uhifadhi haujathibitishwa hapa.',
-  'bi_document_history_truncated': 'Muhtasari umefupishwa kwenye historia. Fungua invoice kuona taarifa zote.',
+  'bi_invoice_changes_error':
+      'Mabadiliko hayakuhifadhiwa. Hakiki ruhusa na invoice kisha ujaribu tena.',
+  'bi_invoice_stock_edit_unavailable':
+      'Kuhariri invoice yenye stock bado hakupatikani hapa kwa sababu marekebisho ya stock hayajawezeshwa.',
+  'bi_document_form_opened':
+      'Fomu ya nyaraka imefunguliwa kwa ajili ya kujaza. Uhifadhi haujathibitishwa hapa.',
+  'bi_document_history_truncated':
+      'Muhtasari umefupishwa kwenye historia. Fungua invoice kuona taarifa zote.',
   'bi_invoice_open_saved': 'Fungua invoice',
-  'bi_invoice_open_error': 'Imeshindikana kufungua invoice. Angalia mtandao na ruhusa.',
-  'bi_draft_invalid': 'Tumia: niandalie invoice; mteja: Jina; bidhaa: Bidhaa; idadi: 2; bei: 5000. Weka taarifa zote za bidhaa pamoja. Kwa advance tumia subtotal, kodi na advance. Hakuna rekodi iliyohifadhiwa.',
-  'bi_transaction_category_error': 'Muamala haujahifadhiwa. Chagua kundi lililopo linalolingana na aina ya muamala.',
-  'bi_transaction_suggestion_prompt': 'Chagua kundi hapa chini na weka maelezo ili kurekodi muamala huu.',
+  'bi_invoice_open_error':
+      'Imeshindikana kufungua invoice. Angalia mtandao na ruhusa.',
+  'bi_draft_invalid':
+      'Tumia: niandalie invoice; mteja: Jina; bidhaa: Bidhaa; idadi: 2; bei: 5000. Weka taarifa zote za bidhaa pamoja. Kwa advance tumia subtotal, kodi na advance. Hakuna rekodi iliyohifadhiwa.',
+  'bi_transaction_category_error':
+      'Muamala haujahifadhiwa. Chagua kundi lililopo linalolingana na aina ya muamala.',
+  'bi_transaction_suggestion_prompt':
+      'Chagua kundi hapa chini na weka maelezo ili kurekodi muamala huu.',
   'bi_transaction_suggestion_amount': '@type: TZS @amount',
-  'bi_transaction_suggestion_date': 'Leo kwenye kifaa hiki: @date. Seva itatumia muda halisi wa kuhifadhi.',
+  'bi_transaction_suggestion_date':
+      'Leo kwenye kifaa hiki: @date. Seva itatumia muda halisi wa kuhifadhi.',
   'bi_transaction_suggestion_choose': 'Chagua kundi lililopo',
   'bi_transaction_suggestion_search': 'Tafuta kundi',
   'bi_transaction_suggestion_no_match': 'Hakuna kundi linalolingana',
   'bi_transaction_suggestion_description': 'Maelezo',
   'bi_transaction_suggestion_use_category': 'Tumia jina la kundi kama maelezo',
-  'bi_transaction_suggestion_invalid': 'Chagua kundi na weka maelezo bila semikolon au mstari mpya.',
-  'bi_transaction_suggestion_load_error': 'Imeshindikana kupata makundi. Angalia mtandao na ruhusa.',
-  'bi_transaction_suggestion_empty': 'Hakuna kundi la aina hii. Ongeza kundi kwanza kwenye Makundi.',
+  'bi_transaction_suggestion_invalid':
+      'Chagua kundi na weka maelezo bila semikolon au mstari mpya.',
+  'bi_transaction_suggestion_load_error':
+      'Imeshindikana kupata makundi. Angalia mtandao na ruhusa.',
+  'bi_transaction_suggestion_empty':
+      'Hakuna kundi la aina hii. Ongeza kundi kwanza kwenye Makundi.',
   'bi_transaction_suggestion_save': 'Rekodi muamala',
-  'bi_transaction_uncertain': 'Hali ya muamala haijulikani. Kagua orodha ya miamala kabla ya kutuma amri tena.',
-  'bi_chat_disclosure': 'Taarifa hapa chini, swali lako na mazungumzo ya hivi karibuni zitatoka MJASI na kutumwa kwa OpenAI. Swali na jibu pia vitahifadhiwa kwenye historia ya chat ya Firebase. Majina ya bidhaa, makundi na ujumbe wako yanaweza kuwa na taarifa nyeti. Usijumuishe taarifa binafsi za wateja, nywila au taarifa za malipo. Kagua kwa makini kabla ya kutuma. Muhtasari umetoka kwenye seva.',
+  'bi_transaction_uncertain':
+      'Hali ya muamala haijulikani. Kagua orodha ya miamala kabla ya kutuma amri tena.',
+  'bi_chat_disclosure':
+      'Taarifa hapa chini, swali lako na mazungumzo ya hivi karibuni zitatoka MJASI na kutumwa kwa OpenAI. Swali na jibu pia vitahifadhiwa kwenye historia ya chat ya Firebase. Majina ya bidhaa, makundi na ujumbe wako yanaweza kuwa na taarifa nyeti. Usijumuishe taarifa binafsi za wateja, nywila au taarifa za malipo. Kagua kwa makini kabla ya kutuma. Muhtasari umetoka kwenye seva.',
   'bi_chat_history': 'Mazungumzo yatakayotumwa',
   'bi_chat_choose_period': 'Chagua tarehe za ripoti kwa swali hili',
   'bi_chat_selected_period': 'Kipindi cha ripoti: @start hadi @end (pamoja)',
-  'bi_date_comparison_unsupported': 'Kulinganisha vipindi tofauti bado hakupatikani. Uliza kipindi kimoja kwa wakati.',
+  'bi_date_comparison_unsupported':
+      'Kulinganisha vipindi tofauti bado hakupatikani. Uliza kipindi kimoja kwa wakati.',
   'bi_chat_user': 'Wewe',
   'bi_chat_assistant': 'Msaidizi',
   'bi_chat_send_confirm': 'Tuma kwa AI uliyochagua',
   'bi_chat_too_long': 'Swali lako lisizidi herufi 2,000.',
-  'bi_chat_access_error': 'Ingia na uhakikishe ufikiaji wa biashara na ruhusa zako.',
+  'bi_chat_access_error':
+      'Ingia na uhakikishe ufikiaji wa biashara na ruhusa zako.',
   'bi_chat_period_error': 'Chagua kipindi cha ripoti kisichozidi siku 366.',
-  'bi_chat_snapshot_error': 'Muda wa ripoti umeisha au ruhusa zimebadilika. Andaa na ukague tena.',
-  'bi_chat_model_unavailable': 'Modeli uliyochagua haipatikani tena. Fungua uchaguzi wa modeli na uchague modeli inayopatikana.',
-  'bi_chat_limit_error': 'Kikomo cha maombi au taarifa kimefikiwa. Angalia matumizi ya AI, jaribu baadaye au chagua kipindi kifupi.',
-  'bi_chat_quota_exhausted': 'Salio la mikopo ya ujumbe halitoshi kwa modeli hii. Angalia matumizi ya AI au chagua modeli inayotumia mikopo michache.',
-  'bi_chat_rate_limited': 'Subiri sekunde 10 kati ya ujumbe wa AI, kisha ujaribu tena.',
-  'bi_chat_preparation_limited': 'Maombi ya kuandaa ripoti yamekuwa mengi. Subiri kidogo ujaribu tena; ikiwa kikomo cha siku kimefikiwa, jaribu kesho.',
-  'bi_chat_report_too_large': 'Ripoti ya biashara ni kubwa mno. Chagua kipindi kifupi kisha ujaribu tena.',
+  'bi_chat_snapshot_error':
+      'Muda wa ripoti umeisha au ruhusa zimebadilika. Andaa na ukague tena.',
+  'bi_chat_model_unavailable':
+      'Modeli uliyochagua haipatikani tena. Fungua uchaguzi wa modeli na uchague modeli inayopatikana.',
+  'bi_chat_limit_error':
+      'Kikomo cha maombi au taarifa kimefikiwa. Angalia matumizi ya AI, jaribu baadaye au chagua kipindi kifupi.',
+  'bi_chat_quota_exhausted':
+      'Salio la mikopo ya ujumbe halitoshi kwa modeli hii. Angalia matumizi ya AI au chagua modeli inayotumia mikopo michache.',
+  'isher_package_exhausted_notice':
+      'Kifurushi chako cha Isher AI kimeisha. Ongeza salio kwa kuchagua kifurushi ili uendelee kuchat au kutumia sauti.',
+  'isher_add_balance': 'Ongeza salio',
+  'bi_chat_rate_limited':
+      'Subiri sekunde 10 kati ya ujumbe wa AI, kisha ujaribu tena.',
+  'bi_chat_preparation_limited':
+      'Maombi ya kuandaa ripoti yamekuwa mengi. Subiri kidogo ujaribu tena; ikiwa kikomo cha siku kimefikiwa, jaribu kesho.',
+  'bi_chat_report_too_large':
+      'Ripoti ya biashara ni kubwa mno. Chagua kipindi kifupi kisha ujaribu tena.',
   'bi_chat_not_configured': 'Mazungumzo ya AI hayajasanidiwa kwenye seva.',
-  'bi_chat_server_error': 'Mazungumzo ya AI hayapatikani. Hakiki usanidi wa seva kisha jaribu tena.',
+  'bi_chat_server_error':
+      'Mazungumzo ya AI hayapatikani. Hakiki usanidi wa seva kisha jaribu tena.',
   'bi_chat': 'Uliza chochote',
   'bi_open_assistant': 'Fungua Isher AI',
   'bi_tab_chat': 'Chat',
   'bi_tab_call': 'Simu',
-  'bi_chat_empty': 'Uliza Isher kuhusu biashara yako, au chagua swali hapa chini.',
+  'isher_packages_title': 'Vifurushi vya Isher AI',
+  'isher_packages_unavailable':
+      'Malipo na mgao wa vifurushi vya mwezi bado havipatikani.',
+  'isher_packages_error': 'Imeshindikana kupakia vifurushi. Jaribu tena.',
+  'isher_package_edit': 'Maelezo ya kifurushi',
+  'isher_package_id': 'Kitambulisho (herufi ndogo, namba, - au _)',
+  'isher_package_name': 'Jina la kifurushi',
+  'isher_package_price': 'Bei ya mwezi (TZS)',
+  'isher_package_chats': 'Chat',
+  'isher_package_voiceMinutes': 'Dakika za juu kwa kila simu',
+  'isher_package_voiceSessions': 'Simu za sauti',
+  'isher_package_chats_remaining': 'Chat zilizobaki',
+  'isher_package_voice_remaining': 'Simu zilizobaki',
+  'isher_package_active': 'Kinatumika',
+  'isher_package_queued': 'Kinasubiri',
+  'isher_package_exhausted': 'Kimeisha',
+  'isher_package_expired': 'Muda umeisha',
+  'isher_package_analyses': 'Uchambuzi wa biashara',
+  'isher_package_research': 'Utafiti wa soko',
+  'isher_package_credits': 'Credits',
+  'isher_package_enabled': 'Kimewashwa',
+  'isher_package_disabled': 'Kimezimwa',
+  'isher_test_mode': 'TEST MODE',
+  'isher_test_admin_desc':
+      'Malipo ya majaribio tu. Mmiliki yeyote wa biashara anaweza kujaribu ukiwashwa. Hakuna pesa inayokusanywa.',
+  'isher_test_notice':
+      'TEST MODE: Hakuna malipo halisi. Chat na simu za kifurushi kinachotumika zitapunguza mgao wake.',
+  'isher_test_confirm_title': 'Thibitisha malipo ya TEST',
+  'isher_test_confirm_body':
+      'Jaribu kulipia @name kwa TZS @price? Hakuna pesa itakayokatwa. Mgao bado hautumiki kwenye AI.',
+  'isher_test_pay': 'TEST lipa TZS @price',
+  'isher_test_success': 'Kifurushi cha majaribio kimewashwa',
+  'isher_package_status_active': 'kinafanya kazi',
+  'isher_package_status_queued': 'kimesubiri',
+  'isher_test_success_body':
+      '@name @status kuanzia @start hadi @end. Hakuna pesa iliyokusanywa. Vikomo vya kifurushi vinatumika kwenye chat na sauti za AI.',
+  'isher_test_period': '@start – @end · TEST pekee',
+  'isher_test_denied':
+      'TEST MODE imezimwa au akaunti hii haina ruhusa ya kununua kifurushi.',
+  'isher_test_changed':
+      'Maelezo ya kifurushi yamebadilika au hakipatikani. Refresh kisha kikague tena.',
+  'isher_test_error':
+      'Matokeo ya malipo hayakuthibitishwa. Jaribu tena kifurushi kilekile kukagua matokeo.',
+  'isher_test_pending':
+      'Jaribu tena malipo ya awali kwa biashara na kifurushi kilekile kabla ya kuchagua kingine.',
+  'isher_test_retry': 'Kagua au rudia malipo ya majaribio yaliyopita',
+  'bi_chat_empty':
+      'Uliza Isher kuhusu biashara yako, au chagua swali hapa chini.',
   'bi_chat_emoji': 'Ongeza emoji',
   'bi_chat_thinking': 'Isher anaandaa jibu...',
-  'bi_history_error': 'Historia ya chat haikupatikana. Hakiki intaneti na ruhusa zako, kisha jaribu tena.',
-  'bi_answer_unsaved': 'Jibu halijahifadhiwa. Jaribu tena kabla ya kuendelea; unaweza kulipoteza ukitoka.',
-  'bi_question_unsaved': 'Swali halijahifadhiwa na halijatumwa kwa AI. Jaribu tena kwa swali hilo hilo.',
+  'bi_history_error':
+      'Historia ya chat haikupatikana. Hakiki intaneti na ruhusa zako, kisha jaribu tena.',
+  'bi_answer_unsaved':
+      'Jibu halijahifadhiwa. Jaribu tena kabla ya kuendelea; unaweza kulipoteza ukitoka.',
+  'bi_question_unsaved':
+      'Swali halijahifadhiwa na halijatumwa kwa AI. Jaribu tena kwa swali hilo hilo.',
   'bi_retry_save': 'Jaribu kuhifadhi jibu tena',
   'bi_load_older': 'Pakia ujumbe wa zamani',
-  'bi_voice_android_only': 'Mazungumzo ya sauti yanapatikana kwenye Android pekee kwa sasa.',
+  'bi_voice_android_only':
+      'Mazungumzo ya sauti yanapatikana kwenye Android pekee kwa sasa.',
   'bi_voice_title': 'Mazungumzo ya sauti moja kwa moja',
   'bi_voice_welcome': 'Zungumza na msaidizi wako wa biashara',
   'bi_voice_session_title': 'Mazungumzo ya sauti',
   'bi_voice_idle_prompt': 'Bonyeza kipaza sauti kukagua na kuanza mazungumzo.',
   'bi_voice_connecting': 'Inaandaa mazungumzo ya sauti...',
-  'bi_voice_intro': 'Ongea na AI kwa Kiswahili au Kiingereza. Angalia matumizi ya AI kuona kikomo chako. Kufungua chat kunasitisha sauti ya Gemini na kumaliza ya OpenAI.',
+  'bi_voice_intro':
+      'Ongea na AI kwa Kiswahili au Kiingereza. Angalia matumizi ya AI kuona kikomo chako. Kufungua chat kunasitisha sauti ya Gemini na kumaliza ya OpenAI.',
   'bi_voice_review': 'Kagua na uanze mazungumzo ya sauti',
-  'bi_voice_privacy': 'Muhtasari wa biashara hapa chini na sauti yako ya moja kwa moja zitatumwa kwa @provider hadi uzime kipaza sauti, usitishe au umalize mazungumzo. Wakati wa simu, muhtasari na undani wa invoice au risiti utakaoomba, pamoja na majina ya wateja ukiyaomba, vinaweza pia kutumwa bila ukaguzi mwingine, ndani ya ruhusa zako za biashara. Sauti hutumwa bila kukagua kila sentensi. Shiriki jina la mteja tu likihitajika na una ruhusa; usiseme nywila, mawasiliano au taarifa binafsi za malipo. Kufungua hati kunasitisha sauti ya Gemini au kumaliza ya OpenAI na hakutaihifadhi. Muunganisho wa Gemini uliositishwa unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Sauti ya majibu imetengenezwa na AI. Matumizi ya mtoa huduma yanaweza kuigharimu MJASI. Mazungumzo ya sauti ni tofauti na chat ya maandishi.',
-  'bi_voice_draft_unavailable': 'Fomu ya hati haikuweza kufunguliwa. Maliza au jaribu tena shughuli ya chat inayoendelea kisha ujaribu tena.',
+  'bi_voice_privacy':
+      'Muhtasari wa biashara hapa chini na sauti yako ya moja kwa moja zitatumwa kwa @provider hadi uzime kipaza sauti, usitishe au umalize mazungumzo. Wakati wa simu, muhtasari na undani wa invoice au risiti utakaoomba, pamoja na majina ya wateja ukiyaomba, vinaweza pia kutumwa bila ukaguzi mwingine, ndani ya ruhusa zako za biashara. Sauti hutumwa bila kukagua kila sentensi. Shiriki jina la mteja tu likihitajika na una ruhusa; usiseme nywila, mawasiliano au taarifa binafsi za malipo. Kufungua hati kunasitisha sauti ya Gemini au kumaliza ya OpenAI na hakutaihifadhi. Muunganisho wa Gemini uliositishwa unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Sauti ya majibu imetengenezwa na AI. Matumizi ya mtoa huduma yanaweza kuigharimu MJASI. Mazungumzo ya sauti ni tofauti na chat ya maandishi.',
+  'bi_voice_draft_unavailable':
+      'Fomu ya hati haikuweza kufunguliwa. Maliza au jaribu tena shughuli ya chat inayoendelea kisha ujaribu tena.',
   'bi_voice_transaction_review': 'Kagua rasimu ya muamala',
-  'bi_voice_transaction_not_saved': 'Muamala bado haujahifadhiwa. Fungua chat, kagua na tuma mwenyewe ili kuhifadhi. Kundi lazima liwe tayari kwenye biashara.',
+  'bi_voice_transaction_not_saved':
+      'Muamala bado haujahifadhiwa. Fungua chat, kagua na tuma mwenyewe ili kuhifadhi. Kundi lazima liwe tayari kwenye biashara.',
   'bi_voice_transaction_type': 'Aina',
   'bi_voice_transaction_income': 'Mapato',
   'bi_voice_transaction_expense': 'Matumizi',
@@ -222,30 +344,55 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_start': 'Anza sauti',
   'bi_voice_live': 'Kipaza sauti kiko wazi. Sauti yako inatumwa kwa @provider.',
   'bi_voice_muted': 'Kipaza sauti kimezimwa.',
-  'bi_voice_paused': 'Sauti imesitishwa na kipaza sauti kimezimwa. Muunganisho wa Gemini unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Unaweza kurudi kwa msaidizi na kuendelea wakati muunganisho bado unapatikana.',
+  'bi_voice_paused':
+      'Sauti imesitishwa na kipaza sauti kimezimwa. Muunganisho wa Gemini unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Unaweza kurudi kwa msaidizi na kuendelea wakati muunganisho bado unapatikana.',
   'bi_voice_pause': 'Sitisha sauti',
   'bi_voice_resume': 'Endelea na sauti',
-  'bi_voice_level_unavailable': 'Kipimo cha sauti ya kipaza sauti hakipatikani kwenye kifaa hiki.',
+  'bi_voice_level_unavailable':
+      'Kipimo cha sauti ya kipaza sauti hakipatikani kwenye kifaa hiki.',
   'bi_voice_mute': 'Zima kipaza sauti',
   'bi_voice_unmute': 'Washa kipaza sauti',
   'bi_voice_end': 'Maliza sauti',
   'bi_voice_ended': 'Mazungumzo ya sauti yameisha.',
-  'bi_voice_limit': 'Kikomo cha vipindi vya sauti kimefikiwa. Jaribu baada ya usiku wa manane kwa saa za Tanzania au wasiliana na msimamizi.',
-  'bi_voice_active': 'Kipindi kingine cha sauti kinaendelea au bado kinafungwa. Jaribu tena baadaye.',
-  'bi_voice_active_wait': 'Kipindi kingine cha sauti kinaendelea au bado kinafungwa. Jaribu tena baada ya sekunde @seconds.',
-  'bi_voice_microphone_permission': 'Ruhusu matumizi ya kipaza sauti kwenye mipangilio ya kifaa, kisha ujaribu tena.',
-  'bi_voice_plugin_missing': 'Sauti haipatikani kwenye app hii. Sakinisha app iliyojengwa upya kisha uifungue tena.',
+  'bi_voice_limit':
+      'Kikomo cha vipindi vya sauti kimefikiwa. Jaribu baada ya usiku wa manane kwa saa za Tanzania au wasiliana na msimamizi.',
+  'bi_voice_active':
+      'Kipindi kingine cha sauti kinaendelea au bado kinafungwa. Jaribu tena baadaye.',
+  'bi_voice_active_wait':
+      'Kipindi kingine cha sauti kinaendelea au bado kinafungwa. Jaribu tena baada ya sekunde @seconds.',
+  'bi_voice_microphone_permission':
+      'Ruhusu matumizi ya kipaza sauti kwenye mipangilio ya kifaa, kisha ujaribu tena.',
+  'bi_voice_plugin_missing':
+      'Sauti haipatikani kwenye app hii. Sakinisha app iliyojengwa upya kisha uifungue tena.',
   'bi_quota_title': 'Matumizi ya AI',
   'isher_usage': 'Matumizi',
   'isher_loading': 'Inaandaa taarifa za biashara...',
   'isher_welcome_title': 'Karibu Isher AI',
   'isher_welcome_subtitle': 'Msaidizi wako mahiri wa biashara',
+  'isher_wake_listening': 'Ninasikiliza “Isher” au “Aisha” — gusa kuzima',
+  'isher_wake_waiting_choice': 'Ndio, habari? Unataka kuchat au kupiga simu?',
+  'isher_wake_responding': 'Isher anajibu...',
+  'isher_wake_off': 'Gusa kuwasha Isher asikilize kwenye ukurasa huu',
+  'isher_wake_unavailable': 'Utambuzi wa sauti haupatikani — gusa kujaribu tena',
+  'isher_wake_privacy':
+      'Home tu; huduma ya sauti ya kifaa au kivinjari inaweza kuchakata sauti.',
   'isher_capability_insights': 'Chambua biashara',
   'isher_capability_documents': 'Andaa rasimu za hati',
   'isher_capability_transactions': 'Rekodi miamala',
-  'isher_personal_greeting': 'Habari @name! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.',
-  'isher_personal_greeting_no_name': 'Habari! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.',
-  'isher_greeting_voice_error': 'Sauti haipatikani. Sakinisha sauti ya Kiswahili ya bila intaneti.',
+  'isher_personal_greeting_1':
+      'Habari @name! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.',
+  'isher_personal_greeting_2':
+      'Karibu @name! Mimi ni Isher AI. Ungependa tuanze na nini kuhusu biashara yako leo?',
+  'isher_personal_greeting_3':
+      'Habari @name! Nipo tayari kukusaidia. Tuangalie jambo gani la biashara yako leo?',
+  'isher_personal_greeting_no_name_1':
+      'Habari! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.',
+  'isher_personal_greeting_no_name_2':
+      'Karibu! Mimi ni Isher AI. Ungependa tuanze na nini kuhusu biashara yako leo?',
+  'isher_personal_greeting_no_name_3':
+      'Habari! Nipo tayari kukusaidia. Tuangalie jambo gani la biashara yako leo?',
+  'isher_greeting_voice_error':
+      'Sauti haipatikani. Sakinisha sauti ya Kiswahili ya bila intaneti.',
   'isher_greeting_voice_unavailable': 'Sauti haipatikani. Jaribu tena baadaye.',
   'isher_speech_settings': 'Mipangilio ya sauti',
   'bi_models_title': 'Chagua modeli ya AI',
@@ -266,13 +413,18 @@ const Map<String, String> swTzTranslations = {
   'bi_models_generic_provider': 'Isher AI @number',
   'bi_models_generic_version': 'Toleo @number',
   'bi_models_voice_load_error': 'Imeshindikana kupakia injini za sauti.',
-  'isher_speech_settings_general': 'Tafuta Text-to-speech output kwenye mipangilio ya simu.',
-  'isher_speech_settings_failed': 'Imeshindikana kufungua mipangilio. Fungua Settings, kisha tafuta Text-to-speech output.',
-  'isher_greeting_cloud_disclosure': 'Sauti ya AI: jina la biashara hutumwa OpenAI.',
-  'isher_greeting_cloud_fallback': 'Sauti ya OpenAI haipatikani au kikomo cha 3 kwa siku kimefikiwa; inatumia sauti ya kifaa.',
+  'isher_speech_settings_general':
+      'Tafuta Text-to-speech output kwenye mipangilio ya simu.',
+  'isher_speech_settings_failed':
+      'Imeshindikana kufungua mipangilio. Fungua Settings, kisha tafuta Text-to-speech output.',
+  'isher_greeting_cloud_disclosure':
+      'Sauti ya AI: jina la biashara hutumwa OpenAI.',
+  'isher_greeting_cloud_fallback':
+      'Sauti ya OpenAI haipatikani au kikomo cha 3 kwa siku kimefikiwa; inatumia sauti ya kifaa.',
   'isher_greeting_replay': 'Sikiliza salamu',
   'isher_welcome_greeting': 'Habari! Mimi ni Isher.',
-  'isher_welcome_description': 'Nipo kukusaidia kusimamia biashara yako, kuelewa takwimu na kufanya maamuzi bora.',
+  'isher_welcome_description':
+      'Nipo kukusaidia kusimamia biashara yako, kuelewa takwimu na kufanya maamuzi bora.',
   'isher_start_chat': 'Anza kuandika',
   'isher_talk': 'Zungumza na Isher',
   'isher_powered': 'Inawezeshwa na MJASI',
@@ -285,38 +437,51 @@ const Map<String, String> swTzTranslations = {
   'bi_view_report': 'Angalia ripoti ya biashara',
   'bi_quota_admin_title': 'Mipangilio ya Isher AI',
   'isher_language_title': 'Mifano ya lugha ya Isher Voice',
-  'isher_language_intro': 'Pakia CSV ya UTF-8 yenye safu number,spoken, hadi mifano 50 na KB 16. Andika namba bila koma za maelfu na maneno ya namba ya Kiswahili pekee. Usiweke taarifa binafsi. Hii inaongoza sauti; haifundishi model.',
+  'isher_language_intro':
+      'Pakia CSV ya UTF-8 yenye safu number,spoken, hadi mifano 50 na KB 16. Andika namba bila koma za maelfu na maneno ya namba ya Kiswahili pekee. Usiweke taarifa binafsi. Hii inaongoza sauti; haifundishi model.',
   'isher_language_pick': 'Chagua faili la CSV',
   'isher_language_download': 'Pakua mfano wa CSV',
-  'isher_language_sample_instructions': 'Pakua mfano, hariri safu za number na spoken, hifadhi kama CSV ya UTF-8, kisha chagua faili hapa chini. Kagua kila mstari kabla ya kuhifadhi na kuwasha.',
+  'isher_language_sample_instructions':
+      'Pakua mfano, hariri safu za number na spoken, hifadhi kama CSV ya UTF-8, kisha chagua faili hapa chini. Kagua kila mstari kabla ya kuhifadhi na kuwasha.',
   'isher_language_download_saved': 'Mfano wa CSV umehifadhiwa.',
-  'isher_language_download_started': 'Upakuaji wa mfano wa CSV umeanza kwenye kivinjari.',
-  'isher_language_download_error': 'Imeshindikana kupakua mfano wa CSV. Jaribu tena.',
+  'isher_language_download_started':
+      'Upakuaji wa mfano wa CSV umeanza kwenye kivinjari.',
+  'isher_language_download_error':
+      'Imeshindikana kupakua mfano wa CSV. Jaribu tena.',
   'isher_language_name': 'Jina la toleo',
-  'isher_language_review': 'Kagua kwa makini kila namba na maneno yake kabla ya kuhifadhi na kuwasha.',
+  'isher_language_review':
+      'Kagua kwa makini kila namba na maneno yake kabla ya kuhifadhi na kuwasha.',
   'isher_language_test': 'Jaribu namba kwenye hakiki',
   'isher_language_no_match': 'Namba hii haipo kwenye faili.',
   'isher_language_save': 'Hifadhi toleo',
   'isher_language_saved': 'Toleo limehifadhiwa, lakini bado halijawashwa.',
   'isher_language_versions': 'Matoleo',
-  'isher_language_voice_test': 'Gusa toleo kulikagua. Pima matamshi kwa kuanza kipindi kipya cha Isher Voice; hakiki hii haitoi sauti.',
+  'isher_language_voice_test':
+      'Gusa toleo kulikagua. Pima matamshi kwa kuanza kipindi kipya cha Isher Voice; hakiki hii haitoi sauti.',
   'isher_language_default': 'Mifano ya awali pekee',
   'isher_language_active': 'Linatumika',
   'isher_language_activate': 'Washa',
-  'isher_language_confirm': 'Washa @name kwa vipindi vipya vya sauti ya Kiswahili? Vipindi vilivyoanza havitabadilika.',
+  'isher_language_confirm':
+      'Washa @name kwa vipindi vipya vya sauti ya Kiswahili? Vipindi vilivyoanza havitabadilika.',
   'isher_language_activated': 'Toleo limewashwa kwa vipindi vipya.',
   'isher_language_limited': 'Inaonyesha matoleo 50 ya karibuni.',
-  'isher_language_load_error': 'Imeshindikana kupata matoleo. Angalia ruhusa na mtandao.',
-  'isher_language_file_error': 'Faili halijasomeka. Chagua CSV ya UTF-8 isiyozidi KB 16.',
+  'isher_language_load_error':
+      'Imeshindikana kupata matoleo. Angalia ruhusa na mtandao.',
+  'isher_language_file_error':
+      'Faili halijasomeka. Chagua CSV ya UTF-8 isiyozidi KB 16.',
   'isher_language_invalid': 'Mifano si sahihi',
   'isher_language_name_error': 'Weka jina la toleo na chagua faili sahihi.',
-  'isher_language_save_error': 'Imeshindikana kuhifadhi mabadiliko. Angalia ruhusa na mtandao.',
+  'isher_language_save_error':
+      'Imeshindikana kuhifadhi mabadiliko. Angalia ruhusa na mtandao.',
   'bi_quota_admin_desc': 'Weka vikomo na bei; ongeza salio la majaribio.',
-  'bi_quota_explanation': 'Kikomo ni kwa kila mtumiaji na hurejea usiku wa manane kwa saa za Tanzania. Maombi ya AI yanahesabiwa yanapotumwa, hata huduma ikishindwa. Salio la ziada halipotei siku inapoisha.',
-  'bi_quota_load_error': 'Imeshindikana kupata taarifa za matumizi. Jaribu tena.',
+  'bi_quota_explanation':
+      'Kikomo ni kwa kila mtumiaji na hurejea usiku wa manane kwa saa za Tanzania. Maombi ya AI yanahesabiwa yanapotumwa, hata huduma ikishindwa. Salio la ziada halipotei siku inapoisha.',
+  'bi_quota_load_error':
+      'Imeshindikana kupata taarifa za matumizi. Jaribu tena.',
   'bi_quota_invalid': 'Ingiza namba halali na taarifa zinazohitajika.',
   'bi_quota_saved': 'Mipangilio ya AI imehifadhiwa.',
-  'bi_quota_save_error': 'Imeshindikana kuhifadhi. Hakikisha viwango viko ndani ya mipaka inayoruhusiwa.',
+  'bi_quota_save_error':
+      'Imeshindikana kuhifadhi. Hakikisha viwango viko ndani ya mipaka inayoruhusiwa.',
   'bi_quota_dailyVoice': 'Vipindi vya sauti kwa siku',
   'bi_quota_dailyMessages': 'Ujumbe kwa siku',
   'bi_quota_voiceMinutes': 'Dakika kwa kila kipindi (1–30)',
@@ -328,49 +493,89 @@ const Map<String, String> swTzTranslations = {
   'bi_quota_extra_voice': 'Vipindi vya ziada',
   'bi_quota_extra_messages': 'Ujumbe wa ziada',
   'bi_quota_grant': 'Ongeza salio',
-  'bi_quota_grant_confirm': 'Ongeza vipindi @voice na ujumbe @messages kwa mtumiaji @uid? Hakuna malipo yanayochakatwa.',
+  'bi_quota_grant_confirm':
+      'Ongeza vipindi @voice na ujumbe @messages kwa mtumiaji @uid? Hakuna malipo yanayochakatwa.',
   'bi_quota_granted': 'Salio la majaribio limeongezwa.',
-  'bi_quota_grant_error': 'Imeshindikana kuthibitisha ongezeko. Rudia bila kubadilisha taarifa, au wasiliana na msimamizi.',
+  'bi_quota_grant_error':
+      'Imeshindikana kuthibitisha ongezeko. Rudia bila kubadilisha taarifa, au wasiliana na msimamizi.',
   'bi_quota_voice_remaining': 'Vipindi vilivyobaki: @count',
   'bi_quota_messages_remaining': 'Ujumbe uliobaki: @count',
   'bi_quota_minutes_value': 'Muda wa juu kwa kipindi: dakika @count',
-  'bi_quota_prices': 'Bei zilizowekwa: TZS @voice kwa kipindi, TZS @message kwa ujumbe.',
-  'bi_quota_payment_later': 'Malipo na kuongeza salio kiotomatiki havijawashwa. Wasiliana na msimamizi kwa salio la majaribio.',
-  'bi_voice_not_configured': 'Huduma ya sauti haijasanidiwa kwenye programu hii.',
-  'bi_voice_connection_error': 'Sauti haikuunganishwa au imekatika. Hakiki ruhusa ya kipaza sauti, intaneti na usanidi wa huduma.',
-  'bi_chat_disabled': 'Mazungumzo ya AI ndani ya programu hayapatikani mpaka huduma ya AI isanidiwe. Unaweza kushiriki ripoti na huduma ya nje.',
+  'bi_quota_prices':
+      'Bei zilizowekwa: TZS @voice kwa kipindi, TZS @message kwa ujumbe.',
+  'bi_quota_payment_later':
+      'Malipo na kuongeza salio kiotomatiki havijawashwa. Wasiliana na msimamizi kwa salio la majaribio.',
+  'bi_quota_business': 'Biashara yako',
+  'bi_quota_business_greeting': 'Ndugu @name',
+  'bi_quota_no_package': 'Bado huna kifurushi',
+  'bi_quota_no_active_package':
+      'Biashara hii haina kifurushi hai cha Isher AI. Chagua kifurushi ili uanze.',
+  'bi_quota_inactive_package':
+      'Kifurushi hiki hakitumiki sasa. Chagua kifurushi kinachotumika au kagua hali yake.',
+  'bi_quota_waiting_package':
+      'Kifurushi hiki kinasubiri na kitaanza kifurushi cha sasa kitakapokwisha.',
+  'bi_quota_package_explanation':
+      'Kifurushi cha Isher AI kinashirikiwa na watumiaji wa biashara hii. Matumizi ya chat na sauti hukaguliwa dhidi ya mgao uliobaki.',
+  'bi_quota_package_chats': 'Ujumbe/chat za Isher zilizobaki',
+  'bi_quota_package_voice': 'Dakika za sauti zilizopo',
+  'bi_quota_voice_calls_left': 'Simu @count zimebaki',
+  'bi_quota_voice_duration_note':
+      'Kila simu ya sauti iliyobaki inaweza kudumu hadi dakika @minutes. Jumla inayoonekana ni kiwango cha juu kinachowezekana; dakika hazijakusanywa kuwa muda mmoja.',
+  'bi_quota_daily_limits':
+      'Vikomo vya usalama vya kila siku kwa mtumiaji: chat @messages na simu @voice. Vikomo vya kifurushi pia vinatumika.',
+  'bi_voice_not_configured':
+      'Huduma ya sauti haijasanidiwa kwenye programu hii.',
+  'bi_voice_connection_error':
+      'Sauti haikuunganishwa au imekatika. Hakiki ruhusa ya kipaza sauti, intaneti na usanidi wa huduma.',
+  'bi_chat_disabled':
+      'Mazungumzo ya AI ndani ya programu hayapatikani mpaka huduma ya AI isanidiwe. Unaweza kushiriki ripoti na huduma ya nje.',
   'bi_access_error': 'Ufikiaji wa biashara au ruhusa ya uchambuzi haipatikani.',
   'bi_load_error': 'Imeshindikana kupakia ripoti ya biashara: @error',
   'bi_action_error': 'Imeshindikana kutekeleza kitendo: @error',
-  'bi_limit_income': 'Mapato ya miamala yanaweza yasijumuishe mauzo ya POS au ankara zote.',
-  'bi_limit_profit': 'Salio la fedha si faida; gharama ya bidhaa zilizouzwa na marekebisho ya uhasibu hayajahesabiwa.',
-  'bi_limit_modules': 'Wateja, wafanyakazi, kazi za wateja na jumla za ankara au risiti zisizo za POS hazijajumuishwa.',
+  'bi_limit_income':
+      'Mapato ya miamala yanaweza yasijumuishe mauzo ya POS au ankara zote.',
+  'bi_limit_profit':
+      'Salio la fedha si faida; gharama ya bidhaa zilizouzwa na marekebisho ya uhasibu hayajahesabiwa.',
+  'bi_limit_modules':
+      'Wateja, wafanyakazi, kazi za wateja na jumla za ankara au risiti zisizo za POS hazijajumuishwa.',
   'bi_purchases': 'Manunuzi ya bidhaa yaliyopokelewa (kipindi)',
   'bi_purchase_count': 'Manunuzi yaliyopokelewa (kipindi)',
   'bi_tasks': 'Muhtasari wa kazi',
-  'bi_tasks_summary': 'Zilizo wazi sasa: @open\nZinazosubiri ukaguzi sasa: @review\nZilizoidhinishwa katika kipindi: @approved',
+  'bi_tasks_summary':
+      'Zilizo wazi sasa: @open\nZinazosubiri ukaguzi sasa: @review\nZilizoidhinishwa katika kipindi: @approved',
   'bi_question_tasks': 'Muhtasari wa kazi za sasa unaonyesha nini?',
-  'bi_limit_purchases': 'Manunuzi yaliyopokelewa ni ya biashara nzima na yamepangwa kwa tarehe ya manunuzi, si lazima yawe matumizi yaliyolipwa; yanaweza kuingiliana na matumizi yaliyorekodiwa na yasijumlishwe pamoja. Manunuzi bila tarehe sahihi hayajajumuishwa.',
-  'bi_limit_invalid_purchases': 'Manunuzi @count yana taarifa pungufu au zisizotumika.',
-  'bi_limit_purchases_unavailable': 'Taarifa za manunuzi hazipatikani kwa akaunti hii.',
-  'bi_limit_tasks': 'Kazi ni zote zinazoonekana kwa ruhusa ya kuona kazi. Zilizo wazi na zinazosubiri ukaguzi ni za sasa; zilizoidhinishwa zinatumia tarehe ya idhini katika kipindi.',
-  'bi_limit_invalid_tasks': 'Kazi @count hazina hali au tarehe ya idhini sahihi.',
+  'bi_limit_purchases':
+      'Manunuzi yaliyopokelewa ni ya biashara nzima na yamepangwa kwa tarehe ya manunuzi, si lazima yawe matumizi yaliyolipwa; yanaweza kuingiliana na matumizi yaliyorekodiwa na yasijumlishwe pamoja. Manunuzi bila tarehe sahihi hayajajumuishwa.',
+  'bi_limit_invalid_purchases':
+      'Manunuzi @count yana taarifa pungufu au zisizotumika.',
+  'bi_limit_purchases_unavailable':
+      'Taarifa za manunuzi hazipatikani kwa akaunti hii.',
+  'bi_limit_tasks':
+      'Kazi ni zote zinazoonekana kwa ruhusa ya kuona kazi. Zilizo wazi na zinazosubiri ukaguzi ni za sasa; zilizoidhinishwa zinatumia tarehe ya idhini katika kipindi.',
+  'bi_limit_invalid_tasks':
+      'Kazi @count hazina hali au tarehe ya idhini sahihi.',
   'bi_limit_tasks_unavailable': 'Taarifa za kazi hazipatikani kwa akaunti hii.',
   'bi_income_trend': 'Mapato yaliyorekodiwa kwa siku (UTC)',
-  'bi_limit_pos': 'Mauzo ya POS yanaonyeshwa tofauti na mapato yaliyorekodiwa na yanaweza kuingiliana. Oda za baa, marejesho na ankara zilizofutwa hazijajumuishwa; thamani za bidhaa hazijumuishi marekebisho ya ankara.',
-  'bi_limit_pos_unavailable': 'Mauzo ya POS na utendaji wa bidhaa havipatikani kwa akaunti hii.',
+  'bi_limit_pos':
+      'Mauzo ya POS yanaonyeshwa tofauti na mapato yaliyorekodiwa na yanaweza kuingiliana. Oda za baa, marejesho na ankara zilizofutwa hazijajumuishwa; thamani za bidhaa hazijumuishi marekebisho ya ankara.',
+  'bi_limit_pos_unavailable':
+      'Mauzo ya POS na utendaji wa bidhaa havipatikani kwa akaunti hii.',
   'bi_limit_invalid_pos': 'Mauzo au bidhaa za POS @count zina taarifa pungufu.',
   'bi_pos_sales': 'Mauzo ya POS (tofauti)',
   'bi_top_products': 'Bidhaa za POS zinazoongoza kwa thamani ya mauzo',
   'bi_limit_type': 'Aina ya biashara haipatikani kwenye wasifu wa kampuni.',
   'bi_limit_dates': 'Miamala isiyo na tarehe sahihi haijajumuishwa.',
-  'bi_limit_shop': 'Miamala na madeni ni ya duka ulilopangiwa; akiba ni ya biashara nzima.',
-  'bi_limit_invalid_transactions': 'Miamala @count yenye taarifa zisizo sahihi imeondolewa.',
+  'bi_limit_shop':
+      'Miamala na madeni ni ya duka ulilopangiwa; akiba ni ya biashara nzima.',
+  'bi_limit_invalid_transactions':
+      'Miamala @count yenye taarifa zisizo sahihi imeondolewa.',
   'bi_limit_invalid_stock': 'Bidhaa @count zina taarifa pungufu za akiba.',
-  'bi_limit_stock_current': 'Akiba inaonyesha hali ya sasa, si hali ya mwisho wa kipindi kilichochaguliwa.',
+  'bi_limit_stock_current':
+      'Akiba inaonyesha hali ya sasa, si hali ya mwisho wa kipindi kilichochaguliwa.',
   'bi_limit_stock_permission': 'Taarifa za akiba hazipatikani kwa akaunti hii.',
   'bi_limit_invalid_debts': 'Madeni @count yana taarifa pungufu.',
-  'bi_limit_debt_current': 'Madeni yanaonyesha hali ya sasa, si hali ya mwisho wa kipindi kilichochaguliwa.',
+  'bi_limit_debt_current':
+      'Madeni yanaonyesha hali ya sasa, si hali ya mwisho wa kipindi kilichochaguliwa.',
   'bi_limit_debt_permission': 'Taarifa za madeni hazipatikani kwa akaunti hii.',
   // General
   'save': 'Hifadhi',

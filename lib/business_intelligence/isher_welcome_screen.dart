@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +44,10 @@ class IsherWelcomeScreen extends StatefulWidget {
 
 class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static final _random = Random();
+  static final Map<String, int> _lastGreetingVariants = {};
+  static const _greetingVariantCount = 3;
+
   late final AnimationController _ambient;
   late final IsherGreetingVoice _voice;
   int _voiceGeneration = 0;
@@ -116,11 +121,22 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
     });
   }
 
-  String get _greeting {
+  int _nextGreetingVariant(String language) {
+    final previous = _lastGreetingVariants[language];
+    final choices = List<int>.generate(_greetingVariantCount, (index) => index)
+        .where((index) => index != previous)
+        .toList();
+    final selected = choices[_random.nextInt(choices.length)];
+    _lastGreetingVariants[language] = selected;
+    return selected;
+  }
+
+  String _greeting(int variant) {
     final name = widget.businessName.trim();
-    return name.isEmpty
-        ? 'isher_personal_greeting_no_name'.tr
-        : 'isher_personal_greeting'.trParams({'name': name});
+    final key = name.isEmpty
+        ? 'isher_personal_greeting_no_name_${variant + 1}'
+        : 'isher_personal_greeting_${variant + 1}';
+    return name.isEmpty ? key.tr : key.trParams({'name': name});
   }
 
   Future<void> _playGreeting() async {
@@ -141,8 +157,9 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
         return;
       }
       final language = Get.locale?.languageCode == 'sw' ? 'sw' : 'en';
+      final greetingVariant = _nextGreetingVariant(language);
       await _voice.speak(
-        _greeting,
+        _greeting(greetingVariant),
         language,
         () =>
             mounted &&
@@ -150,6 +167,7 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
             _foreground &&
             !_leaving &&
             generation == _voiceGeneration,
+        greetingVariant: greetingVariant,
       );
     } catch (error, stack) {
       debugPrint('Isher greeting voice failed: $error');

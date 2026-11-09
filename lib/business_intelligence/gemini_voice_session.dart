@@ -248,6 +248,9 @@ class GeminiVoiceSession implements VoiceSession {
             retryAfter is int && retryAfter > 0 ? retryAfter : null,
           );
         }
+        if (error.message == 'package-limit') {
+          throw StateError('isher_package_exhausted');
+        }
         throw StateError('bi_voice_limit');
       }
       rethrow;

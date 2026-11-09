@@ -5,6 +5,8 @@ const DEFAULTS = Object.freeze({
   voicePrice: 0,
   messagePrice: 0,
 });
+const { randomUUID } = require("node:crypto");
+const packageUsage = require("./isher_package_usage");
 
 function validateSettings(settings) {
   const limits = {
@@ -85,31 +87,50 @@ function consume(data, settings, kind, now, id, cost = 1) {
   return usage;
 }
 
-async function reserveWithCharge(db, uid, kind, id = "", cost = 1) {
+async function reserveWithCharge(db, uid, kind, id = "", cost = 1, businessUid = "") {
   const settingsRef = db.doc("businessAiConfig/settings");
   const usageRef = db.doc(`businessAiQuota/${uid}`);
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
     const [config, current] = await Promise.all([tx.get(settingsRef), tx.get(usageRef)]);
     const settings = settingsFromDocument(config.data());
     const now = Date.now();
     const previous = usageForDay(current.data() || {}, now);
-    const usage = consume(current.data() || {}, settings, kind, now, id, cost);
+    const packageCharge = businessUid
+      ? await packageUsage.reserve(tx, db, businessUid, kind, now, id || randomUUID())
+      : null;
+    if (packageCharge?.exhausted) {
+      return { packageExhausted: true };
+    }
+    const effectiveSettings = kind === "voice" && packageCharge != null
+      ? { ...settings, voiceMinutes: Math.min(settings.voiceMinutes, packageCharge.voiceMinutes) }
+      : settings;
+    const usage = consume(current.data() || {}, effectiveSettings, kind, now, id, cost);
     tx.set(usageRef, usage);
     const charge = kind === "voice"
-      ? { source: usage.voiceUsed > previous.voiceUsed ? "daily" : "extra", day: usage.day }
+      ? {
+          source: usage.voiceUsed > previous.voiceUsed ? "daily" : "extra",
+          day: usage.day,
+          businessUid,
+          packageCharge: packageCharge?.subscriptionId
+            ? { subscriptionId: packageCharge.subscriptionId, reservationId: packageCharge.reservationId }
+            : null,
+        }
       : null;
-    return { settings, charge };
+    return { settings: effectiveSettings, charge, packageCharge };
   });
+  if (result.packageExhausted) throw new Error("package-quota-exhausted");
+  return result;
 }
 
-async function reserve(db, uid, kind, id = "", cost = 1) {
-  return (await reserveWithCharge(db, uid, kind, id, cost)).settings;
+async function reserve(db, uid, kind, id = "", cost = 1, businessUid = "") {
+  return (await reserveWithCharge(db, uid, kind, id, cost, businessUid)).settings;
 }
 
 async function rollbackVoiceReservation(db, uid, id, charge) {
   const ref = db.doc(`businessAiQuota/${uid}`);
   return db.runTransaction(async (tx) => {
-    const data = (await tx.get(ref)).data();
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data();
     if (!data || data.activeId !== id) return false;
     if (!charge || !["daily", "extra"].includes(charge.source) ||
         typeof charge.day !== "string") {
@@ -122,6 +143,9 @@ async function rollbackVoiceReservation(db, uid, id, charge) {
       const used = nonnegative(data.voiceUsed);
       if (used < 1) throw new Error("invalid-voice-reservation");
       update.voiceUsed = used - 1;
+    }
+    if (charge.packageCharge && charge.businessUid) {
+      await packageUsage.refund(tx, db, charge.businessUid, charge.packageCharge);
     }
     tx.update(ref, update);
     return true;

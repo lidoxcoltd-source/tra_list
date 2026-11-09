@@ -17,8 +17,9 @@ class FakeGreetingVoice implements IsherGreetingVoice {
   Future<void> speak(
     String text,
     String language,
-    bool Function() isCurrent,
-  ) async {
+    bool Function() isCurrent, {
+    required int greetingVariant,
+  }) async {
     if (waiting != null) await waiting!.future;
     if (!isCurrent()) return;
     if (fail) throw StateError('unavailable');
@@ -32,7 +33,9 @@ class FakeGreetingVoice implements IsherGreetingVoice {
 }
 
 void main() {
-  testWidgets('shows three capabilities without speech controls', (tester) async {
+  testWidgets('shows three capabilities without speech controls', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       GetMaterialApp(
         translations: AppTranslations(),
@@ -90,8 +93,9 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(voice.spoken, hasLength(1));
-    expect(voice.spoken.single, contains('Habari Duka Asha'));
-    expect(find.textContaining('Habari Duka Asha'), findsNothing);
+    expect(voice.spoken.single, startsWith('sw:'));
+    expect(voice.spoken.single, contains('Duka Asha'));
+    expect(find.textContaining('Duka Asha'), findsNothing);
     expect(find.text('bi_tab_chat'.tr), findsNothing);
     await tester.pumpWidget(screen(false));
     await tester.pump();
@@ -129,9 +133,10 @@ void main() {
     await tester.pumpWidget(screen());
     await tester.pump();
     await tester.pump();
-    expect(find.textContaining('Habari Duka Asha!'), findsNothing);
+    expect(find.textContaining('Duka Asha'), findsNothing);
     expect(voice.spoken, hasLength(1));
-    expect(voice.spoken.single, contains('sw:Habari Duka Asha!'));
+    expect(voice.spoken.single, startsWith('sw:'));
+    expect(voice.spoken.single, contains('Duka Asha'));
     await tester.pumpWidget(screen());
     await tester.pump();
     expect(voice.spoken, hasLength(1));
@@ -141,36 +146,69 @@ void main() {
     expect(voice.stops, greaterThanOrEqualTo(2));
   });
 
-  testWidgets(
-    'shows an audio error without a business name',
-    (tester) async {
-      final voice = FakeGreetingVoice()..fail = true;
-      await tester.pumpWidget(
-        GetMaterialApp(
-          translations: AppTranslations(),
-          locale: const Locale('sw', 'TZ'),
-          home: IsherWelcomeScreen(
-            loading: false,
-            error: '',
-            ready: true,
-            businessName: '',
-            businessId: 'business',
-            greetingReady: true,
-            greetingVoice: voice,
-            onRetry: () {},
-            onChat: () {},
-            onVoice: () {},
-            onUsage: () {},
-            onReport: () {},
-          ),
+  testWidgets('uses a different greeting when entering Isher again', (
+    tester,
+  ) async {
+    final voice = FakeGreetingVoice();
+    Widget screen() => GetMaterialApp(
+      translations: AppTranslations(),
+      locale: const Locale('sw', 'TZ'),
+      home: IsherWelcomeScreen(
+        loading: false,
+        ready: true,
+        greetingReady: true,
+        error: '',
+        businessName: 'Duka Asha',
+        businessId: 'business',
+        greetingVoice: voice,
+        onRetry: () {},
+        onChat: () {},
+        onVoice: () {},
+        onUsage: () {},
+        onReport: () {},
+      ),
+    );
+
+    await tester.pumpWidget(screen());
+    await tester.pump();
+    await tester.pump();
+    final firstGreeting = voice.spoken.single;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(screen());
+    await tester.pump();
+    await tester.pump();
+
+    expect(voice.spoken, hasLength(2));
+    expect(voice.spoken.last, isNot(firstGreeting));
+  });
+
+  testWidgets('shows an audio error without a business name', (tester) async {
+    final voice = FakeGreetingVoice()..fail = true;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: IsherWelcomeScreen(
+          loading: false,
+          error: '',
+          ready: true,
+          businessName: '',
+          businessId: 'business',
+          greetingReady: true,
+          greetingVoice: voice,
+          onRetry: () {},
+          onChat: () {},
+          onVoice: () {},
+          onUsage: () {},
+          onReport: () {},
         ),
-      );
-      await tester.pump();
-      await tester.pump();
-      expect(find.textContaining('Habari! Naitwa Isher AI.'), findsNothing);
-      expect(find.textContaining('Sauti haipatikani'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Habari! Naitwa Isher AI.'), findsNothing);
+    expect(find.textContaining('Sauti haipatikani'), findsOneWidget);
+  });
 
   testWidgets('a delayed greeting does not speak after leaving', (
     tester,

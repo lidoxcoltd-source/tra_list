@@ -21,6 +21,7 @@ import 'package:tra_list/business_intelligence/voice_business_tools.dart';
 import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
+import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/services/business_access_service.dart';
 
 String voiceServiceUrl(String configuredUrl, String firebaseProjectId) {
@@ -232,6 +233,7 @@ class _VoiceSession implements VoiceSession {
             answer.complete(data['sdp'] as String);
           } else if (data['type'] == 'error') {
             final reason = switch (data['code']) {
+              'package-limit' => 'isher_package_exhausted',
               'limit' => 'bi_voice_limit',
               'active' => 'bi_voice_active',
               _ => 'bi_voice_connection_error',
@@ -799,6 +801,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       if (_engineReady && widget.sessionFactory == null) _syncEngine();
     });
     if (notice != null && widget.isCurrent()) {
+      if (notice == 'isher_package_exhausted') {
+        showIsherPackageQuotaNotice(context);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1066,6 +1072,8 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                 ? 'bi_voice_limit'
                 : error.toString().contains('bi_voice_active')
                 ? 'bi_voice_active'
+                : error.toString().contains('isher_package_exhausted')
+                ? 'isher_package_exhausted'
                 : error.toString().contains('Microphone permission denied')
                 ? 'bi_voice_microphone_permission'
                 : error is MissingPluginException

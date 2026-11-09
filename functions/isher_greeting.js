@@ -4,6 +4,27 @@ const { dayInTanzania } = require("./business_ai_quota");
 
 const LIMIT = 3;
 const LEASE_MS = 90000;
+const GREETING_VARIANTS = Object.freeze({
+  sw: [
+    (name) => `Habari${name ? ` ${name}` : ""}! Naitwa Isher AI. Nikusaidie nini leo? Tunaweza kuchat au kuongea kuhusu biashara yako.`,
+    (name) => `Karibu${name ? ` ${name}` : ""}! Mimi ni Isher AI. Ungependa tuanze na nini kuhusu biashara yako leo?`,
+    (name) => `Habari${name ? ` ${name}` : ""}! Nipo tayari kukusaidia. Tuangalie jambo gani la biashara yako leo?`,
+  ],
+  en: [
+    (name) => `Hello${name ? ` ${name}` : ""}! My name is Isher AI. How can I help you today? We can chat or talk about your business.`,
+    (name) => `Welcome${name ? ` ${name}` : ""}! I'm Isher AI. What would you like to explore about your business today?`,
+    (name) => `Hi${name ? ` ${name}` : ""}! I'm here to help. What would you like to work on in your business today?`,
+  ],
+});
+
+function greetingText(language, name, variant) {
+  const greetings = GREETING_VARIANTS[language];
+  if (!greetings || !Number.isInteger(variant) || variant < 0 || variant >= greetings.length) {
+    throw new Error("invalid-greeting");
+  }
+  const cleanName = String(name || "").replace(/[\r\n\t]+/g, " ").trim();
+  return greetings[variant](cleanName);
+}
 
 async function reserve(db, uid) {
   const ref = db.doc(`isherGreetingUsage/${uid}`);
@@ -140,4 +161,6 @@ async function synthesizeGemini({ apiKey, text, fetchImpl = fetch }) {
 
 const PROVIDERS = Object.freeze(["openai", "gemini"]);
 
-module.exports = { reserve, finish, synthesize, synthesizeGemini, wav, PROVIDERS };
+module.exports = {
+  reserve, finish, synthesize, synthesizeGemini, wav, greetingText, PROVIDERS,
+};
