@@ -1,11 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:tra_list/business_intelligence/isher_brand_mark.dart';
 import 'package:tra_list/invoice/language_switcher.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
-import 'package:tra_list/theme/app_theme.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -17,10 +17,6 @@ class SplashPage extends StatefulWidget {
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
   static const _duration = Duration(milliseconds: 5000);
-  static const _navy = MjasiColors.primaryNavy;
-  static const _blue = MjasiColors.primaryBlue;
-  static const _accent = MjasiColors.secondaryBlue;
-
   late final AnimationController _controller;
   late final Animation<double> _logoScale;
   late final Animation<double> _logoFade;
@@ -75,20 +71,11 @@ class _SplashPageState extends State<SplashPage>
     super.dispose();
   }
 
-  String get _greeting {
-    final user = FirebaseAuth.instance.currentUser;
-    final name = user?.displayName?.trim() ?? '';
-    if (user == null) return 'splash_welcome'.tr;
-    final firstName = name.isEmpty ? '' : name.split(' ').first;
-    return firstName.isEmpty
-        ? 'splash_welcome_back'.tr
-        : 'splash_welcome_back_name'.trParams({'name': firstName});
-  }
-
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Scaffold(
-      backgroundColor: _navy,
+      backgroundColor: const Color(0xFF101A54),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -97,7 +84,12 @@ class _SplashPageState extends State<SplashPage>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [_blue, _navy],
+                colors: [
+                  Color(0xFF082D72),
+                  Color(0xFF193580),
+                  Color(0xFF4A257E),
+                  Color(0xFF201342),
+                ],
               ),
             ),
           ),
@@ -120,133 +112,114 @@ class _SplashPageState extends State<SplashPage>
                     ),
                   ),
                   Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 64, 24, 92),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight > 156
-                              ? constraints.maxHeight - 156
-                              : 0,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            FadeTransition(
-                              opacity: _logoFade,
-                              child: ScaleTransition(
-                                scale: _logoScale,
-                                child: Container(
-                                  width: 104,
-                                  height: 104,
-                                  padding: const EdgeInsets.all(17),
-                                  decoration: BoxDecoration(
-                                    color: MjasiColors.surface,
-                                    borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: .75,
-                                      ),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: .16,
-                                        ),
-                                        blurRadius: 28,
-                                        offset: const Offset(0, 12),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Image.asset(
-                                    'assets/mjas.png',
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, _, _) => const Icon(
-                                      Icons.storefront_rounded,
-                                      size: 58,
-                                      color: _navy,
-                                    ),
-                                  ),
-                                ),
+                    child: FadeTransition(
+                      opacity: reduceMotion
+                          ? const AlwaysStoppedAnimation(1.0)
+                          : _logoFade,
+                      child: ScaleTransition(
+                        scale: reduceMotion
+                            ? const AlwaysStoppedAnimation(1.0)
+                            : _logoScale,
+                        child: Container(
+                          width: 148,
+                          height: 148,
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(42),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .24),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF8A71FF)
+                                    .withValues(alpha: .35),
+                                blurRadius: 52,
+                                spreadRadius: 4,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: .22),
+                                blurRadius: 30,
+                                offset: const Offset(0, 16),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(37),
+                            child: Image.asset(
+                              'assets/mjas.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const Icon(
+                                Icons.storefront_rounded,
+                                size: 64,
+                                color: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 28),
-                            FadeTransition(
-                              opacity: _textFade,
-                              child: SlideTransition(
-                                position: _textSlide,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 340,
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        _greeting,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 25,
-                                          height: 1.25,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'splash_tagline'.tr,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: .78,
-                                          ),
-                                          fontSize: 14,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                   Positioned(
-                    left: 32,
-                    right: 32,
-                    bottom: 20,
+                    left: 24,
+                    right: 24,
+                    bottom: constraints.maxHeight < 300 ? 8 : 56,
                     child: FadeTransition(
-                      opacity: _textFade,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: AnimatedBuilder(
-                              animation: _controller,
-                              builder: (context, _) => LinearProgressIndicator(
-                                value: _controller.value,
-                                minHeight: 3,
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: .2,
-                                ),
-                                valueColor: const AlwaysStoppedAnimation(
-                                  _accent,
+                      opacity: reduceMotion
+                          ? const AlwaysStoppedAnimation(1.0)
+                          : _textFade,
+                      child: SlideTransition(
+                        position: reduceMotion
+                            ? const AlwaysStoppedAnimation(Offset.zero)
+                            : _textSlide,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const IsherBrandMark(size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Isher AI',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .9),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'isher_welcome_subtitle'.tr,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .65),
+                                fontSize: 10,
+                                letterSpacing: .2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: 92,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: AnimatedBuilder(
+                                  animation: _controller,
+                                  builder: (context, _) =>
+                                      LinearProgressIndicator(
+                                        value: _controller.value,
+                                        minHeight: 2,
+                                        backgroundColor: Colors.white
+                                            .withValues(alpha: .18),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation(
+                                              Color(0xFF8ADFFF),
+                                            ),
+                                      ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'splash_loading'.tr,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: .68),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

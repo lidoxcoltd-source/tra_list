@@ -2226,8 +2226,9 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                                   branch.name.toLowerCase() ==
                                   existingShop.toLowerCase(),
                             );
-                            if (match.isNotEmpty)
+                            if (match.isNotEmpty) {
                               _selectedBranchId = match.first.id;
+                            }
                           }
                           return DropdownButtonFormField<String>(
                             initialValue:
@@ -2302,8 +2303,9 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                           helperText: 'staff_daily_expense_limit_hint'.tr,
                         ),
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty)
+                          if (value == null || value.trim().isEmpty) {
                             return null;
+                          }
                           final amount = _parseDailyExpenseLimit(value);
                           return amount == null ||
                                   amount < 0 ||
@@ -2343,7 +2345,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                             ),
                             const SizedBox(height: 6),
                             DropdownButtonFormField<String>(
-                              value: _barRole,
+                              initialValue: _barRole,
                               decoration: InputDecoration(
                                 prefixIcon: const Icon(
                                   Icons.local_bar_outlined,

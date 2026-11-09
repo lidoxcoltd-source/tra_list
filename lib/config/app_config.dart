@@ -44,9 +44,9 @@ class AppConfig {
       'https://via.placeholder.com';
   static String get defaultPlaceholderImage =>
       // _tryGetContactController()?.defaultPlaceholderImage.value ??
-      '${placeholderImageBaseUrl}/150';
+      '$placeholderImageBaseUrl/150';
   static String categoryPlaceholderImage(String name) =>
-      '${placeholderImageBaseUrl}/150?text=${name.replaceAll(' ', '+')}';
+      '$placeholderImageBaseUrl/150?text=${name.replaceAll(' ', '+')}';
 
   // Product Share URLs (already dynamic)
   static String get productShareBaseUrl =>

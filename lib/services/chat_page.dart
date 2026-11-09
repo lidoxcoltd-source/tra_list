@@ -913,8 +913,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (error, stackTrace) {
       debugPrint('Could not pick chat attachments: $error');
       debugPrintStack(stackTrace: stackTrace);
-      if (mounted)
+      if (mounted) {
         Get.snackbar('error'.tr, '${'chat_file_read_error'.tr}: $error');
+      }
     }
   }
 

@@ -34,4 +34,21 @@ void main() {
     expect(yesterday.period!.start, DateTime(2026, 11, 6));
     expect(yesterday.period!.end, DateTime(2026, 11, 7));
   });
+
+  test('transaction descriptions do not trigger report period selection', () {
+    expect(
+      resolveChatPeriod(
+        'rekodi matumizi 30000; kundi: Kodi; maelezo: Kodi ya mwezi huu',
+        now,
+      ).kind,
+      ChatPeriodKind.none,
+    );
+    expect(
+      resolveChatPeriod(
+        'record expense 30; category: Rent; description: previous month',
+        now,
+      ).kind,
+      ChatPeriodKind.none,
+    );
+  });
 }

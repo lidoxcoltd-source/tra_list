@@ -7,9 +7,11 @@ import 'package:tra_list/services/company_logo_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 import 'package:flutter/services.dart';
+import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 
 class AdvanceInvoicePage extends StatefulWidget {
-  const AdvanceInvoicePage({super.key});
+  const AdvanceInvoicePage({super.key, this.aiDraft});
+  final AiDocumentDraft? aiDraft;
 
   @override
   State<AdvanceInvoicePage> createState() => _AdvanceInvoicePageState();
@@ -82,6 +84,15 @@ class _AdvanceInvoicePageState extends State<AdvanceInvoicePage> {
   @override
   void initState() {
     super.initState();
+    final draft = widget.aiDraft;
+    if (draft != null) {
+      _clientNameC.text = draft.customer ?? '';
+      if (draft.subtotal != null) _subtotalC.text = draft.subtotal!.toString();
+      if (draft.tax != null) _taxC.text = draft.tax!.toString();
+      if (draft.advancePaid != null) {
+        _advancePaidC.text = draft.advancePaid!.toString();
+      }
+    }
     _loadProfileAndBranding();
   }
 

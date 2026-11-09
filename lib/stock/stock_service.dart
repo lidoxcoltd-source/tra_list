@@ -34,6 +34,7 @@ class _Req {
     this.refType = '',
     this.refId = '',
     this.movementId,
+    this.requireTracked = false,
   });
 
   final String productId;
@@ -45,6 +46,7 @@ class _Req {
   final String note;
   final String refType;
   final String refId;
+  final bool requireTracked;
 
   /// Deterministic id => the same operation can never be applied twice.
   final String? movementId;
@@ -581,6 +583,7 @@ class StockService {
     required DocumentReference<Map<String, dynamic>> saleRef,
     required Map<String, dynamic> saleData,
     required List<SaleLine> lines,
+    bool requireTracked = false,
   }) async {
     _requireInvoiceCreate();
     debugPrint(
@@ -608,6 +611,7 @@ class StockService {
             refType: 'sale',
             refId: saleRef.id,
             movementId: 'sale_${saleRef.id}_${e.key}',
+            requireTracked: requireTracked,
           ),
       ];
       debugPrint(
@@ -1045,6 +1049,9 @@ class StockService {
       final name = p['name']?.toString() ?? '';
       final tracked = p['tracked'] != false;
       if (!tracked) {
+        if (r.requireTracked) {
+          throw StockException('stk_err_not_tracked', {'name': name});
+        }
         if (r.type == MovementType.sale ||
             r.type == MovementType.saleReversal) {
           continue;
@@ -1210,6 +1217,11 @@ class StockService {
   Future<void> _notifyAlerts(List<StockAlert> alerts) async {
     if (!notify || alerts.isEmpty) return;
     for (final a in alerts) {
+      if (BusinessAccessService.businessId != businessId ||
+          FirebaseAuth.instance.currentUser?.uid != uid) {
+        debugPrint('Stock alert skipped: business or user changed');
+        return;
+      }
       try {
         await NotificationService.stockAlert(
           a.state == StockState.out

@@ -56,8 +56,8 @@ class _AnalyticsPageState extends State<AnalyticsPage>
 
   // Analytics data
   List<MapEntry<String, double>> _categoryChartData = [];
-  Map<String, double> _categoryData = {};
-  Map<String, int> _transactionFrequency = {};
+  final Map<String, double> _categoryData = {};
+  final Map<String, int> _transactionFrequency = {};
   List<TimeData> _timeSeriesData = [];
   double _totalIncome = 0;
   double _totalExpense = 0;
@@ -84,7 +84,7 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   int _analyticsRequest = 0;
 
   bool _isPdfBusy = false;
-  bool _isExcelBusy = false;
+  final bool _isExcelBusy = false;
   ChartGranularity _chartGranularity = ChartGranularity.day;
 
   @override
@@ -1936,8 +1936,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Widget _buildCategoryPieChart() {
-    if (_categoryChartData.isEmpty)
+    if (_categoryChartData.isEmpty) {
       return _buildEmptyChart('analytics_no_category_data'.tr);
+    }
 
     // NEW: Logic to group smaller categories into "Other".
     final List<MapEntry<String, double>> chartDataSource;
@@ -2068,8 +2069,9 @@ class _AnalyticsPageState extends State<AnalyticsPage>
   }
 
   Widget _buildCategoryAnalysis() {
-    if (_categoryChartData.isEmpty)
+    if (_categoryChartData.isEmpty) {
       return _buildEmptyChart('analytics_no_category_data'.tr);
+    }
 
     return AnimatedBuilder(
       animation: _chartAnimController,

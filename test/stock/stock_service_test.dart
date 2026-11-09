@@ -510,6 +510,27 @@ void main() {
       expect((await product(db, svcItem))['quantity'], 0);
     });
 
+    test('guided invoice rejects a product that stopped tracking stock', () async {
+      final item = await addProduct(s, sku: 'UNTRACKED', qty: 0, tracked: false);
+      await expectLater(
+        s.finalizeSale(
+          saleRef: sale('guided'),
+          saleData: {'total': 150},
+          lines: [SaleLine(productId: item, quantity: 1)],
+          requireTracked: true,
+        ),
+        throwsA(
+          isA<StockException>().having(
+            (e) => e.messageKey,
+            'key',
+            'stk_err_not_tracked',
+          ),
+        ),
+      );
+      expect((await sale('guided').get()).exists, isFalse);
+      expect((await product(db, item))['quantity'], 0);
+    });
+
     test('negative stock only when explicitly allowed', () async {
       final id = await s.createProduct(
         Product(name: 'Neg', sku: 'NEG', allowNegative: true),

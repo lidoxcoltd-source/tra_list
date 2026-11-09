@@ -24,10 +24,21 @@ import 'package:tra_list/services/thousands_separator_formatter.dart';
 import 'package:tra_list/stock/stock_models.dart';
 import 'package:tra_list/stock/stock_service.dart';
 import 'package:tra_list/stock/stock_ui.dart';
+import 'package:tra_list/business_intelligence/ai_document_draft.dart';
+import 'package:tra_list/business_intelligence/ai_saved_invoice_pdf.dart';
 
 class InvoicePage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? invoice;
-  const InvoicePage({super.key, this.invoice});
+  const InvoicePage({
+    super.key,
+    this.invoice,
+    this.aiDraft,
+    this.aiEditBusinessId,
+    this.aiEditUserId,
+  });
+  final AiDocumentDraft? aiDraft;
+  final String? aiEditBusinessId;
+  final String? aiEditUserId;
 
   @override
   State<InvoicePage> createState() => _InvoicePageState();
@@ -62,6 +73,7 @@ class _InvoicePageState extends State<InvoicePage> {
 
   final List<Map<String, dynamic>> _items = [];
   Map<String, dynamic> _baseDocumentTerms = {};
+  Map<String, dynamic>? _aiExpectedInvoice;
   String? _savedDocId;
 
   static String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
@@ -75,9 +87,41 @@ class _InvoicePageState extends State<InvoicePage> {
     // fetch profile from Firestore and load colors
     _loadCompanyAndColors();
 
+    final draft = widget.aiDraft;
+    if (widget.invoice == null && draft != null) {
+      _clientController.text = draft.customer ?? '';
+      if (draft.invoiceName != null) _invoiceNameController.text = draft.invoiceName!;
+      if (draft.invoiceNumber != null) _invoiceNoController.text = draft.invoiceNumber!;
+      if (draft.issueDate != null) _issueDateController.text = _fmtDate(draft.issueDate!);
+      if (draft.dueDate != null) _dueDateController.text = _fmtDate(draft.dueDate!);
+      if (draft.terms != null) {
+        _includeTerms = true;
+        _termsController.text = draft.terms!;
+      }
+      if (draft.invoiceItems.isNotEmpty) {
+        _items.addAll(draft.invoiceItems.map((item) => {
+          'desc': item.description,
+          'qty': item.quantity,
+          'unit': item.unitPrice,
+          if (item.productId != null) 'productId': item.productId,
+        }));
+      } else if (draft.description != null &&
+          draft.quantity != null &&
+          draft.unitPrice != null) {
+        _items.add({
+          'desc': draft.description!,
+          'qty': draft.quantity!,
+          'unit': draft.unitPrice!,
+        });
+      }
+    }
+
     if (widget.invoice != null) {
       final data = widget.invoice!.data();
       if (data != null) {
+        if (widget.aiEditBusinessId != null) {
+          _aiExpectedInvoice = data;
+        }
         final invoiceData = data['invoice'] as Map<String, dynamic>? ?? {};
         final clientData = data['client'] as Map<String, dynamic>? ?? {};
         final itemsData = data['items'] as List<dynamic>? ?? [];
@@ -109,6 +153,21 @@ class _InvoicePageState extends State<InvoicePage> {
         );
       }
     }
+  }
+
+  bool _sameInvoiceValue(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every(
+            (key) => b.containsKey(key) && _sameInvoiceValue(a[key], b[key]),
+          );
+    }
+    if (a is List && b is List) {
+      return a.length == b.length &&
+          List.generate(a.length, (i) => i)
+              .every((i) => _sameInvoiceValue(a[i], b[i]));
+    }
+    return a == b;
   }
 
   @override
@@ -161,11 +220,14 @@ class _InvoicePageState extends State<InvoicePage> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
         debugPrint('InvoicePage: no signed-in user; skip company load');
-        Get.snackbar(
-          'Not signed in',
-          'Sign in to load company profile',
-          snackPosition: SnackPosition.BOTTOM,
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Get.snackbar(
+            'Not signed in',
+            'Sign in to load company profile',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+        });
         return;
       }
       final profile = await ProfileService.loadOrCreate();
@@ -225,6 +287,16 @@ class _InvoicePageState extends State<InvoicePage> {
       appBar: AppBar(
         elevation: 0,
         foregroundColor: Colors.white,
+        actions: [
+          if (widget.aiEditBusinessId != null)
+            TextButton(
+              onPressed: _busy ? null : _saveAiInvoiceChanges,
+              child: Text(
+                'bi_invoice_save_changes'.tr,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+        ],
         title: const Text(
           'Create document',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
@@ -866,6 +938,29 @@ class _InvoicePageState extends State<InvoicePage> {
     );
   }
 
+  Future<void> _saveAiInvoiceChanges() async {
+    if (_busy || !_formKey.currentState!.validate()) return;
+    setState(() => _busy = true);
+    try {
+      await _trySaveToFirestore(_buildData(), 'invoice');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('bi_invoice_changes_saved'.tr)),
+        );
+      }
+    } catch (error, stack) {
+      debugPrint('Invoice edit failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('bi_invoice_changes_error'.tr)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _addEmptyItem() {
     setState(() {
       _items.add({'desc': 'New Item', 'qty': 1, 'unit': 0.0});
@@ -1109,6 +1204,19 @@ class _InvoicePageState extends State<InvoicePage> {
     try {
       final storageData = _dataForStorage(data);
       final user = FirebaseAuth.instance.currentUser;
+      final aiBusinessId = widget.aiEditBusinessId;
+      void checkAiAccess() {
+        if (aiBusinessId != null &&
+            (user == null ||
+                FirebaseAuth.instance.currentUser?.uid != widget.aiEditUserId ||
+                !BusinessAccessService.hasBusinessAccess ||
+                BusinessAccessService.businessId != aiBusinessId ||
+                !BusinessAccessService.can('invoices', 'view') ||
+                !BusinessAccessService.can('invoices', 'edit'))) {
+          throw StateError('Invoice access changed');
+        }
+      }
+      checkAiAccess();
       if (user == null) {
         Get.snackbar('Sign in required', 'Please sign in to save to cloud');
         return;
@@ -1131,11 +1239,38 @@ class _InvoicePageState extends State<InvoicePage> {
       if (existingId != null) {
         // Update existing document
         debugPrint('Updating $existingId');
-        await col.doc(existingId).update({
+        final update = {
           ...storageData,
           'kind': kind,
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
+        if (aiBusinessId != null) {
+          if (kind != 'invoice' || invoiceHasStockLinks(storageData)) {
+            throw StateError('bi_invoice_stock_edit_unavailable'.tr);
+          }
+          final ref = col.doc(existingId);
+          await FirebaseFirestore.instance.runTransaction((tx) async {
+            final current = await tx.get(ref);
+            checkAiAccess();
+            final currentData = current.data();
+            if (currentData == null || currentData['kind'] != 'invoice' ||
+                invoiceHasStockLinks(currentData)) {
+              throw StateError('bi_invoice_stock_edit_unavailable'.tr);
+            }
+            for (final key in const [
+              'company', 'client', 'invoice', 'items', 'total', 'documentTerms',
+            ]) {
+              if (!_sameInvoiceValue(currentData[key], _aiExpectedInvoice?[key])) {
+                throw StateError('Invoice changed; reopen before editing');
+              }
+            }
+            tx.update(ref, update);
+          });
+          _aiExpectedInvoice = {...?_aiExpectedInvoice, ...storageData};
+        } else {
+          await col.doc(existingId).update(update);
+        }
+        checkAiAccess();
         await NotificationService.notifyOwner(
           action: kind == 'quotation' ? 'quotation' : 'invoice',
           summary:
@@ -1175,6 +1310,7 @@ class _InvoicePageState extends State<InvoicePage> {
               lines: stockLines,
             );
           } on FirebaseException catch (e) {
+            if (widget.aiEditBusinessId != null) rethrow;
             if (e.code == 'permission-denied') {
               throw StockException('stk_err_permission');
             }
@@ -1284,6 +1420,11 @@ class _InvoicePageState extends State<InvoicePage> {
                 ListTile(
                   leading: Icon(k.$3),
                   title: Text(k.$2),
+                  selected:
+                      widget.aiDraft?.kind == AiDocumentKind.invoice &&
+                          k.$1 == 'invoice' ||
+                      widget.aiDraft?.kind == AiDocumentKind.proforma &&
+                          k.$1 == 'proforma',
                   subtitle: k.$1 == 'payment_details'
                       ? Text(
                           Get.locale?.languageCode == 'sw'

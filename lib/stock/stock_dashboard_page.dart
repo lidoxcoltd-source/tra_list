@@ -587,8 +587,9 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
             text: stockErrorText(snap.error!),
           );
         }
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final q = _query.trim().toLowerCase();
         final list = snap.data!.where((m) {
           if (_type != null && m.type != _type) return false;
@@ -688,8 +689,9 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
             text: stockErrorText(snap.error!),
           );
         }
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         if (snap.data!.isEmpty) {
           return StockMessage(
             icon: Icons.local_shipping_outlined,

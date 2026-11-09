@@ -145,10 +145,11 @@ class _ProfilePageState extends State<ProfilePage> {
         }
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Init error: $e')));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1547,11 +1548,12 @@ class _ProfilePageState extends State<ProfilePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           busy = false;
           uploadProgress = null;
         });
+      }
     }
   }
 
@@ -1607,15 +1609,17 @@ class _ProfilePageState extends State<ProfilePage> {
       await sub.cancel();
       _currentUploadTask = null;
 
-      if (snapshot.state != TaskState.success)
+      if (snapshot.state != TaskState.success) {
         throw Exception('Upload failed with state ${snapshot.state}');
+      }
 
       final url = await ref.getDownloadURL();
-      if (mounted)
+      if (mounted) {
         setState(() {
           uploadProgress = 1.0;
           logoUrl = url;
         });
+      }
       return url;
     } on FirebaseException catch (e) {
       debugPrint('FirebaseException: ${e.code} ${e.message}');

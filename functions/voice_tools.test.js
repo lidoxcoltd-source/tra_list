@@ -1,0 +1,22 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { geminiTools, openAiTools } = require("./voice_tools");
+const { instruction } = require("./gemini_voice");
+
+test("both providers receive matching bounded voice tools", () => {
+  const gemini = geminiTools[0].functionDeclarations;
+  assert.deepEqual(gemini.map((tool) => tool.name), [
+    "get_business_summary", "get_document_details", "open_document_draft", "review_transaction_draft", "open_app_page",
+  ]);
+  assert.deepEqual(openAiTools.map((tool) => tool.name), gemini.map((tool) => tool.name));
+  assert.ok(openAiTools.every((tool) => tool.type === "function"));
+  assert.equal(gemini[0].parameters.type, "OBJECT");
+  assert.equal(gemini[0].parameters.properties.period.type, "STRING");
+  assert.ok(gemini[0].parameters.properties.period.enum.includes("yesterday"));
+  assert.ok(gemini[2].parameters.properties.kind.enum.includes("receipt"));
+  assert.equal(gemini[2].parameters.properties.items.items.type, "OBJECT");
+  assert.deepEqual(gemini[4].parameters.properties.destination.enum,
+    ["transactions", "invoices", "receipts", "quotation", "analytics", "jobs", "tasks", "staff", "pos"]);
+  assert.match(instruction("Swahili", {}), /get_business_summary/);
+  assert.match(instruction("Swahili", {}), /user must review and save manually/);
+});

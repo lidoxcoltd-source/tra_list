@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:math';
@@ -12,10 +13,12 @@ import 'services/business_access_service.dart';
 import 'services/notification_service.dart';
 import 'utils/url_launcher_platform.dart';
 import 'stock/thermal_receipt_printer.dart';
+import 'business_intelligence/ai_document_draft.dart';
 
 class AddReceiptPage extends StatefulWidget {
   final ReceiptData? receiptData;
-  const AddReceiptPage({super.key, this.receiptData});
+  const AddReceiptPage({super.key, this.receiptData, this.aiDraft});
+  final AiDocumentDraft? aiDraft;
 
   @override
   State<AddReceiptPage> createState() => _AddReceiptPageState();
@@ -92,6 +95,20 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
       _generateReceiptNumber();
       _generateVerificationCode();
       _generateZNumber();
+      final draft = widget.aiDraft;
+      if (draft != null) {
+        _customerNameController.text = draft.customer ?? '';
+        if (draft.description != null &&
+            draft.quantity != null &&
+            draft.unitPrice != null) {
+          _itemDescriptionController.text = draft.description!;
+          _itemQtyController.text = draft.quantity!.toInt().toString();
+          _itemAmountController.text = (draft.quantity! * draft.unitPrice!)
+              .toStringAsFixed(2);
+        }
+        if (draft.tax != null) _taxController.text = draft.tax!.toString();
+        if (draft.description != null || draft.tax != null) _calculateTotals();
+      }
     }
   }
 
@@ -499,6 +516,21 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.aiDraft?.requestedAmount != null) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'bi_draft_receipt_requested_amount'.trParams({
+                          'amount': NumberFormat.decimalPattern().format(
+                            widget.aiDraft!.requestedAmount,
+                          ),
+                        }),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // Company Information Section
                 _buildSectionHeader(
                   'Company Information',
@@ -722,8 +754,9 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                               if (parts.length >= 2) {
                                 initHour = int.parse(parts[0]);
                                 initMinute = int.parse(parts[1]);
-                                if (parts.length >= 3)
+                                if (parts.length >= 3) {
                                   seconds = int.parse(parts[2]);
+                                }
                               }
                             } catch (_) {}
                             final picked = await showTimePicker(

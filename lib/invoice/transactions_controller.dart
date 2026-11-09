@@ -645,7 +645,7 @@ class TransactionsController extends GetxController {
     // Show snackbar with Undo action
     // Use GetSnackBar so we can react to status changes (CLOSED) instead of the
     // nonexistent `onClosed` parameter on Get.snackbar.
-    bool _undoPressed = false;
+    bool undoPressed = false;
     Get.showSnackbar(
       GetSnackBar(
         titleText: Text(
@@ -661,7 +661,7 @@ class TransactionsController extends GetxController {
           onPressed: () {
             // Undo action: re-insert the transaction and close the snackbar
             if (Get.isSnackbarOpen) Get.back();
-            _undoPressed = true;
+            undoPressed = true;
             allFetchedTransactions.insert(index, removedTransaction);
             applyAllFilters();
             _recalculateTotals();
@@ -673,7 +673,7 @@ class TransactionsController extends GetxController {
     );
     // After the snackbar duration, if the user didn't undo, perform deletion.
     Future.delayed(const Duration(seconds: 5), () async {
-      if (!_undoPressed) {
+      if (!undoPressed) {
         try {
           final removedOffline = await OfflineService.deletePendingTransaction(
             t.id!,

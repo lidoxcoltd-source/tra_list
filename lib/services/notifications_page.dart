@@ -664,8 +664,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: () {
-                if (unread)
+                if (unread) {
                   NotificationService.markRead(n.id, inbox: n.isInbox);
+                }
                 if (n.taskId != null) {
                   Navigator.of(context).push(
                     MaterialPageRoute(

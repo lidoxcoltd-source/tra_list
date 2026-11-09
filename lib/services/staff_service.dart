@@ -134,7 +134,7 @@ class StaffService {
     final accountSnapshot = await accountFuture;
     final legacySnapshot = await legacyFuture;
     final members = <String, StaffMember>{};
-    for (final document in legacySnapshot?.docs ?? const []) {
+    for (final document in legacySnapshot.docs ?? const []) {
       final data = document.data();
       if (data['role'] != 'owner') {
         members[document.id] = StaffMember(

@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:pdf/pdf.dart';
@@ -223,9 +222,17 @@ class InvoicePdf {
                           t.smallBold,
                         ),
                         if ((data['tableNumber']?.toString() ?? '').isNotEmpty)
-                          _kv('Table:', data['tableNumber'].toString(), t.smallBold),
+                          _kv(
+                            'Table:',
+                            data['tableNumber'].toString(),
+                            t.smallBold,
+                          ),
                         if ((data['waiterName']?.toString() ?? '').isNotEmpty)
-                          _kv('Served by:', data['waiterName'].toString(), t.smallBold),
+                          _kv(
+                            'Served by:',
+                            data['waiterName'].toString(),
+                            t.smallBold,
+                          ),
                       ],
                     ),
                   ],

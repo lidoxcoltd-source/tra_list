@@ -194,12 +194,14 @@ class _BarOrdersPageState extends State<BarOrdersPage> {
                   child: FutureBuilder<Uint8List>(
                     future: InvoicePdf.generateBytes(receipt),
                     builder: (context, snapshot) {
-                      if (snapshot.hasError)
+                      if (snapshot.hasError) {
                         return Center(
                           child: Text(stockErrorText(snapshot.error!)),
                         );
-                      if (!snapshot.hasData)
+                      }
+                      if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
+                      }
                       return PdfPreview(
                         build: (_) async => snapshot.data!,
                         pdfFileName: 'Receipt_$number.pdf',

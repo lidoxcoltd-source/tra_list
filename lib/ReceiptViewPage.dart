@@ -35,9 +35,7 @@ class ReceiptViewController extends GetxController {
       ReceiptData? receipt = await _loadFromFirestore(receiptId);
 
       // If not found in Firestore, try local storage
-      if (receipt == null) {
-        receipt = await _loadFromLocalStorage(receiptId);
-      }
+      receipt ??= await _loadFromLocalStorage(receiptId);
 
       if (receipt != null) {
         receiptData.value = receipt;
@@ -211,7 +209,7 @@ class ReceiptViewController extends GetxController {
   void shareReceiptUrl() {
     final receiptId = Get.parameters['id'];
     if (receiptId != null) {
-      final url = '${Get.currentRoute}';
+      final url = Get.currentRoute;
       Get.snackbar(
         'Share Receipt',
         'Receipt URL: $url',

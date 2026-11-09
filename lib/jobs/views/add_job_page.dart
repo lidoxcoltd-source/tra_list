@@ -212,32 +212,17 @@ class _AddJobPageState extends State<AddJobPage> {
                 : {
                     // optional brand colors if you store hex strings
                     if (m['brandColor'] != null)
-                      'brand':
-                          int.tryParse(
-                            m['brandColor'].toString().replaceFirst(
-                              '#',
-                              '0xFF',
-                            ),
-                          ) ??
-                          null,
+                      'brand': int.tryParse(
+                        m['brandColor'].toString().replaceFirst('#', '0xFF'),
+                      ),
                     if (m['accentColor'] != null)
-                      'accent':
-                          int.tryParse(
-                            m['accentColor'].toString().replaceFirst(
-                              '#',
-                              '0xFF',
-                            ),
-                          ) ??
-                          null,
+                      'accent': int.tryParse(
+                        m['accentColor'].toString().replaceFirst('#', '0xFF'),
+                      ),
                     if (m['footerColor'] != null)
-                      'footer':
-                          int.tryParse(
-                            m['footerColor'].toString().replaceFirst(
-                              '#',
-                              '0xFF',
-                            ),
-                          ) ??
-                          null,
+                      'footer': int.tryParse(
+                        m['footerColor'].toString().replaceFirst('#', '0xFF'),
+                      ),
                   }
             ..removeWhere((k, v) => v == null),
     }..removeWhere((k, v) => v == null);
@@ -249,9 +234,7 @@ class _AddJobPageState extends State<AddJobPage> {
     final company = _normalizeCompany((profile ?? {}) as Map<String, dynamic>?);
 
     final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final due = j.dueDate != null
-        ? DateFormat('yyyy-MM-dd').format(j.dueDate)
-        : '';
+    final due = DateFormat('yyyy-MM-dd').format(j.dueDate);
     final desc = _description.text.trim();
     final lineDesc = [
       if (j.jobType.isNotEmpty) j.jobType,

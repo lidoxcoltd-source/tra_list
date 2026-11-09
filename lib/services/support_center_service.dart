@@ -118,8 +118,9 @@ class SupportCenterService {
 
   static Future<void> save(SupportCenterConfig config) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
+    if (user == null) {
       throw StateError('You must sign in to save support settings.');
+    }
     if (config.faqs.length > 50) {
       throw ArgumentError('A maximum of 50 FAQ entries is allowed.');
     }

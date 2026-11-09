@@ -10,6 +10,8 @@ import 'package:tra_list/stock/stock_dashboard_page.dart';
 import 'package:tra_list/stock/pos_page.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/business_intelligence/business_intelligence_page.dart';
+import 'package:tra_list/business_intelligence/ai_assistant_page.dart';
+import 'package:tra_list/business_intelligence/ai_quota_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';
 import 'package:tra_list/jobs/views/archived_jobs_page.dart';
 import 'package:tra_list/subscription_page.dart';
@@ -172,6 +174,7 @@ class AppRoutes {
   static const String staff = '/staff';
   static const String tasks = '/tasks';
   static const String adminSubscriptions = '/admin-subscriptions';
+  static const String adminAiQuota = '/admin-ai-quota';
   static const String adminAppVersions = '/admin-app-versions';
   static const String downloads = '/downloads';
   static const String adminDownloads = '/admin-downloads';
@@ -428,7 +431,13 @@ class AppRoutes {
     ),
     GetPage(
       name: businessIntelligence,
-      page: () => const BusinessIntelligencePage(),
+      page: () => BusinessIntelligencePage(
+        initialTab: switch (Get.arguments) {
+          'chat' => AiAssistantTab.chat,
+          'voice' => AiAssistantTab.voice,
+          _ => null,
+        },
+      ),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),
@@ -465,6 +474,12 @@ class AppRoutes {
       name: tasks,
       page: () => const TasksPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: adminAiQuota,
+      page: () => const AiQuotaPage(admin: true),
+      middlewares: [AuthMiddleware()],
       transition: Transition.rightToLeft,
     ),
     GetPage(

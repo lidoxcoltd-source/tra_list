@@ -167,8 +167,9 @@ class _SharedDocumentPageState extends State<SharedDocumentPage> {
   }
 
   static String _formatDate(dynamic value) {
-    if (value is Timestamp)
+    if (value is Timestamp) {
       return DateFormat('d MMM yyyy').format(value.toDate());
+    }
     if (value is DateTime) return DateFormat('d MMM yyyy').format(value);
     if (value is String) {
       final date = DateTime.tryParse(value);

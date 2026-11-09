@@ -13,5 +13,20 @@ abstract class AIProvider {
     required AiSnapshot snapshot,
     required List<Map<String, String>> messages,
     required String language,
+    String? messageId,
+  });
+}
+
+class AiDocumentReview {
+  const AiDocumentReview(this.details, this.token);
+  final Map<String, dynamic> details;
+  final String token;
+}
+
+abstract class AiDocumentReviewProvider {
+  Future<AiDocumentReview?> prepareDocumentReview({
+    required BusinessContext context,
+    required AiSnapshot snapshot,
+    required String question,
   });
 }

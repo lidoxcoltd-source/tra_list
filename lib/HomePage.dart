@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:tra_list/invoice/add_transaction_page.dart';
+import 'package:tra_list/business_intelligence/isher_brand_mark.dart';
 import 'package:tra_list/invoice/analytics_page.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/invoice/transaction_model.dart';
@@ -769,6 +770,68 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          if (BusinessAccessService.can('analytics', 'view'))
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0759BE), Color(0xFF448BFF)],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x330D6FEB),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () {
+                    Navigator.of(dialogContext).pop();
+                    _openRestrictedRoute(AppRoutes.businessIntelligence);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const IsherBrandMark(size: 32),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            'bi_open_assistant'.tr,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 19,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -2116,7 +2179,7 @@ class _HomePageState extends State<HomePage> {
       if (BusinessAccessService.can('analytics', 'view'))
         (
           label: 'bi_title'.tr,
-          icon: Icons.auto_awesome_outlined,
+          icon: Icons.hub_outlined,
           onTap: () => _openRestrictedRoute(AppRoutes.businessIntelligence),
         ),
     ];
@@ -2153,11 +2216,14 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            shortcut.icon,
-                            color: const Color(0xFF0759BE),
-                            size: 30,
-                          ),
+                          if (shortcut.icon == Icons.hub_outlined)
+                            const IsherBrandMark(size: 34)
+                          else
+                            Icon(
+                              shortcut.icon,
+                              color: const Color(0xFF0759BE),
+                              size: 30,
+                            ),
                           const SizedBox(height: 7),
                           Text(
                             shortcut.label,
@@ -2514,7 +2580,10 @@ class _HomePageState extends State<HomePage> {
         ),
     ];
 
-    if (actions.isEmpty) {
+    final canOpenAi =
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.can('analytics', 'view');
+    if (actions.isEmpty && !canOpenAi) {
       await _showMoreActions();
       return;
     }
@@ -2558,6 +2627,24 @@ class _HomePageState extends State<HomePage> {
                             action.onTap();
                           },
                           onClose: () => Navigator.pop(dialogContext),
+                          onAiChat: canOpenAi
+                              ? () {
+                                  Navigator.pop(dialogContext);
+                                  _openRestrictedRoute(
+                                    AppRoutes.businessIntelligence,
+                                    arguments: 'chat',
+                                  );
+                                }
+                              : null,
+                          onAiVoice: canOpenAi
+                              ? () {
+                                  Navigator.pop(dialogContext);
+                                  _openRestrictedRoute(
+                                    AppRoutes.businessIntelligence,
+                                    arguments: 'voice',
+                                  );
+                                }
+                              : null,
                           title: 'home_quick_access'.tr,
                         ),
                       ),
@@ -2579,6 +2666,24 @@ class _HomePageState extends State<HomePage> {
                             action.onTap();
                           },
                           onClose: () => Navigator.pop(dialogContext),
+                          onAiChat: canOpenAi
+                              ? () {
+                                  Navigator.pop(dialogContext);
+                                  _openRestrictedRoute(
+                                    AppRoutes.businessIntelligence,
+                                    arguments: 'chat',
+                                  );
+                                }
+                              : null,
+                          onAiVoice: canOpenAi
+                              ? () {
+                                  Navigator.pop(dialogContext);
+                                  _openRestrictedRoute(
+                                    AppRoutes.businessIntelligence,
+                                    arguments: 'voice',
+                                  );
+                                }
+                              : null,
                         ),
                       ),
                     ),
@@ -3771,6 +3876,7 @@ class _HomePageState extends State<HomePage> {
     String route, {
     bool refreshFinance = false,
     _HomeDestination? destination,
+    Object? arguments,
   }) async {
     final isReceiptRoute =
         route == AppRoutes.receiptsList || route == AppRoutes.addReceipt;
@@ -3794,7 +3900,7 @@ class _HomePageState extends State<HomePage> {
       route,
       arguments: route == AppRoutes.transactions
           ? {'shopNickname': _selectedShopNickname}
-          : null,
+          : arguments,
     );
     if (route == AppRoutes.tasks && result == 'open_chat' && mounted) {
       _selectDestination(_HomeDestination.chat);

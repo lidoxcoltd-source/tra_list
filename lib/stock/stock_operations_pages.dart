@@ -343,8 +343,9 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
       if (!mounted) return;
       _products = list;
       final id = widget.productId;
-      if (id != null)
+      if (id != null) {
         setState(() => _product = list.where((e) => e.id == id).firstOrNull);
+      }
     });
   }
 

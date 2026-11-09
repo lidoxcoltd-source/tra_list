@@ -64,8 +64,9 @@ Uint8List? _applyEdit(_EditJob job) {
   if (image == null) return null;
   image = img.bakeOrientation(image);
   if (job.turns != 0) image = img.copyRotate(image, angle: job.turns * 90);
-  if (job.flip)
+  if (job.flip) {
     image = img.flip(image, direction: img.FlipDirection.horizontal);
+  }
   final w = image.width;
   final h = image.height;
   final x = (job.crop[0] * w).round().clamp(0, w - 1);

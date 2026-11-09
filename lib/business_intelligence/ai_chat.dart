@@ -1,13 +1,50 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import 'package:tra_list/business_intelligence/ai_history.dart';
+import 'package:tra_list/business_intelligence/ai_models.dart';
+import 'package:tra_list/business_intelligence/ai_document_draft.dart';
+import 'package:tra_list/business_intelligence/ai_invoice_guide.dart';
+import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
+import 'package:tra_list/business_intelligence/ai_invoice_save.dart';
+import 'package:tra_list/business_intelligence/ai_saved_invoice_pdf.dart';
+import 'package:tra_list/business_intelligence/ai_transaction_suggestions.dart';
 import 'package:tra_list/business_intelligence/ai_provider.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/chat_period.dart';
+import 'package:tra_list/business_intelligence/isher_avatar.dart';
+import 'package:tra_list/business_intelligence/isher_navigation.dart';
+import 'package:tra_list/business_intelligence/isher_thinking_indicator.dart';
+import 'package:tra_list/invoice/InvoicePage.dart';
+import 'package:tra_list/invoice/quotation_page.dart';
+import 'package:tra_list/invoice/advance_invoice_page.dart';
+import 'package:tra_list/AddReceiptPage.dart';
+import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/pdf/invoice_pdf.dart';
+import 'package:tra_list/stock/stock_models.dart';
+import 'package:tra_list/stock/stock_service.dart';
+import 'package:tra_list/stock/stock_ui.dart';
+
+@visibleForTesting
+String aiResourceLimitMessageKey(String? message) => switch (message) {
+  'quota-exhausted' => 'bi_chat_quota_exhausted',
+  'rate-limited' => 'bi_chat_rate_limited',
+  'Report preparation limit reached. Try again later.' =>
+    'bi_chat_preparation_limited',
+  'Too many records to prepare a complete report. Select a shorter period.' ||
+  'Too many staff records to prepare a complete report.' ||
+  'The business report is too large to share safely.' ||
+  'Document details exceed the report size limit. Choose a shorter period.' =>
+    'bi_chat_report_too_large',
+  _ => 'bi_chat_limit_error',
+};
 
 Object? localizedAiSnapshot(
   Object? value,
@@ -83,6 +120,7 @@ Object? localizedAiSnapshot(
       ),
     );
   }
+
   if (value is List) {
     return value
         .map(
@@ -95,15 +133,36 @@ Object? localizedAiSnapshot(
   return value;
 }
 
-class OpenAiCloudProvider implements AIProvider {
+class OpenAiCloudProvider implements AIProvider, AiDocumentReviewProvider {
   OpenAiCloudProvider({FirebaseFunctions? functions})
     : _functions = functions ?? FirebaseFunctions.instance;
   final FirebaseFunctions _functions;
 
   @override
+  Future<AiDocumentReview?> prepareDocumentReview({
+    required BusinessContext context,
+    required AiSnapshot snapshot,
+    required String question,
+  }) async {
+    final result = await _functions
+        .httpsCallable('prepareBusinessAiDocuments')
+        .call({
+          'businessUid': context.businessId,
+          'token': snapshot.token,
+          'question': question,
+        });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    if (data['required'] == false) return null;
+    return AiDocumentReview(
+      Map<String, dynamic>.from(data['details'] as Map),
+      data['token'] as String,
+    );
+  }
+
+  @override
   Future<AiSnapshot> prepare(BusinessContext context) async {
     final result = await _functions
-        .httpsCallable('prepareBusinessAiContext')
+        .httpsCallable('prepareBusinessAiContextV2')
         .call({
           'businessUid': context.businessId,
           'startMillis': context.period.start.millisecondsSinceEpoch,
@@ -122,12 +181,21 @@ class OpenAiCloudProvider implements AIProvider {
     required AiSnapshot snapshot,
     required List<Map<String, String>> messages,
     required String language,
+    String? messageId,
   }) async {
-    final result = await _functions.httpsCallable('askBusinessAi').call({
+    await AiModelSelection.load();
+    final selectedModel =
+        AiModelSelection.selectedId.value ??
+        defaultAiModelId(
+          (await AiModelRepository(functions: _functions).available()).models,
+        );
+    final result = await _functions.httpsCallable('askBusinessAiV2').call({
       'businessUid': context.businessId,
       'token': snapshot.token,
       'messages': messages,
       'language': language,
+      'model': selectedModel,
+      if (messageId != null) 'messageId': messageId,
     });
     final data = Map<String, dynamic>.from(result.data as Map);
     return data['answer'] as String;
@@ -141,20 +209,30 @@ class BusinessAiChat extends StatefulWidget {
     required this.isCurrent,
     this.provider,
     this.historyRepository,
+    this.historyCache,
+    this.transactionCategoryLoader,
+    this.invoiceSaveFactory,
+    this.invoiceStockPicker,
   });
   final BusinessContext businessContext;
   final bool Function() isCurrent;
   final AIProvider? provider;
   final AiHistoryRepository? historyRepository;
+  final AiHistoryCache? historyCache;
+  final Future<List<String>> Function(String type)? transactionCategoryLoader;
+  final Future<String> Function(AiDocumentDraft draft) Function()?
+  invoiceSaveFactory;
+  final Future<Product?> Function()? invoiceStockPicker;
 
   @override
-  State<BusinessAiChat> createState() => _BusinessAiChatState();
+  State<BusinessAiChat> createState() => BusinessAiChatState();
 }
 
-class _BusinessAiChatState extends State<BusinessAiChat> {
+class BusinessAiChatState extends State<BusinessAiChat> {
   late final AIProvider _provider;
   late final AiHistoryRepository _history;
   final _input = TextEditingController();
+  final _inputFocus = FocusNode();
   final _messages = <AiChatMessage>[];
   bool _loading = true;
   bool _loadingOlder = false;
@@ -164,13 +242,40 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
   AiChatMessage? _pendingUser;
   ReportingPeriod? _conversationPeriod;
   bool _busy = false;
+  bool _awaitingResponse = false;
+  AiDocumentReview? _documentReview;
+  Completer<bool>? _documentReviewDecision;
+  bool _guidingInvoice = false;
+  bool _openingDraft = false;
+  bool _invoiceSaveFailed = false;
+  AiInvoiceSave? _invoiceSave;
+  Future<String> Function(AiDocumentDraft)? _saveInvoice;
+  AiChatMessage? _pendingDocumentRequest;
+  AiChatMessage? _replyTo;
 
   @override
   void initState() {
     super.initState();
     _provider = widget.provider ?? OpenAiCloudProvider();
     _history = widget.historyRepository ?? CloudAiHistoryRepository();
+    final cached = widget.historyCache?.read(widget.businessContext);
+    if (cached != null) {
+      _messages.addAll(cached.messages);
+      _hasMore = cached.hasMore;
+      _restorePeriod();
+    }
     _loadHistory();
+  }
+
+  void _restorePeriod() {
+    _conversationPeriod = _messages.reversed
+        .where((message) => message.role == 'user' && message.period != null)
+        .map((message) => message.period)
+        .firstOrNull;
+  }
+
+  void _cacheHistory() {
+    widget.historyCache?.store(widget.businessContext, _messages, _hasMore);
   }
 
   Future<void> _loadHistory() async {
@@ -186,15 +291,23 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
           ..clear()
           ..addAll(page.messages);
         _hasMore = page.hasMore;
-        _conversationPeriod = page.messages.reversed
-            .where((message) => message.role == 'user' && message.period != null)
-            .map((message) => message.period)
-            .firstOrNull;
+        _restorePeriod();
+        _cacheHistory();
       });
     } catch (error, stack) {
       debugPrint('Business AI history load failed: $error');
       debugPrintStack(stackTrace: stack);
-      if (mounted) setState(() => _historyError = 'bi_history_error'.tr);
+      if (mounted && widget.isCurrent()) {
+        setState(() {
+          if (error is FirebaseFunctionsException &&
+              (error.code == 'permission-denied' ||
+                  error.code == 'unauthenticated')) {
+            _messages.clear();
+            widget.historyCache?.clear();
+          }
+          _historyError = 'bi_history_error'.tr;
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -212,6 +325,7 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
       setState(() {
         _messages.insertAll(0, page.messages);
         _hasMore = page.hasMore;
+        _cacheHistory();
       });
     } catch (error, stack) {
       debugPrint('Business AI older history load failed: $error');
@@ -228,14 +342,236 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
 
   @override
   void dispose() {
+    if (_documentReviewDecision?.isCompleted == false) {
+      _documentReviewDecision!.complete(false);
+    }
     _input.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
+  Future<bool> _reviewDocumentInChat(AiDocumentReview review) async {
+    final decision = Completer<bool>();
+    setState(() {
+      _documentReview = review;
+      _documentReviewDecision = decision;
+    });
+    final confirmed = await decision.future;
+    if (mounted) {
+      setState(() {
+        _documentReview = null;
+        _documentReviewDecision = null;
+      });
+    }
+    return confirmed;
+  }
+
+  void _resolveDocumentReview(bool confirmed) {
+    final decision = _documentReviewDecision;
+    if (decision != null && !decision.isCompleted) decision.complete(confirmed);
+  }
+
+  bool get _canEditMessage =>
+      widget.isCurrent() &&
+      !_busy &&
+      !_guidingInvoice &&
+      !_openingDraft &&
+      !_loading &&
+      !_loadingOlder &&
+      _historyError == null &&
+      _unsavedAnswer == null;
+
+  Future<void> _editMessage(AiChatMessage message) async {
+    final Object repository = _history;
+    if (!_canEditMessage ||
+        message.role != 'user' ||
+        decodeDocumentHistoryEvent(message) != null ||
+        repository is! AiHistoryEditing) {
+      return;
+    }
+    final editor = TextEditingController(text: message.content);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('bi_chat_edit_title'.tr),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('bi_chat_edit_notice'.tr),
+            TextField(controller: editor, maxLength: 2000, maxLines: 5),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, editor.text.trim()),
+            child: Text('bi_chat_edit_save'.tr),
+          ),
+        ],
+      ),
+    );
+    editor.dispose();
+    if (!mounted || updated == null || !_canEditMessage) return;
+    if (updated.isEmpty || updated.length > 2000) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('bi_chat_edit_invalid'.tr)));
+      return;
+    }
+    if (updated == message.content) return;
+    setState(() => _busy = true);
+    try {
+      await repository.edit(
+        widget.businessContext.businessId,
+        message.id,
+        updated,
+      );
+      if (!mounted || !widget.isCurrent()) return;
+      final index = _messages.indexWhere((item) => item.id == message.id);
+      if (index < 0) return;
+      setState(() {
+        _messages[index] = AiChatMessage(
+          id: message.id,
+          role: message.role,
+          content: updated,
+          createdAt: message.createdAt,
+        );
+        if (_replyTo?.id == message.id) _replyTo = _messages[index];
+        _restorePeriod();
+        _cacheHistory();
+      });
+    } catch (error, stack) {
+      debugPrint('Business AI edit failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_chat_change_error'.tr)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteMessage(AiChatMessage message) async {
+    final Object repository = _history;
+    if (!_canEditMessage || repository is! AiHistoryEditing) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('bi_chat_delete_title'.tr),
+        content: Text('bi_chat_delete_notice'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('bi_chat_delete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !_canEditMessage) return;
+    setState(() => _busy = true);
+    try {
+      await repository.delete(widget.businessContext.businessId, message.id);
+      if (!mounted || !widget.isCurrent()) return;
+      setState(() {
+        _messages.removeWhere((item) => item.id == message.id);
+        if (_replyTo?.id == message.id) _replyTo = null;
+        _restorePeriod();
+        _cacheHistory();
+      });
+      if (_messages.isEmpty && _hasMore) await _loadHistory();
+    } catch (error, stack) {
+      debugPrint('Business AI delete failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_chat_change_error'.tr)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _startReply(AiChatMessage message) {
+    if (!_canEditMessage) return;
+    setState(() => _replyTo = message);
+    _inputFocus.requestFocus();
+  }
+
+  Future<void> stageVoiceTransaction(VoiceTransactionDraft draft) async {
+    bool allowed() =>
+        _canEditMessage &&
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.isOwner.value &&
+        BusinessAccessService.businessId == widget.businessContext.businessId;
+    if (!allowed()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('bi_voice_draft_unavailable'.tr)),
+        );
+      }
+      return;
+    }
+    if (_input.text.isNotEmpty && _input.text != draft.chatCommand) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('bi_chat_edit_replace_title'.tr),
+          content: Text('bi_chat_edit_replace_notice'.tr),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('cancel'.tr),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('bi_chat_edit_replace'.tr),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || replace != true || !allowed()) return;
+    }
+    _input.value = TextEditingValue(
+      text: draft.chatCommand,
+      selection: TextSelection.collapsed(offset: draft.chatCommand.length),
+    );
+    _inputFocus.requestFocus();
+  }
+
   Future<void> _send([String? suggestion]) async {
-    final prompt = (suggestion ?? _input.text).trim();
+    final typed = (suggestion ?? _input.text).trim();
+    final reply = suggestion == null ? _replyTo : null;
+    final quoted = reply == null
+        ? ''
+        : (decodeDocumentHistoryEvent(reply)?.text ?? reply.content);
+    final excerpt = String.fromCharCodes(quoted.runes.take(300));
+    final prompt = reply == null || typed.isEmpty
+        ? typed
+        : '${'bi_chat_reply_context'.tr}: $excerpt\n\n$typed';
+    final isTransactionFollowUp =
+        _messages.isNotEmpty &&
+        _messages.last.role == 'assistant' &&
+        (_messages.last.content ==
+                'Tafadhali tuma kundi na maelezo kwa muundo: kundi: Kodi; maelezo: Kodi ya duka. Tumia kundi lililopo; tarehe itakuwa leo.' ||
+            _messages.last.content ==
+                'Please send the category and description in this format: category: Rent; description: Shop rent. Use an existing category; the date will be today.') &&
+        RegExp(
+          r'^\s*(kundi|category)\s*:',
+          caseSensitive: false,
+        ).hasMatch(prompt);
     if (prompt.isEmpty ||
         _busy ||
+        _openingDraft ||
         _loading ||
         _historyError != null ||
         _unsavedAnswer != null) {
@@ -245,6 +581,67 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('bi_chat_too_long'.tr)));
+      return;
+    }
+    if (reply == null && isIsherNavigationCommand(prompt)) {
+      final destination = parseIsherNavigationCommand(prompt);
+      if (destination == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_navigation_unknown'.tr)));
+        return;
+      }
+      setState(() => _busy = true);
+      try {
+        final opened = await openIsherDestination(
+          context: context,
+          destination: destination,
+          businessId: widget.businessContext.businessId,
+          isCurrent: widget.isCurrent,
+        );
+        if (opened && mounted && suggestion == null) _input.clear();
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+    AiDocumentDraft? draft;
+    try {
+      draft = reply == null ? parseAiDocumentDraft(prompt) : null;
+    } on FormatException {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('bi_draft_invalid'.tr)));
+      return;
+    }
+    if (draft != null) {
+      if (draft.kind == AiDocumentKind.invoice &&
+          draft.customer == null &&
+          draft.description == null) {
+        if (!_canCreateDraft(draft)) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('bi_access_error'.tr)));
+          return;
+        }
+        setState(() => _busy = true);
+        final recorded = await _recordDocumentRequest(prompt);
+        if (mounted) setState(() => _busy = false);
+        if (!recorded || !mounted || !widget.isCurrent()) return;
+        if (suggestion == null) _input.clear();
+        setState(() {
+          _guidingInvoice = true;
+          _invoiceSaveFailed = false;
+          _invoiceSave = AiInvoiceSave(
+            widget.businessContext.businessId,
+            widget.isCurrent,
+          );
+          _saveInvoice =
+              widget.invoiceSaveFactory?.call() ?? _invoiceSave!.save;
+        });
+        return;
+      }
+      await _openDraft(draft, prompt: prompt, clearInput: suggestion == null);
       return;
     }
     setState(() => _busy = true);
@@ -279,18 +676,37 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
       if (selectedPeriod.end.difference(selectedPeriod.start) >
           const Duration(days: 366)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('bi_chat_period_error'.tr)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('bi_chat_period_error'.tr)));
         }
         return;
       }
       final requestContext = widget.businessContext.withPeriod(selectedPeriod);
-      final snapshot = await _provider.prepare(requestContext);
+      var snapshot = await _provider.prepare(requestContext);
       if (!mounted || !widget.isCurrent()) return;
+      final Object provider = _provider;
+      if (provider is AiDocumentReviewProvider) {
+        final review = await provider.prepareDocumentReview(
+          context: requestContext,
+          snapshot: snapshot,
+          question: prompt,
+        );
+        if (!mounted || !widget.isCurrent()) return;
+        if (review != null) {
+          final confirmed = await _reviewDocumentInChat(review);
+          if (!confirmed || !mounted || !widget.isCurrent()) return;
+          snapshot = AiSnapshot(snapshot.context, review.token);
+        }
+      }
       final history = <Map<String, String>>[
         ..._messages
-            .skip(_messages.length > 11 ? _messages.length - 11 : 0)
+            .where((m) => decodeDocumentHistoryEvent(m) == null)
+            .toList()
+            .reversed
+            .take(11)
+            .toList()
+            .reversed
             .map(
               (m) => {
                 'role': m.role,
@@ -301,73 +717,8 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
             ),
         {'role': 'user', 'content': prompt},
       ];
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => Obx(
-          () => !widget.isCurrent()
-              ? AlertDialog(
-                  content: Text('bi_access_error'.tr),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext, false),
-                      child: Text('close'.tr),
-                    ),
-                  ],
-                )
-              : AlertDialog(
-                  title: Text('bi_chat_review'.tr),
-                  content: SizedBox(
-                    width: 600,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('bi_chat_disclosure'.tr),
-                          const SizedBox(height: 8),
-                          Text(
-                            'bi_chat_selected_period'.trParams({
-                              'start': DateFormat.yMMMd().format(selectedPeriod.start),
-                              'end': DateFormat.yMMMd().format(selectedPeriod.end.subtract(const Duration(microseconds: 1))),
-                            }),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 12),
-                          SelectableText(
-                            const JsonEncoder.withIndent('  ').convert(
-                              localizedAiSnapshot(
-                                snapshot.context,
-                                Get.locale?.languageCode ?? 'en',
-                              ),
-                            ),
-                          ),
-                          const Divider(),
-                          Text(
-                            'bi_chat_history'.tr,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          for (final message in history)
-                            SelectableText(
-                              '${(message['role'] == 'user' ? 'bi_chat_user' : 'bi_chat_assistant').tr}: ${message['content']}\n',
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext, false),
-                      child: Text('cancel'.tr),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext, true),
-                      child: Text('bi_chat_send_confirm'.tr),
-                    ),
-                  ],
-                ),
-        ),
-      );
-      if (confirmed != true || !mounted || !widget.isCurrent()) return;
-      final userMessage = _pendingUser?.content == prompt &&
+      final userMessage =
+          _pendingUser?.content == prompt &&
               _pendingUser?.period?.start == selectedPeriod.start &&
               _pendingUser?.period?.end == selectedPeriod.end
           ? _pendingUser!
@@ -390,15 +741,22 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
       setState(() {
         _messages.add(userMessage);
         _conversationPeriod = selectedPeriod;
-        if (suggestion == null) _input.clear();
+        _cacheHistory();
+        if (suggestion == null) {
+          _input.clear();
+          _replyTo = null;
+        }
       });
+      setState(() => _awaitingResponse = true);
       final answer = await _provider.respond(
         context: requestContext,
         snapshot: snapshot,
         messages: history,
         language: Get.locale?.languageCode ?? 'en',
+        messageId: userMessage.id,
       );
       if (!mounted || !widget.isCurrent()) return;
+      setState(() => _awaitingResponse = false);
       final aiMessage = newAiChatMessage('assistant', answer);
       try {
         await _history.save(widget.businessContext.businessId, aiMessage);
@@ -417,7 +775,10 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
         return;
       }
       if (!mounted || !widget.isCurrent()) return;
-      setState(() => _messages.add(aiMessage));
+      setState(() {
+        _messages.add(aiMessage);
+        _cacheHistory();
+      });
     } catch (e, stack) {
       debugPrint('Business AI request failed: $e');
       debugPrintStack(stackTrace: stack);
@@ -431,8 +792,24 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
                         'permission-denied' ||
                         'unauthenticated' => 'bi_chat_access_error'.tr,
                         'invalid-argument' => 'bi_chat_period_error'.tr,
-                        'failed-precondition' => 'bi_chat_snapshot_error'.tr,
-                        'resource-exhausted' => 'bi_chat_limit_error'.tr,
+                        'failed-precondition' =>
+                          e.details is Map &&
+                                  (e.details as Map)['reason'] ==
+                                      'ai-transaction-category'
+                              ? 'bi_transaction_category_error'.tr
+                              : e.details is Map &&
+                                    (e.details as Map)['reason'] ==
+                                        'ai-model-unavailable'
+                              ? 'bi_chat_model_unavailable'.tr
+                              : 'bi_chat_snapshot_error'.tr,
+                        'unavailable' || 'deadline-exceeded' =>
+                          (isTransactionCommand(prompt) ||
+                                  isTransactionFollowUp)
+                              ? 'bi_transaction_uncertain'.tr
+                              : 'bi_chat_server_error'.tr,
+                        'resource-exhausted' => aiResourceLimitMessageKey(
+                          e.message,
+                        ).tr,
                         'not-found' ||
                         'unimplemented' => 'bi_chat_not_configured'.tr,
                         _ => 'bi_chat_server_error'.tr,
@@ -444,8 +821,356 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _awaitingResponse = false;
+        });
+      }
     }
+  }
+
+  bool _canCreateDraft(AiDocumentDraft draft) {
+    final module = switch (draft.kind) {
+      AiDocumentKind.quotation => 'quotations',
+      AiDocumentKind.receipt => 'receipts',
+      _ => 'invoices',
+    };
+    return widget.isCurrent() &&
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.businessId == widget.businessContext.businessId &&
+        BusinessAccessService.can(module, 'create');
+  }
+
+  Future<bool> _recordDocumentRequest(String prompt) async {
+    final content = encodeDocumentHistoryEvent(prompt);
+    final message = _pendingDocumentRequest?.content == content
+        ? _pendingDocumentRequest!
+        : newAiChatMessage('user', content);
+    _pendingDocumentRequest = message;
+    try {
+      await _history.save(widget.businessContext.businessId, message);
+      if (!mounted || !widget.isCurrent()) return false;
+      _pendingDocumentRequest = null;
+      setState(() {
+        _messages.add(message);
+        _cacheHistory();
+      });
+      return true;
+    } catch (error, stack) {
+      debugPrint('Document request history save failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_question_unsaved'.tr)));
+      }
+      return false;
+    }
+  }
+
+  Future<void> _recordDocumentResult(String text, {String? invoiceId}) async {
+    final message = newAiChatMessage(
+      'assistant',
+      encodeBoundedDocumentHistoryEvent(
+        text,
+        truncatedNotice: 'bi_document_history_truncated'.tr,
+        invoiceId: invoiceId,
+      ),
+    );
+    try {
+      await _history.save(widget.businessContext.businessId, message);
+      if (!mounted || !widget.isCurrent()) return;
+      setState(() {
+        _messages.add(message);
+        _cacheHistory();
+      });
+    } catch (error, stack) {
+      debugPrint('Document result history save failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        setState(() {
+          _messages.add(message);
+          _unsavedAnswer = message;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_answer_unsaved'.tr)));
+      }
+    }
+  }
+
+  Future<Product?> _pickInvoiceStock() async {
+    try {
+      if (!_canCreateDraft(
+        const AiDocumentDraft(kind: AiDocumentKind.invoice),
+      )) {
+        throw StateError('Invoice access changed');
+      }
+      final customPicker = widget.invoiceStockPicker;
+      if (customPicker != null) return await customPicker();
+      final result = await StockService.current().products
+          .orderBy('name')
+          .get(const GetOptions(source: Source.server));
+      final products = result.docs.map(Product.fromDoc).toList();
+      if (!mounted ||
+          !_canCreateDraft(
+            const AiDocumentDraft(kind: AiDocumentKind.invoice),
+          )) {
+        throw StateError('Invoice access changed');
+      }
+      final selected = await pickProduct(context, products, trackedOnly: true);
+      if (!mounted ||
+          !_canCreateDraft(
+            const AiDocumentDraft(kind: AiDocumentKind.invoice),
+          )) {
+        throw StateError('Invoice access changed');
+      }
+      return selected;
+    } catch (error, stack) {
+      debugPrint('Invoice stock selection failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_invoice_stock_error'.tr)));
+      }
+      return null;
+    }
+  }
+
+  Future<void> _saveGuidedInvoice(AiDocumentDraft draft) async {
+    if (_openingDraft || _saveInvoice == null) return;
+    setState(() => _openingDraft = true);
+    try {
+      final id = await _saveInvoice!(draft);
+      if (!mounted || !widget.isCurrent()) return;
+      setState(() {
+        _guidingInvoice = false;
+        _invoiceSaveFailed = false;
+      });
+      await _recordDocumentResult(
+        '${'bi_invoice_saved'.tr}\n${formatAiInvoiceSummary(draft)}',
+        invoiceId: id,
+      );
+    } catch (error, stack) {
+      debugPrint('Guided invoice save failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        setState(() => _invoiceSaveFailed = true);
+        final message = error is StockException
+            ? stockErrorText(error)
+            : 'bi_invoice_save_error'.tr;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _openingDraft = false);
+    }
+  }
+
+  Future<void> _savedInvoicePdf(String id, {required bool save}) async {
+    if (_openingDraft) return;
+    setState(() => _openingDraft = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      bool hasAccess() =>
+          uid != null &&
+          FirebaseAuth.instance.currentUser?.uid == uid &&
+          widget.isCurrent() &&
+          BusinessAccessService.hasBusinessAccess &&
+          BusinessAccessService.businessId ==
+              widget.businessContext.businessId &&
+          BusinessAccessService.can('invoices', 'view');
+      if (!hasAccess()) throw StateError('Invoice access changed');
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.businessContext.businessId)
+          .collection('invoices')
+          .doc(id)
+          .get(const GetOptions(source: Source.server));
+      if (!mounted || !hasAccess()) throw StateError('Invoice access changed');
+      final data = doc.data();
+      if (data == null || data['kind'] != 'invoice') {
+        throw StateError('Invoice is unavailable');
+      }
+      final bytes = await InvoicePdf.generateBytes(savedInvoicePdfData(data));
+      if (!mounted || !hasAccess()) throw StateError('Invoice access changed');
+      if (save) {
+        final path = await saveInvoicePdfToDevice(bytes, id);
+        if (mounted && hasAccess()) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${'bi_invoice_pdf_saved'.tr}: $path')),
+          );
+        }
+      } else {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text('bi_invoice_pdf_preview'.tr)),
+              body: PdfPreview(
+                build: (_) async => bytes,
+                canChangePageFormat: false,
+                canChangeOrientation: false,
+                canDebug: false,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (error, stack) {
+      debugPrint('Saved invoice PDF failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_invoice_pdf_error'.tr)));
+      }
+    } finally {
+      if (mounted) setState(() => _openingDraft = false);
+    }
+  }
+
+  Future<void> _editSavedInvoice(String id) async {
+    if (_openingDraft) return;
+    setState(() => _openingDraft = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      bool hasAccess() =>
+          uid != null &&
+          FirebaseAuth.instance.currentUser?.uid == uid &&
+          widget.isCurrent() &&
+          BusinessAccessService.hasBusinessAccess &&
+          BusinessAccessService.businessId ==
+              widget.businessContext.businessId &&
+          BusinessAccessService.can('invoices', 'view') &&
+          BusinessAccessService.can('invoices', 'edit');
+      if (!hasAccess()) throw StateError('Invoice access changed');
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.businessContext.businessId)
+          .collection('invoices')
+          .doc(id)
+          .get(const GetOptions(source: Source.server));
+      if (!mounted || !hasAccess()) throw StateError('Invoice access changed');
+      final data = doc.data();
+      if (data == null || data['kind'] != 'invoice') {
+        throw StateError('Invoice is unavailable');
+      }
+      if (invoiceHasStockLinks(data)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('bi_invoice_stock_edit_unavailable'.tr)),
+        );
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => InvoicePage(
+            invoice: doc,
+            aiEditBusinessId: widget.businessContext.businessId,
+            aiEditUserId: uid,
+          ),
+        ),
+      );
+    } catch (error, stack) {
+      debugPrint('Edit saved invoice failed: $error');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_invoice_open_error'.tr)));
+      }
+    } finally {
+      if (mounted) setState(() => _openingDraft = false);
+    }
+  }
+
+  Future<void> _openDraft(
+    AiDocumentDraft draft, {
+    required String prompt,
+    bool clearInput = false,
+  }) async {
+    if (_busy || _openingDraft) return;
+    if (!_canCreateDraft(draft)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('bi_access_error'.tr)));
+      return;
+    }
+
+    setState(() => _openingDraft = true);
+    try {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('bi_draft_title'.tr),
+          content: Text(
+            draft.kind == AiDocumentKind.receipt
+                ? 'bi_draft_receipt_notice'.tr
+                : 'bi_draft_notice'.tr,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('cancel'.tr),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('bi_draft_open'.tr),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || proceed != true) return;
+      if (!_canCreateDraft(draft)) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_access_error'.tr)));
+        return;
+      }
+      if (!await _recordDocumentRequest(prompt) ||
+          !mounted ||
+          !_canCreateDraft(draft)) {
+        return;
+      }
+      await _recordDocumentResult('bi_document_form_opened'.tr);
+      if (!mounted || !_canCreateDraft(draft)) return;
+      if (clearInput) _input.clear();
+      if (_guidingInvoice) setState(() => _guidingInvoice = false);
+      final page = switch (draft.kind) {
+        AiDocumentKind.invoice ||
+        AiDocumentKind.proforma => InvoicePage(aiDraft: draft),
+        AiDocumentKind.quotation => QuotationPage(aiDraft: draft),
+        AiDocumentKind.advance => AdvanceInvoicePage(aiDraft: draft),
+        AiDocumentKind.receipt => AddReceiptPage(aiDraft: draft),
+      };
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => page));
+    } finally {
+      if (mounted) setState(() => _openingDraft = false);
+    }
+  }
+
+  Future<void> openVoiceDraft(AiDocumentDraft draft) async {
+    if (_loading ||
+        _historyError != null ||
+        _unsavedAnswer != null ||
+        _busy ||
+        _openingDraft ||
+        !widget.isCurrent()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('bi_voice_draft_unavailable'.tr)),
+        );
+      }
+      return;
+    }
+    await _openDraft(
+      draft,
+      prompt: 'Voice document request: ${draft.kind.name}',
+    );
   }
 
   Future<void> _retryAnswer() async {
@@ -454,7 +1179,12 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
     setState(() => _busy = true);
     try {
       await _history.save(widget.businessContext.businessId, message);
-      if (mounted && widget.isCurrent()) setState(() => _unsavedAnswer = null);
+      if (mounted && widget.isCurrent()) {
+        setState(() {
+          _unsavedAnswer = null;
+          _cacheHistory();
+        });
+      }
     } catch (error, stack) {
       debugPrint('Business AI answer retry failed: $error');
       debugPrintStack(stackTrace: stack);
@@ -468,165 +1198,686 @@ class _BusinessAiChatState extends State<BusinessAiChat> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Expanded(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _historyError != null
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _historyError!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    TextButton(
-                      onPressed: _loadHistory,
-                      child: Text('refresh'.tr),
-                    ),
-                  ],
-                ),
-              )
-            : ListView(
-                reverse: true,
-                padding: const EdgeInsets.all(16),
-                children: [
-                  for (final message in _messages.reversed)
-                    Align(
-                      alignment: message.role == 'user'
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.fromLTRB(14, 11, 14, 7),
-                        decoration: BoxDecoration(
-                          color: message.role == 'user'
-                              ? const Color(0xFF1757A5)
-                              : const Color(0xFF263246),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SelectableText(
-                              message.content,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat.Hm().format(message.createdAt),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (_hasMore)
-                    Center(
-                      child: TextButton(
-                        onPressed: _loadingOlder ? null : _loadOlder,
-                        child: Text('bi_load_older'.tr),
-                      ),
-                    ),
-                  if (_messages.isEmpty)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'bi_chat_empty'.tr,
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 12),
-                        for (final key in [
-                          'bi_question_performance',
-                          if (widget
-                              .businessContext
-                              .expenseCategories
-                              .isNotEmpty)
-                            'bi_question_expenses',
-                          if (widget.businessContext.lowStock?.isNotEmpty ==
-                              true)
-                            'bi_question_stock',
-                          if (widget.businessContext.pos?.products.isNotEmpty ==
-                              true)
-                            'bi_question_products',
-                          if (widget.businessContext.tasks != null &&
-                              (widget.businessContext.tasks!.open > 0 ||
-                                  widget.businessContext.tasks!.awaitingReview >
-                                      0))
-                            'bi_question_tasks',
-                        ])
-                          ActionChip(
-                            label: Text(key.tr),
-                            onPressed: _busy ? null : () => _send(key.tr),
-                          ),
-                      ],
-                    ),
-                ],
-              ),
-      ),
-      if (_unsavedAnswer != null)
-        TextButton.icon(
-          onPressed: _busy ? null : _retryAnswer,
-          icon: const Icon(Icons.cloud_upload_outlined),
-          label: Text('bi_retry_save'.tr),
-        ),
-      if (_busy) const LinearProgressIndicator(),
-      SafeArea(
-        top: false,
+  Future<List<String>> _loadTransactionCategories(String type) async {
+    if (!widget.isCurrent() ||
+        !BusinessAccessService.hasBusinessAccess ||
+        !BusinessAccessService.isOwner.value ||
+        BusinessAccessService.businessId != widget.businessContext.businessId) {
+      throw StateError('Business owner access is unavailable.');
+    }
+    final loader = widget.transactionCategoryLoader;
+    final names = <String>{};
+    if (loader != null) {
+      names.addAll(await loader(type));
+    } else {
+      final result = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.businessContext.businessId)
+          .collection('categories')
+          .where('type', isEqualTo: type)
+          .get(const GetOptions(source: Source.server));
+      for (final doc in result.docs) {
+        final name = doc.data()['name'];
+        if (name is String) names.add(name);
+      }
+    }
+    if (!widget.isCurrent() ||
+        !BusinessAccessService.hasBusinessAccess ||
+        !BusinessAccessService.isOwner.value ||
+        BusinessAccessService.businessId != widget.businessContext.businessId) {
+      throw StateError('Business owner access changed.');
+    }
+    return names
+        .where(
+          (name) =>
+              name.isNotEmpty &&
+              name == name.trim() &&
+              name.length <= 100 &&
+              !RegExp(r'[;\r\n]').hasMatch(name),
+        )
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  void _submitTransactionSuggestion(String command) {
+    if (!widget.isCurrent() ||
+        !BusinessAccessService.hasBusinessAccess ||
+        !BusinessAccessService.isOwner.value ||
+        BusinessAccessService.businessId != widget.businessContext.businessId) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('bi_chat_access_error'.tr)));
+      return;
+    }
+    _send(command);
+  }
+
+  Future<void> _pickEmoji() async {
+    final emoji = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1C1732),
+      builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Row(
+          padding: const EdgeInsets.all(20),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _input,
-                  enabled:
-                      !_loading &&
-                      _historyError == null &&
-                      _unsavedAnswer == null,
-                  maxLength: 2000,
-                  minLines: 1,
-                  maxLines: 4,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'bi_chat_hint'.tr,
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    counterText: '',
-                    filled: true,
-                    fillColor: const Color(0xFF263246),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+              for (final emoji in [
+                '😊',
+                '👍',
+                '💡',
+                '📈',
+                '📊',
+                '💰',
+                '🎯',
+                '✅',
+                '🙏',
+                '✨',
+              ])
+                IconButton(
+                  tooltip: emoji,
+                  onPressed: () => Navigator.pop(context, emoji),
+                  icon: Text(emoji, style: const TextStyle(fontSize: 25)),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed:
-                    _busy ||
-                        _loading ||
-                        _historyError != null ||
-                        _unsavedAnswer != null
-                    ? null
-                    : () => _send(),
-                icon: const Icon(Icons.send),
-                tooltip: 'bi_chat_send_confirm'.tr,
-              ),
             ],
           ),
         ),
       ),
-    ],
-  );
+    );
+    if (emoji == null || !mounted) return;
+    final value = _input.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final text = value.text.replaceRange(start, end, emoji);
+    if (text.length > 2000) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('bi_chat_too_long'.tr)));
+      return;
+    }
+    _input.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingTransaction = pendingAiTransaction(
+      _messages
+          .map((message) => {'role': message.role, 'content': message.content})
+          .toList(),
+    );
+    final showTransactionSuggestions =
+        !_guidingInvoice &&
+        pendingTransaction != null &&
+        widget.isCurrent() &&
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.isOwner.value &&
+        BusinessAccessService.businessId == widget.businessContext.businessId;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF080817), Color(0xFF17102D)],
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: _loading && _messages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : _historyError != null && _messages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _historyError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        if (_historyError != null && _messages.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _loading ? null : _loadHistory,
+                            icon: const Icon(Icons.refresh),
+                            label: Text('bi_history_error'.tr),
+                          ),
+                        TextButton(
+                          onPressed: _loadHistory,
+                          child: Text('refresh'.tr),
+                        ),
+                      ],
+                    ),
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) => ListView(
+                      reverse: true,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      children: [
+                        if (_documentReview case final AiDocumentReview review)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 520),
+                              child: Card(
+                                color: const Color(0xFF25213D),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'bi_document_review_title'.tr,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'bi_document_review_notice'.tr,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 240,
+                                        ),
+                                        child: SingleChildScrollView(
+                                          child: SelectableText(
+                                            const JsonEncoder.withIndent(
+                                              '  ',
+                                            ).convert(review.details),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Wrap(
+                                        spacing: 8,
+                                        children: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                _resolveDocumentReview(false),
+                                            child: Text('cancel'.tr),
+                                          ),
+                                          FilledButton(
+                                            onPressed: widget.isCurrent()
+                                                ? () => _resolveDocumentReview(
+                                                    true,
+                                                  )
+                                                : null,
+                                            child: Text(
+                                              'bi_document_review_send'.tr,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_awaitingResponse) const IsherThinkingIndicator(),
+                        if (_guidingInvoice)
+                          AiInvoiceGuide(
+                            enabled:
+                                !_busy && !_openingDraft && widget.isCurrent(),
+                            onCancel: () =>
+                                setState(() => _guidingInvoice = false),
+                            pickStock: _pickInvoiceStock,
+                            onComplete: _saveGuidedInvoice,
+                          ),
+                        if (_guidingInvoice && _invoiceSaveFailed)
+                          Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Text(
+                              'bi_invoice_save_error'.tr,
+                              style: const TextStyle(color: Colors.redAccent),
+                            ),
+                          ),
+                        if (showTransactionSuggestions)
+                          AiTransactionSuggestions(
+                            key: ValueKey(_messages.last.id),
+                            request: pendingTransaction,
+                            loadCategories: _loadTransactionCategories,
+                            enabled:
+                                !_busy &&
+                                !_loading &&
+                                _historyError == null &&
+                                _unsavedAnswer == null,
+                            onSubmit: _submitTransactionSuggestion,
+                          ),
+                        for (final message in _messages.reversed)
+                          GestureDetector(
+                            key: ValueKey('ai_message_${message.id}'),
+                            onHorizontalDragEnd: (details) {
+                              if ((details.primaryVelocity ?? 0) > 150) {
+                                _startReply(message);
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: message.role == 'user'
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  if (message.role != 'user') ...[
+                                    const IsherAvatar(size: 32),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Flexible(
+                                    child: Container(
+                                      constraints: BoxConstraints(
+                                        maxWidth: (constraints.maxWidth * 0.72)
+                                            .clamp(0.0, 420.0)
+                                            .toDouble(),
+                                      ),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        9,
+                                        12,
+                                        6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: message.role == 'user'
+                                              ? const [
+                                                  Color(0xFF6543BD),
+                                                  Color(0xFF374FA1),
+                                                ]
+                                              : const [
+                                                  Color(0xFF25213D),
+                                                  Color(0xFF1B1A30),
+                                                ],
+                                        ),
+                                        border: Border.all(
+                                          color: message.role == 'user'
+                                              ? const Color(0xFF8E79DD)
+                                              : const Color(0xFF3A3353),
+                                        ),
+                                        borderRadius: BorderRadius.circular(17),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SelectableText(
+                                            showTransactionSuggestions &&
+                                                    identical(
+                                                      message,
+                                                      _messages.last,
+                                                    )
+                                                ? 'bi_transaction_suggestion_prompt'
+                                                      .tr
+                                                : decodeDocumentHistoryEvent(
+                                                        message,
+                                                      )?.text ??
+                                                      message.content,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                          if (decodeDocumentHistoryEvent(
+                                                message,
+                                              )?.invoiceId
+                                              case final String invoiceId)
+                                            Wrap(
+                                              spacing: 4,
+                                              children: [
+                                                TextButton(
+                                                  onPressed: _openingDraft
+                                                      ? null
+                                                      : () => _editSavedInvoice(
+                                                          invoiceId,
+                                                        ),
+                                                  child: Text(
+                                                    'bi_invoice_edit_saved'.tr,
+                                                  ),
+                                                ),
+                                                TextButton(
+                                                  onPressed: _openingDraft
+                                                      ? null
+                                                      : () => _savedInvoicePdf(
+                                                          invoiceId,
+                                                          save: false,
+                                                        ),
+                                                  child: Text(
+                                                    'bi_invoice_pdf_preview'.tr,
+                                                  ),
+                                                ),
+                                                TextButton(
+                                                  onPressed: _openingDraft
+                                                      ? null
+                                                      : () => _savedInvoicePdf(
+                                                          invoiceId,
+                                                          save: true,
+                                                        ),
+                                                  child: Text(
+                                                    'bi_invoice_pdf_save'.tr,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          Wrap(
+                                            alignment: WrapAlignment.end,
+                                            children: [
+                                              IconButton(
+                                                tooltip: 'bi_chat_reply'.tr,
+                                                onPressed: _canEditMessage
+                                                    ? () => _startReply(message)
+                                                    : null,
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                icon: const Icon(
+                                                  Icons.reply,
+                                                  size: 18,
+                                                ),
+                                                color: Colors.white70,
+                                              ),
+                                              if (message.role == 'user' &&
+                                                  decodeDocumentHistoryEvent(
+                                                        message,
+                                                      ) ==
+                                                      null &&
+                                                  _history is AiHistoryEditing)
+                                                IconButton(
+                                                  tooltip:
+                                                      'bi_chat_edit_title'.tr,
+                                                  onPressed: _canEditMessage
+                                                      ? () => _editMessage(
+                                                          message,
+                                                        )
+                                                      : null,
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  icon: const Icon(
+                                                    Icons.edit_outlined,
+                                                    size: 18,
+                                                  ),
+                                                  color: Colors.white70,
+                                                ),
+                                              if (_history is AiHistoryEditing)
+                                                IconButton(
+                                                  tooltip: 'bi_chat_delete'.tr,
+                                                  onPressed: _canEditMessage
+                                                      ? () => _deleteMessage(
+                                                          message,
+                                                        )
+                                                      : null,
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  icon: const Icon(
+                                                    Icons.delete_outline,
+                                                    size: 18,
+                                                  ),
+                                                  color: Colors.white70,
+                                                ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: Text(
+                                              DateFormat.Hm().format(
+                                                message.createdAt,
+                                              ),
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_hasMore)
+                          Center(
+                            child: TextButton(
+                              onPressed:
+                                  _loadingOlder ||
+                                      _guidingInvoice ||
+                                      _documentReview != null ||
+                                      _openingDraft ||
+                                      _loading ||
+                                      _historyError != null
+                                  ? null
+                                  : _loadOlder,
+                              child: Text('bi_load_older'.tr),
+                            ),
+                          ),
+                        if (_messages.isEmpty && !_guidingInvoice)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const IsherAvatar(size: 76),
+                              const SizedBox(height: 18),
+                              const Text(
+                                'Isher AI',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'bi_chat_empty'.tr,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              const SizedBox(height: 12),
+                              for (final key in [
+                                'bi_question_performance',
+                                if (widget
+                                    .businessContext
+                                    .expenseCategories
+                                    .isNotEmpty)
+                                  'bi_question_expenses',
+                                if (widget
+                                        .businessContext
+                                        .lowStock
+                                        ?.isNotEmpty ==
+                                    true)
+                                  'bi_question_stock',
+                                if (widget
+                                        .businessContext
+                                        .pos
+                                        ?.products
+                                        .isNotEmpty ==
+                                    true)
+                                  'bi_question_products',
+                                if (widget.businessContext.tasks != null &&
+                                    (widget.businessContext.tasks!.open > 0 ||
+                                        widget
+                                                .businessContext
+                                                .tasks!
+                                                .awaitingReview >
+                                            0))
+                                  'bi_question_tasks',
+                              ])
+                                ActionChip(
+                                  label: Text(key.tr),
+                                  labelStyle: const TextStyle(
+                                    color: Color(0xFFE6DEFF),
+                                  ),
+                                  backgroundColor: const Color(0xFF29213F),
+                                  side: const BorderSide(
+                                    color: Color(0xFF51446F),
+                                  ),
+                                  onPressed: _busy ? null : () => _send(key.tr),
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+          if (_unsavedAnswer != null)
+            TextButton.icon(
+              onPressed: _busy ? null : _retryAnswer,
+              icon: const Icon(Icons.cloud_upload_outlined),
+              label: Text('bi_retry_save'.tr),
+            ),
+          if ((_busy && !_awaitingResponse) ||
+              (_loading && _messages.isNotEmpty))
+            const LinearProgressIndicator(
+              color: Color(0xFFB9A4FF),
+              backgroundColor: Color(0xFF241D3A),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'bi_chat_data_notice'.tr,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
+          ),
+          if (_replyTo case final AiChatMessage reply)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.reply, color: Color(0xFFC7A9FF), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${'bi_chat_reply'.tr}: ${decodeDocumentHistoryEvent(reply)?.text ?? reply.content}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'cancel'.tr,
+                    onPressed: () => setState(() => _replyTo = null),
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'bi_chat_emoji'.tr,
+                    onPressed:
+                        _guidingInvoice ||
+                            _openingDraft ||
+                            _loading ||
+                            _historyError != null ||
+                            _unsavedAnswer != null
+                        ? null
+                        : _pickEmoji,
+                    icon: const Icon(Icons.emoji_emotions_outlined),
+                    color: const Color(0xFFB9A4FF),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      focusNode: _inputFocus,
+                      enabled:
+                          !_guidingInvoice &&
+                          _documentReview == null &&
+                          !_openingDraft &&
+                          !_loading &&
+                          _historyError == null &&
+                          _unsavedAnswer == null,
+                      maxLength: 2000,
+                      minLines: 1,
+                      maxLines: 4,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                      cursorColor: const Color(0xFFC7A9FF),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      decoration: InputDecoration(
+                        hintText: 'bi_chat_hint'.tr,
+                        hintStyle: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                        counterText: '',
+                        filled: true,
+                        fillColor: const Color(0xFF1D1A2B),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF342D4F),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF8E79DD),
+                            width: 1.2,
+                          ),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed:
+                        _busy ||
+                            _guidingInvoice ||
+                            _openingDraft ||
+                            _loading ||
+                            _historyError != null ||
+                            _unsavedAnswer != null
+                        ? null
+                        : () => _send(),
+                    icon: const Icon(Icons.send),
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF7656D6),
+                      foregroundColor: Colors.white,
+                    ),
+                    tooltip: 'bi_chat_send_confirm'.tr,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -29,6 +29,13 @@ class _AdminGroup {
 const _groups = <_AdminGroup>[
   _AdminGroup('hub_group_insights', [
     _AdminItem(
+      'bi_quota_admin_title',
+      'bi_quota_admin_desc',
+      Icons.auto_awesome,
+      AppRoutes.adminAiQuota,
+      Color(0xFF5433BC),
+    ),
+    _AdminItem(
       'admin_manage_analytics',
       'hub_desc_analytics',
       Icons.insights_rounded,

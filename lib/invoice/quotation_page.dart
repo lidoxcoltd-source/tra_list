@@ -11,10 +11,12 @@ import 'package:tra_list/services/pdf/quotation_pdf.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/notification_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
+import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 
 class QuotationPage extends StatefulWidget {
   final DocumentSnapshot<Map<String, dynamic>>? quotation; // for editing
-  const QuotationPage({super.key, this.quotation});
+  const QuotationPage({super.key, this.quotation, this.aiDraft});
+  final AiDocumentDraft? aiDraft;
 
   @override
   State<QuotationPage> createState() => _QuotationPageState();
@@ -54,6 +56,26 @@ class _QuotationPageState extends State<QuotationPage> {
   void initState() {
     super.initState();
     _loadCompanyAndColors();
+
+    final draft = widget.aiDraft;
+    if (widget.quotation == null && draft != null) {
+      _clientController.text = draft.customer ?? '';
+      if (draft.invoiceItems.isNotEmpty) {
+        _items.addAll(draft.invoiceItems.map((item) => {
+          'desc': item.description,
+          'qty': item.quantity,
+          'unit': item.unitPrice,
+        }));
+      } else if (draft.description != null &&
+          draft.quantity != null &&
+          draft.unitPrice != null) {
+        _items.add({
+          'desc': draft.description!,
+          'qty': draft.quantity!,
+          'unit': draft.unitPrice!,
+        });
+      }
+    }
 
     if (widget.quotation != null) {
       final data = widget.quotation!.data();

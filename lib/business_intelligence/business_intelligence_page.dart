@@ -9,12 +9,16 @@ import 'package:share_plus/share_plus.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/business_context_service.dart';
 import 'package:tra_list/business_intelligence/ai_assistant_page.dart';
+import 'package:tra_list/business_intelligence/ai_history.dart';
+import 'package:tra_list/business_intelligence/ai_quota_page.dart';
+import 'package:tra_list/business_intelligence/isher_welcome_screen.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class BusinessIntelligenceController extends GetxController {
   final _service = BusinessContextService();
+  final historyCache = AiHistoryCache();
   final context = Rxn<BusinessContext>();
   final loading = false.obs;
   final error = ''.obs;
@@ -49,6 +53,7 @@ class BusinessIntelligenceController extends GetxController {
 
   Future<void> refreshContext() async {
     final request = ++_request;
+    historyCache.clear();
     context.value = null;
     error.value = '';
     if (!BusinessAccessService.hasBusinessAccess ||
@@ -86,6 +91,7 @@ class BusinessIntelligenceController extends GetxController {
   @override
   void onClose() {
     _request++;
+    historyCache.clear();
     _accessWorker?.dispose();
     _authSubscription?.cancel();
     super.onClose();
@@ -93,7 +99,9 @@ class BusinessIntelligenceController extends GetxController {
 }
 
 class BusinessIntelligencePage extends StatefulWidget {
-  const BusinessIntelligencePage({super.key});
+  const BusinessIntelligencePage({super.key, this.initialTab});
+
+  final AiAssistantTab? initialTab;
 
   @override
   State<BusinessIntelligencePage> createState() =>
@@ -261,8 +269,328 @@ class _BusinessIntelligencePageState extends State<BusinessIntelligencePage> {
     }
   }
 
+  void _openAssistant(AiAssistantTab tab) {
+    Get.to(
+      () => AiAssistantPage(
+        business: controller.context,
+        loading: controller.loading,
+        error: controller.error,
+        historyCache: controller.historyCache,
+        initialTab: tab,
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => widget.initialTab != null
+      ? AiAssistantPage(
+          business: controller.context,
+          loading: controller.loading,
+          error: controller.error,
+          historyCache: controller.historyCache,
+          initialTab: widget.initialTab!,
+        )
+      : Obx(
+    () => IsherWelcomeScreen(
+      loading: controller.loading.value,
+      error: controller.error.value,
+      ready: controller.context.value != null,
+      businessName: BusinessAccessService.businessName.value,
+      businessId:
+          BusinessAccessService.hasBusinessAccess &&
+              BusinessAccessService.can('analytics', 'view') &&
+              FirebaseAuth.instance.currentUser != null
+          ? BusinessAccessService.businessUid.value
+          : null,
+      greetingReady:
+          BusinessAccessService.hasBusinessAccess &&
+          BusinessAccessService.can('analytics', 'view') &&
+          FirebaseAuth.instance.currentUser != null,
+      onRetry: controller.refreshContext,
+      onChat: () => _openAssistant(AiAssistantTab.chat),
+      onVoice: () => _openAssistant(AiAssistantTab.voice),
+      onUsage: () => Get.to(() => const AiQuotaPage()),
+      onReport: () => Get.to(() => _businessOverview()),
+    ),
+  );
+
+  Widget _businessOverview() => Scaffold(
+    backgroundColor: const Color(0xFF080817),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFF080817),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      title: const Text(
+        'Isher AI',
+        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+      ),
+      actions: [
+        IconButton(
+          tooltip: 'bi_quota_title'.tr,
+          onPressed: () => Get.to(() => const AiQuotaPage()),
+          icon: const Icon(Icons.data_usage_rounded),
+        ),
+      ],
+    ),
+    body: Obx(() {
+      final data = controller.context.value;
+      final loading = controller.loading.value;
+      final error = controller.error.value;
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF080817), Color(0xFF101127), Color(0xFF17102D)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                children: [
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Container(
+                      width: 164,
+                      height: 164,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const RadialGradient(
+                          center: Alignment(-0.45, -0.5),
+                          radius: 0.9,
+                          colors: [
+                            Color(0xFFB9A4FF),
+                            Color(0xFF6B3EC0),
+                            Color(0xFF15122D),
+                            Color(0xFF2878FF),
+                            Color(0xFF080817),
+                          ],
+                          stops: [0, 0.24, 0.58, 0.85, 1],
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFFAB92FF).withValues(alpha: 0.4),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFF7048ED,
+                            ).withValues(alpha: 0.28),
+                            blurRadius: 55,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 98,
+                          height: 98,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const RadialGradient(
+                              center: Alignment(-0.3, -0.5),
+                              colors: [Color(0xFF443B75), Color(0xFF090817)],
+                            ),
+                            border: Border.all(
+                              color: const Color(
+                                0xFFB9A4FF,
+                              ).withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 36,
+                            color: Color(0xFFE6DEFF),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'bi_welcome_title'.tr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'bi_welcome_subtitle'.tr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFB3B2C7),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (loading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (error.isNotEmpty || data == null)
+                    Column(
+                      children: [
+                        Text(
+                          error.isEmpty ? 'bi_access_error'.tr : error,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        TextButton.icon(
+                          onPressed: controller.refreshContext,
+                          icon: const Icon(Icons.refresh),
+                          label: Text('refresh'.tr),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF26213E),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: const Color(0xFF40345D)),
+                        ),
+                        child: Text(
+                          data.businessName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFD8CCFF),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final chat = _modeCard(
+                          icon: Icons.chat_bubble_rounded,
+                          title: 'bi_mode_chat'.tr,
+                          subtitle: 'bi_mode_chat_desc'.tr,
+                          accent: const Color(0xFFB9A4FF),
+                          onTap: () => _openAssistant(AiAssistantTab.chat),
+                        );
+                        final voice = _modeCard(
+                          icon: Icons.call_rounded,
+                          title: 'bi_mode_voice'.tr,
+                          subtitle: 'bi_mode_voice_desc'.tr,
+                          accent: const Color(0xFF00D9FF),
+                          onTap: () => _openAssistant(AiAssistantTab.voice),
+                        );
+                        if (constraints.maxWidth < 360 ||
+                            MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [chat, const SizedBox(height: 12), voice],
+                          );
+                        }
+                        return IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: chat),
+                              const SizedBox(width: 12),
+                              Expanded(child: voice),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton.icon(
+                      onPressed: () => Get.to(() => _reportPage()),
+                      icon: const Icon(Icons.bar_chart_rounded, size: 19),
+                      label: Text('bi_view_report'.tr),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFC6BBE8),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }),
+  );
+
+  Widget _modeCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color accent,
+    required VoidCallback onTap,
+  }) => Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(24),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [accent.withValues(alpha: 0.16), const Color(0xFF17162C)],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: accent.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: accent.withValues(alpha: 0.28)),
+                  ),
+                  child: Icon(icon, color: accent, size: 27),
+                ),
+                const Spacer(),
+                Icon(Icons.arrow_outward_rounded, color: accent, size: 20),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: Color(0xFFB3B2C7),
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _reportPage() => Scaffold(
     appBar: AppBar(title: Text('bi_title'.tr)),
     body: Obx(() {
       final data = controller.context.value;
@@ -435,13 +763,7 @@ class _BusinessIntelligencePageState extends State<BusinessIntelligencePage> {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: () => Get.to(
-                () => AiAssistantPage(
-                  business: controller.context,
-                  loading: controller.loading,
-                  error: controller.error,
-                ),
-              ),
+              onPressed: () => _openAssistant(AiAssistantTab.chat),
               icon: const Icon(Icons.chat_bubble_outline),
               label: Text('bi_open_assistant'.tr),
             ),

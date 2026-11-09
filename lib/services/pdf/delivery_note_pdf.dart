@@ -43,7 +43,7 @@ class DeliveryNotePdf {
     try {
       // Use loadOrCreate to guarantee a doc exists
       final profile = await ProfileService.loadOrCreate();
-      if (profile == null || profile.isEmpty) {
+      if (profile.isEmpty) {
         print('DeliveryNotePdf: profile missing or empty.');
         return data;
       }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
-import '../theme/app_theme.dart';
 import 'market_palette.dart';
 import 'market_service.dart';
 
