@@ -17,7 +17,16 @@ const GREETING_VARIANTS = Object.freeze({
   ],
 });
 
-function greetingText(language, name, variant) {
+function greetingText(language, name, variant, suppliedText) {
+  if (suppliedText !== undefined) {
+    if (typeof suppliedText !== "string" ||
+        !suppliedText.trim() ||
+        suppliedText.length > 1600 ||
+        /[\r\n\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(suppliedText)) {
+      throw new Error("invalid-greeting-text");
+    }
+    return suppliedText.trim();
+  }
   const greetings = GREETING_VARIANTS[language];
   if (!greetings || !Number.isInteger(variant) || variant < 0 || variant >= greetings.length) {
     throw new Error("invalid-greeting");

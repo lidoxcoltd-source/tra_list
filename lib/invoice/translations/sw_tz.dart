@@ -228,6 +228,7 @@ const Map<String, String> swTzTranslations = {
       'Kulinganisha vipindi tofauti bado hakupatikani. Uliza kipindi kimoja kwa wakati.',
   'bi_chat_user': 'Wewe',
   'bi_chat_assistant': 'Msaidizi',
+  'bi_chat_send_button': 'Tuma',
   'bi_chat_send_confirm': 'Tuma kwa AI uliyochagua',
   'bi_chat_too_long': 'Swali lako lisizidi herufi 2,000.',
   'bi_chat_access_error':
@@ -237,6 +238,8 @@ const Map<String, String> swTzTranslations = {
       'Muda wa ripoti umeisha au ruhusa zimebadilika. Andaa na ukague tena.',
   'bi_chat_model_unavailable':
       'Modeli uliyochagua haipatikani tena. Fungua uchaguzi wa modeli na uchague modeli inayopatikana.',
+  'bi_chat_web_search_gemini_required':
+      'Utafiti wa biashara mtandaoni unahitaji modeli ya Gemini. Chagua Gemini kisha ujaribu tena.',
   'bi_chat_limit_error':
       'Kikomo cha maombi au taarifa kimefikiwa. Angalia matumizi ya AI, jaribu baadaye au chagua kipindi kifupi.',
   'bi_chat_quota_exhausted':
@@ -316,7 +319,11 @@ const Map<String, String> swTzTranslations = {
   'bi_retry_save': 'Jaribu kuhifadhi jibu tena',
   'bi_load_older': 'Pakia ujumbe wa zamani',
   'bi_voice_android_only':
-      'Mazungumzo ya sauti yanapatikana kwenye Android pekee kwa sasa.',
+      'Mazungumzo ya sauti yanapatikana kwenye Android na vivinjari vinavyotumika.',
+  'bi_voice_web_provider_unavailable':
+      'Sauti kwenye web inahitaji OpenAI voice iwashwe na msimamizi.',
+  'bi_voice_web_requirements':
+      'Fungua app kwa HTTPS na uruhusu matumizi ya kipaza sauti kivinjari kitakapokuuliza.',
   'bi_voice_title': 'Mazungumzo ya sauti moja kwa moja',
   'bi_voice_welcome': 'Zungumza na msaidizi wako wa biashara',
   'bi_voice_session_title': 'Mazungumzo ya sauti',
@@ -340,6 +347,9 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_transaction_description': 'Maelezo',
   'bi_voice_transaction_today': 'Tarehe: leo wakati wa kuhifadhi.',
   'bi_voice_transaction_chat': 'Endelea kwenye chat',
+  'bi_voice_summary_title': 'Muhtasari wa biashara',
+  'bi_voice_summary_loading':
+      'Naendelea kuandaa ripoti ya biashara. Subiri kidogo.',
   'bi_voice_consent': 'Kubali na uanze',
   'bi_voice_start': 'Anza sauti',
   'bi_voice_live': 'Kipaza sauti kiko wazi. Sauti yako inatumwa kwa @provider.',
@@ -368,12 +378,13 @@ const Map<String, String> swTzTranslations = {
   'isher_usage': 'Matumizi',
   'isher_loading': 'Inaandaa taarifa za biashara...',
   'isher_welcome_title': 'Karibu Isher AI',
-  'isher_welcome_subtitle': 'Msaidizi wako mahiri wa biashara',
+  'isher_welcome_subtitle': 'Msaidizi wako Mahiri wa Biashara',
   'isher_wake_listening': 'Ninasikiliza “Isher” au “Aisha” — gusa kuzima',
   'isher_wake_waiting_choice': 'Ndio, habari? Unataka kuchat au kupiga simu?',
   'isher_wake_responding': 'Isher anajibu...',
   'isher_wake_off': 'Gusa kuwasha Isher asikilize kwenye ukurasa huu',
-  'isher_wake_unavailable': 'Utambuzi wa sauti haupatikani — gusa kujaribu tena',
+  'isher_wake_unavailable':
+      'Utambuzi wa sauti haupatikani — gusa kujaribu tena',
   'isher_wake_privacy':
       'Home tu; huduma ya sauti ya kifaa au kivinjari inaweza kuchakata sauti.',
   'isher_capability_insights': 'Chambua biashara',
@@ -1949,6 +1960,8 @@ const Map<String, String> swTzTranslations = {
   'profile_save_changes': 'Hifadhi Mabadiliko',
   'profile_uploading': 'Inapakia...',
   'profile_company_details': 'Taarifa za biashara',
+  'profile_business_type': 'Aina ya biashara',
+  'profile_business_description': 'Biashara yako inafanya shughuli gani?',
   'profile_payment_details': 'Taarifa za malipo',
   'profile_branding': 'Nembo na rangi',
   'analytics_all': 'Zote',

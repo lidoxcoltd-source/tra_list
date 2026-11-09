@@ -291,28 +291,33 @@ class _BusinessIntelligencePageState extends State<BusinessIntelligencePage> {
           initialTab: widget.initialTab!,
         )
       : Obx(
-    () => IsherWelcomeScreen(
-      loading: controller.loading.value,
-      error: controller.error.value,
-      ready: controller.context.value != null,
-      businessName: BusinessAccessService.businessName.value,
-      businessId:
-          BusinessAccessService.hasBusinessAccess &&
-              BusinessAccessService.can('analytics', 'view') &&
-              FirebaseAuth.instance.currentUser != null
-          ? BusinessAccessService.businessUid.value
-          : null,
-      greetingReady:
-          BusinessAccessService.hasBusinessAccess &&
-          BusinessAccessService.can('analytics', 'view') &&
-          FirebaseAuth.instance.currentUser != null,
-      onRetry: controller.refreshContext,
-      onChat: () => _openAssistant(AiAssistantTab.chat),
-      onVoice: () => _openAssistant(AiAssistantTab.voice),
-      onUsage: () => Get.to(() => const AiQuotaPage()),
-      onReport: () => Get.to(() => _businessOverview()),
-    ),
-  );
+          () => IsherWelcomeScreen(
+            loading: controller.loading.value,
+            error: controller.error.value,
+            ready: controller.context.value != null,
+            businessName: BusinessAccessService.businessName.value,
+            businessId:
+                BusinessAccessService.hasBusinessAccess &&
+                    BusinessAccessService.can('analytics', 'view') &&
+                    FirebaseAuth.instance.currentUser != null
+                ? BusinessAccessService.businessUid.value
+                : null,
+            greetingReady:
+                controller.context.value != null &&
+                BusinessAccessService.hasBusinessAccess &&
+                BusinessAccessService.can('analytics', 'view') &&
+                FirebaseAuth.instance.currentUser != null,
+            businessContext: controller.context.value,
+            greetingName:
+                FirebaseAuth.instance.currentUser?.displayName?.trim() ?? '',
+            greetingUserId: FirebaseAuth.instance.currentUser?.uid,
+            onRetry: controller.refreshContext,
+            onChat: () => _openAssistant(AiAssistantTab.chat),
+            onVoice: () => _openAssistant(AiAssistantTab.voice),
+            onUsage: () => Get.to(() => const AiQuotaPage()),
+            onReport: () => Get.to(() => _businessOverview()),
+          ),
+        );
 
   Widget _businessOverview() => Scaffold(
     backgroundColor: const Color(0xFF080817),

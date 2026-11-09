@@ -4,9 +4,111 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
 import 'package:tra_list/business_intelligence/isher_brand_mark.dart';
 import 'package:tra_list/business_intelligence/isher_greeting_voice.dart';
+
+@visibleForTesting
+bool shouldIntroduceIsher(DateTime? lastGreeting, DateTime now) =>
+    lastGreeting == null ||
+    !lastGreeting.isAfter(now) &&
+        now.difference(lastGreeting) >= const Duration(days: 7);
+
+@visibleForTesting
+String isherWelcomeGreeting({
+  required String language,
+  required String name,
+  required DateTime now,
+  required bool introduce,
+  required BusinessContext? business,
+}) {
+  final sw = language == 'sw';
+  final tanzaniaTime = now.toUtc().add(const Duration(hours: 3));
+  final hour = tanzaniaTime.hour;
+  final String timeOfDay;
+  if (sw) {
+    timeOfDay = hour < 12
+        ? 'asubuhi'
+        : hour < 17
+        ? 'mchana'
+        : hour < 19
+        ? 'jioni'
+        : 'usiku';
+  } else {
+    timeOfDay = hour < 12
+        ? 'morning'
+        : hour < 17
+        ? 'afternoon'
+        : 'evening';
+  }
+  final safeName = name.replaceAll(RegExp(r'[\r\n\t]+'), ' ').trim();
+  final greeting = sw
+      ? safeName.isEmpty
+            ? 'Habari za $timeOfDay.'
+            : 'Habari $safeName, za $timeOfDay.'
+      : 'Good $timeOfDay${safeName.isEmpty ? '' : ', $safeName'}.';
+  final lines = <String>[
+    greeting,
+    if (introduce)
+      sw
+          ? 'Naitwa Isher AI, msaidizi wako wa biashara.'
+          : 'My name is Isher AI, your business assistant.',
+  ];
+  if (business == null) return lines.join(' ');
+
+  final money = NumberFormat('#,##0.##', 'en_US');
+  final period = DateFormat('yyyy-MM').format(business.period.start);
+  lines.add(
+    sw
+        ? 'Muhtasari wa biashara yako kwa kipindi cha $period.'
+        : 'Here is your business summary for $period.',
+  );
+  if (business.income != null) {
+    lines.add(
+      sw
+          ? 'Mapato yaliyorekodiwa ni TZS ${money.format(business.income)}.'
+          : 'Recorded income is TZS ${money.format(business.income)}.',
+    );
+  }
+  if (business.expenses != null) {
+    lines.add(
+      sw
+          ? 'Matumizi yaliyorekodiwa ni TZS ${money.format(business.expenses)}.'
+          : 'Recorded expenses are TZS ${money.format(business.expenses)}.',
+    );
+  }
+  if (business.income != null && business.expenses != null) {
+    lines.add(
+      sw
+          ? 'Salio la fedha, si faida ni TZS ${money.format(business.income! - business.expenses!)}.'
+          : 'Cash flow, not profit, is TZS ${money.format(business.income! - business.expenses!)}.',
+    );
+  }
+  if (business.lowStock != null && business.lowStock!.isNotEmpty) {
+    final products = business.lowStock!.take(3).join(', ');
+    lines.add(
+      sw
+          ? 'Bidhaa zenye akiba ndogo: $products.'
+          : 'Low-stock products: $products.',
+    );
+  }
+  if (business.receivable != null && business.receivable! > 0) {
+    lines.add(
+      '${sw ? 'Madeni ya wateja' : 'Customer debts'} ni TZS ${money.format(business.receivable)}.',
+    );
+  }
+  if (business.payable != null && business.payable! > 0) {
+    lines.add(
+      sw
+          ? 'Madeni ya biashara ni TZS ${money.format(business.payable)}.'
+          : 'Business debts are TZS ${money.format(business.payable)}.',
+    );
+  }
+  return lines.join(' ');
+}
 
 class IsherWelcomeScreen extends StatefulWidget {
   const IsherWelcomeScreen({
@@ -16,6 +118,9 @@ class IsherWelcomeScreen extends StatefulWidget {
     required this.ready,
     required this.businessName,
     required this.businessId,
+    this.businessContext,
+    this.greetingName = '',
+    this.greetingUserId,
     required this.greetingReady,
     required this.onRetry,
     required this.onChat,
@@ -30,6 +135,9 @@ class IsherWelcomeScreen extends StatefulWidget {
   final bool ready;
   final String businessName;
   final String? businessId;
+  final BusinessContext? businessContext;
+  final String greetingName;
+  final String? greetingUserId;
   final bool greetingReady;
   final IsherGreetingVoice? greetingVoice;
   final VoidCallback onRetry;
@@ -51,6 +159,7 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
   late final AnimationController _ambient;
   late final IsherGreetingVoice _voice;
   int _voiceGeneration = 0;
+  bool? _shouldIntroduce;
   bool _scheduled = false;
   bool _attempted = false;
   bool _voiceError = false;
@@ -88,11 +197,18 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
   void didUpdateWidget(covariant IsherWelcomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.businessId != widget.businessId ||
-        oldWidget.businessName != widget.businessName) {
+        oldWidget.businessName != widget.businessName ||
+        oldWidget.greetingUserId != widget.greetingUserId) {
       _stopGreeting();
       _attempted = false;
+      _shouldIntroduce = null;
     } else if (oldWidget.greetingReady && !widget.greetingReady) {
       _stopGreeting();
+      _attempted = false;
+      _shouldIntroduce = null;
+    } else if ((!oldWidget.ready || oldWidget.loading) &&
+        widget.ready &&
+        !widget.loading) {
       _attempted = false;
     }
     _scheduleGreeting();
@@ -100,6 +216,8 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
 
   void _scheduleGreeting() {
     if (!widget.greetingReady ||
+        !widget.ready ||
+        widget.loading ||
         !_foreground ||
         _leaving ||
         _attempted ||
@@ -111,6 +229,8 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
       _scheduled = false;
       if (!mounted ||
           !widget.greetingReady ||
+          !widget.ready ||
+          widget.loading ||
           !_foreground ||
           _leaving ||
           _attempted) {
@@ -123,20 +243,35 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
 
   int _nextGreetingVariant(String language) {
     final previous = _lastGreetingVariants[language];
-    final choices = List<int>.generate(_greetingVariantCount, (index) => index)
-        .where((index) => index != previous)
-        .toList();
+    final choices = List<int>.generate(
+      _greetingVariantCount,
+      (index) => index,
+    ).where((index) => index != previous).toList();
     final selected = choices[_random.nextInt(choices.length)];
     _lastGreetingVariants[language] = selected;
     return selected;
   }
 
-  String _greeting(int variant) {
-    final name = widget.businessName.trim();
-    final key = name.isEmpty
-        ? 'isher_personal_greeting_no_name_${variant + 1}'
-        : 'isher_personal_greeting_${variant + 1}';
-    return name.isEmpty ? key.tr : key.trParams({'name': name});
+  String _greetingPreferenceKey() =>
+      'isher_last_greeting_${widget.greetingUserId ?? ''}_${widget.businessId ?? ''}';
+
+  Future<bool> _introductionDue(DateTime now) async {
+    final cached = _shouldIntroduce;
+    if (cached != null) return cached;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final milliseconds = preferences.getInt(_greetingPreferenceKey());
+      final lastGreeting = milliseconds == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
+      final due = shouldIntroduceIsher(lastGreeting, now);
+      _shouldIntroduce = due;
+      return due;
+    } catch (error, stack) {
+      debugPrint('Isher greeting history load failed: $error');
+      debugPrintStack(stackTrace: stack);
+      return true;
+    }
   }
 
   Future<void> _playGreeting() async {
@@ -158,8 +293,25 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
       }
       final language = Get.locale?.languageCode == 'sw' ? 'sw' : 'en';
       final greetingVariant = _nextGreetingVariant(language);
+      final now = DateTime.now().toUtc();
+      final introduce = await _introductionDue(now);
+      if (!mounted ||
+          generation != _voiceGeneration ||
+          !widget.ready ||
+          widget.loading ||
+          !_foreground ||
+          _leaving) {
+        return;
+      }
+      final greetingText = isherWelcomeGreeting(
+        language: language,
+        name: widget.greetingName,
+        now: now,
+        introduce: introduce,
+        business: widget.businessContext,
+      );
       await _voice.speak(
-        _greeting(greetingVariant),
+        greetingText,
         language,
         () =>
             mounted &&
@@ -169,6 +321,21 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
             generation == _voiceGeneration,
         greetingVariant: greetingVariant,
       );
+      if (mounted &&
+          generation == _voiceGeneration &&
+          _foreground &&
+          !_leaving) {
+        try {
+          final preferences = await SharedPreferences.getInstance();
+          await preferences.setInt(
+            _greetingPreferenceKey(),
+            now.millisecondsSinceEpoch,
+          );
+        } catch (error, stack) {
+          debugPrint('Isher greeting history save failed: $error');
+          debugPrintStack(stackTrace: stack);
+        }
+      }
     } catch (error, stack) {
       debugPrint('Isher greeting voice failed: $error');
       debugPrintStack(stackTrace: stack);
@@ -337,9 +504,16 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
                                     spacing: 8,
                                     runSpacing: 8,
                                     children: [
-                                      _Capability(label: 'isher_capability_insights'.tr),
-                                      _Capability(label: 'isher_capability_documents'.tr),
-                                      _Capability(label: 'isher_capability_transactions'.tr),
+                                      _Capability(
+                                        label: 'isher_capability_insights'.tr,
+                                      ),
+                                      _Capability(
+                                        label: 'isher_capability_documents'.tr,
+                                      ),
+                                      _Capability(
+                                        label:
+                                            'isher_capability_transactions'.tr,
+                                      ),
                                     ],
                                   ),
                                   SizedBox(height: compact ? 24 : 34),

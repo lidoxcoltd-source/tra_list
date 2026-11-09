@@ -65,8 +65,7 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
     String language,
     bool Function() isCurrent, {
     required int greetingVariant,
-  }
-  ) async {
+  }) async {
     try {
       final id = businessId();
       if (id == null || id.isEmpty) throw StateError('Business unavailable');
@@ -81,6 +80,7 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
               'businessUid': id,
               'language': language,
               'greetingVariant': greetingVariant,
+              'greetingText': text,
             });
         final data = response.data;
         if (data is! Map || data['audio'] is! String) {
@@ -135,8 +135,7 @@ class DeviceIsherGreetingVoice implements IsherGreetingVoice {
     String language,
     bool Function() isCurrent, {
     required int greetingVariant,
-  }
-  ) async {
+  }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       throw UnsupportedError('Offline greeting voice is not supported');
     }

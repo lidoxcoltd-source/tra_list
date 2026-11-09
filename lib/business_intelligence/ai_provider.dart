@@ -1,5 +1,8 @@
 import 'package:tra_list/business_intelligence/business_context.dart';
 
+String supportedAiLanguage(String? languageCode) =>
+    languageCode == 'en' ? 'en' : 'sw';
+
 class AiSnapshot {
   const AiSnapshot(this.context, this.token);
   final Map<String, dynamic> context;

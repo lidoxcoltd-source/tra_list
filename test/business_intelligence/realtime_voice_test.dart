@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:flutter/foundation.dart';
@@ -23,10 +25,14 @@ class _FirebaseCoreMock extends MockFirebaseApp {
 
 class _Provider implements AIProvider {
   int preparations = 0;
+  Completer<AiSnapshot>? nextPreparation;
 
   @override
   Future<AiSnapshot> prepare(BusinessContext context) async {
     preparations++;
+    final pending = nextPreparation;
+    nextPreparation = null;
+    if (pending != null) return pending.future;
     return const AiSnapshot({'businessName': 'Duka'}, 'snapshot');
   }
 
@@ -102,6 +108,23 @@ void main() {
     },
   );
 
+  test(
+    'web voice uses browser-safe OpenAI signaling and supported engines',
+    () {
+      expect(voicePeerConfiguration(web: true)['iceServers'], [
+        {'urls': 'stun:stun.l.google.com:19302'},
+      ]);
+      expect(voicePeerConfiguration(web: false)['iceServers'], isEmpty);
+      expect(voiceEnginesForPlatform(['gemini', 'openai'], web: true), [
+        'openai',
+      ]);
+      expect(voiceEnginesForPlatform(['gemini', 'openai'], web: false), [
+        'gemini',
+        'openai',
+      ]);
+    },
+  );
+
   test('microphone level uses only local audio source statistics', () {
     StatsReport report(String type, Map<String, dynamic> values) =>
         StatsReport('id', type, 0, values);
@@ -136,6 +159,25 @@ void main() {
     expect(openAiPlaybackState('output_audio_buffer.stopped'), isFalse);
     expect(openAiPlaybackState('output_audio_buffer.cleared'), isFalse);
     expect(openAiPlaybackState('response.done'), isNull);
+  });
+
+  test('voice summary includes business, selected period, and cash flow', () {
+    final summary = voiceSummaryText({
+      'businessName': 'Duka la Asha',
+      'businessProfile': {
+        'businessType': 'Retail',
+        'businessDescription': 'Household goods',
+      },
+      'periodStart': '2024-01-01T00:00:00.000Z',
+      'periodEndExclusive': '2024-02-01T00:00:00.000Z',
+      'currency': 'TZS',
+      'transactions': {'income': 120000, 'expenses': 30000, 'count': 8},
+    }, language: 'sw');
+    expect(summary, contains('Duka la Asha'));
+    expect(summary, contains('Kipindi: 2024-01-01 hadi 2024-01-31'));
+    expect(summary, contains('Mapato yaliyorekodiwa: TZS 120,000'));
+    expect(summary, contains('Matumizi yaliyorekodiwa: TZS 30,000'));
+    expect(summary, contains('Salio la fedha (si faida): TZS 90,000'));
   });
 
   test(
@@ -188,10 +230,8 @@ void main() {
     expect(eyeOffset(), isNot(initialEye));
     await tester.tap(find.bySemanticsLabel('Anza sauti').first);
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('Kubali na uanze'));
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Kagua na uanze mazungumzo ya sauti'), findsNothing);
     double scale() => tester
         .widget<Transform>(find.byKey(const ValueKey('voice_orb_scale')))
         .transform
@@ -256,7 +296,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('voice requires review and cancellation does not start session', (
+  testWidgets('voice starts without a repeated privacy review dialog', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -284,21 +324,69 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Anza sauti').first);
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(provider.preparations, 1);
-    expect(find.text('Kagua na uanze mazungumzo ya sauti'), findsOneWidget);
-    expect(find.textContaining('Jina la biashara'), findsOneWidget);
-    expect(find.text('Kubali na uanze'), findsOneWidget);
-    current.value = false;
-    await tester.pump();
-    expect(find.text('Kubali na uanze'), findsNothing);
-    await tester.tap(find.text('cancel'.tr));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(sessionCreated, isFalse);
-    expect(
-      find.text('Kipaza sauti kiko wazi. Sauti yako inatumwa kwa OpenAI.'),
-      findsNothing,
+    expect(provider.preparations, 1);
+    expect(find.text('Kagua na uanze mazungumzo ya sauti'), findsNothing);
+    expect(find.text('Kubali na uanze'), findsNothing);
+    expect(sessionCreated, isTrue);
+    expect(find.text('Mazungumzo ya sauti'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('business summary lifts the orb and types the requested report', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    late VoiceToolHandler tools;
+    final provider = _Provider();
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => true,
+            provider: provider,
+            sessionFactory: (_, level, speaking) =>
+                _FakeVoiceSession(level, speaking),
+            onToolsReady: (value) => tools = value,
+          ),
+        ),
+      ),
     );
+    await tester.tap(find.bySemanticsLabel('Anza sauti').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final orb = find.byKey(const ValueKey('voice_orb_surface'));
+    final topBeforeSummary = tester.getTopLeft(orb).dy;
+
+    final report = Completer<AiSnapshot>();
+    provider.nextPreparation = report;
+    final pending = tools('get_business_summary', {'period': 'selected'});
+    await tester.pump();
+    expect(
+      find.text('Naendelea kuandaa ripoti ya biashara. Subiri kidogo.'),
+      findsOneWidget,
+    );
+    report.complete(const AiSnapshot({'businessName': 'Duka'}, 'report-token'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Muhtasari wa biashara'), findsOneWidget);
+    final typewriter = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice_summary_typewriter')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    expect(typewriter.data, isNot(contains('Duka')));
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(tester.getTopLeft(orb).dy, lessThan(topBeforeSummary));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('Duka'), findsOneWidget);
+    await tester.tap(find.text('Funga'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect((await pending)['summary'], {'businessName': 'Duka'});
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -338,9 +426,6 @@ void main() {
         ),
       );
       await tester.tap(find.bySemanticsLabel('Anza sauti').first);
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.tap(find.text('Kubali na uanze'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       final pending = tools('review_transaction_draft', {
@@ -386,9 +471,6 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Anza sauti').first);
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('Kubali na uanze'));
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     final pending = tools('open_app_page', {'destination': 'tasks'});
@@ -400,6 +482,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect((await pending)['status'], contains('cancelled'));
     expect(session.closed, isFalse);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('orb respects reduced motion', (tester) async {

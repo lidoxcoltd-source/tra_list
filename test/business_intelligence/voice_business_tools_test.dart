@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/ai_provider.dart';
@@ -7,11 +9,17 @@ import 'package:tra_list/business_intelligence/isher_navigation.dart';
 
 class _Provider implements AIProvider {
   BusinessContext? requested;
+  Completer<AiSnapshot>? nextPreparation;
+  var preparations = 0;
   bool fail = false;
 
   @override
   Future<AiSnapshot> prepare(BusinessContext context) async {
+    preparations++;
     requested = context;
+    final pending = nextPreparation;
+    nextPreparation = null;
+    if (pending != null) return pending.future;
     if (fail) throw StateError('unavailable');
     return const AiSnapshot({
       'pos': {'total': 12345},
@@ -75,34 +83,56 @@ void main() {
     );
   });
 
-  test('navigation only accepts allowed destinations and current access', () async {
-    IsherDestination? requested;
-    tools = VoiceBusinessTools(
-      provider: provider,
-      business: business,
-      isCurrent: () => current,
-      onNavigate: (destination) async {
-        requested = destination;
-        return true;
-      },
-    );
-    expect(await tools.call('open_app_page', {'destination': 'tasks'}),
-        containsPair('status', contains('confirmed')));
-    expect(requested, IsherDestination.tasks);
-    requested = null;
-    expect(await tools.call('open_app_page', {'destination': '/admin'}),
-        contains('error'));
-    expect(await tools.call('open_app_page', {'destination': 'tasks', 'route': '/admin'}),
-        contains('error'));
-    current = false;
-    expect(await tools.call('open_app_page', {'destination': 'tasks'}),
-        contains('error'));
-    expect(requested, isNull);
-  });
+  test(
+    'navigation only accepts allowed destinations and current access',
+    () async {
+      IsherDestination? requested;
+      tools = VoiceBusinessTools(
+        provider: provider,
+        business: business,
+        isCurrent: () => current,
+        onNavigate: (destination) async {
+          requested = destination;
+          return true;
+        },
+      );
+      expect(
+        await tools.call('open_app_page', {'destination': 'tasks'}),
+        containsPair('status', contains('confirmed')),
+      );
+      expect(requested, IsherDestination.tasks);
+      requested = null;
+      expect(
+        await tools.call('open_app_page', {'destination': '/admin'}),
+        contains('error'),
+      );
+      expect(
+        await tools.call('open_app_page', {
+          'destination': 'tasks',
+          'route': '/admin',
+        }),
+        contains('error'),
+      );
+      current = false;
+      expect(
+        await tools.call('open_app_page', {'destination': 'tasks'}),
+        contains('error'),
+      );
+      expect(requested, isNull);
+    },
+  );
 
   test(
     'yesterday fetches the authorized exact local day and omits token',
     () async {
+      Map<String, dynamic>? shownSummary;
+      tools = VoiceBusinessTools(
+        provider: provider,
+        business: business,
+        isCurrent: () => current,
+        onSummary: (summary) => shownSummary = summary,
+        clock: () => DateTime(2026, 11, 9, 12),
+      );
       final result = await tools.call('get_business_summary', {
         'period': 'yesterday',
       });
@@ -113,7 +143,66 @@ void main() {
           'pos': {'total': 12345},
         },
       });
+      expect(shownSummary, {
+        'pos': {'total': 12345},
+      });
       expect(result.toString(), isNot(contains('secret-token')));
+    },
+  );
+
+  test(
+    'fresh same-period snapshot is reused but another period is fetched',
+    () async {
+      final snapshot = AiSnapshot({
+        'businessName': 'Duka',
+        'updatedAt': DateTime(
+          2026,
+          11,
+          9,
+          11,
+          59,
+          30,
+        ).toUtc().toIso8601String(),
+      }, 'snapshot-token');
+      tools = VoiceBusinessTools(
+        provider: provider,
+        business: business,
+        isCurrent: () => current,
+        initialSnapshot: snapshot,
+        clock: () => DateTime(2026, 11, 9, 12),
+      );
+
+      final selected = await tools.businessSummary({'period': 'selected'});
+      expect(selected, snapshot.context);
+      expect(provider.preparations, 0);
+
+      await tools.businessSummary({'period': 'yesterday'});
+      expect(provider.preparations, 1);
+      expect(provider.requested!.period.start, DateTime(2026, 11, 8));
+    },
+  );
+
+  test(
+    'report loading callback remains active until fresh data is ready',
+    () async {
+      final loadingStates = <bool>[];
+      final pending = Completer<AiSnapshot>();
+      provider.nextPreparation = pending;
+      tools = VoiceBusinessTools(
+        provider: provider,
+        business: business,
+        isCurrent: () => current,
+        onSummaryLoading: loadingStates.add,
+        clock: () => DateTime(2026, 11, 9, 12),
+      );
+
+      final request = tools.businessSummary({'period': 'yesterday'});
+      expect(loadingStates, [true]);
+      pending.complete(
+        const AiSnapshot({'businessName': 'Duka'}, 'fresh-token'),
+      );
+      await request;
+      expect(loadingStates, [true, false]);
     },
   );
 

@@ -16,18 +16,24 @@ class VoiceBusinessTools {
     required this.provider,
     required this.business,
     required this.isCurrent,
+    this.initialSnapshot,
     this.onDocument,
     this.onTransaction,
     this.onNavigate,
+    this.onSummary,
+    this.onSummaryLoading,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final AIProvider provider;
   final BusinessContext business;
   final bool Function() isCurrent;
+  final AiSnapshot? initialSnapshot;
   final void Function(AiDocumentDraft draft)? onDocument;
   final Future<void> Function(VoiceTransactionDraft draft)? onTransaction;
   final Future<bool> Function(IsherDestination destination)? onNavigate;
+  final void Function(Map<String, dynamic> summary)? onSummary;
+  final void Function(bool loading)? onSummaryLoading;
   final DateTime Function() _clock;
   bool _documentRequested = false;
 
@@ -53,8 +59,10 @@ class VoiceBusinessTools {
         };
       }
       if (name == 'open_app_page') {
-        if (!isCurrent() || onNavigate == null ||
-            args.length != 1 || args['destination'] is! String) {
+        if (!isCurrent() ||
+            onNavigate == null ||
+            args.length != 1 ||
+            args['destination'] is! String) {
           throw StateError('Page navigation unavailable');
         }
         final destination = IsherDestination.values
@@ -250,9 +258,35 @@ class VoiceBusinessTools {
   ) async {
     if (!isCurrent()) throw StateError('Business access changed');
     final period = _period(args);
-    final snapshot = await provider.prepare(business.withPeriod(period));
-    if (!isCurrent()) throw StateError('Business access changed');
-    return snapshot.context;
+    onSummaryLoading?.call(true);
+    try {
+      final snapshot =
+          _reusableSnapshot(period) ??
+          await provider.prepare(business.withPeriod(period));
+      if (!isCurrent()) throw StateError('Business access changed');
+      final summary = snapshot.context;
+      onSummary?.call(summary);
+      return summary;
+    } finally {
+      onSummaryLoading?.call(false);
+    }
+  }
+
+  AiSnapshot? _reusableSnapshot(ReportingPeriod period) {
+    final snapshot = initialSnapshot;
+    final updatedAtValue = snapshot?.context['updatedAt'];
+    if (snapshot == null ||
+        period.start != business.period.start ||
+        period.end != business.period.end ||
+        updatedAtValue is! String) {
+      return null;
+    }
+    final updatedAt = DateTime.tryParse(updatedAtValue);
+    if (updatedAt == null) return null;
+    final age = _clock().toUtc().difference(updatedAt.toUtc());
+    return age >= Duration.zero && age <= const Duration(minutes: 1)
+        ? snapshot
+        : null;
   }
 
   ReportingPeriod _period(Map<dynamic, dynamic> args) {

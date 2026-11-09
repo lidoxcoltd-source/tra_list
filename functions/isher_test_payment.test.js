@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   purchase,
+  purchaseExists,
   addMonth,
   validateSettings,
   activateQueuedIfDepleted,
@@ -69,6 +70,27 @@ test("purchase records test-only amounts, idempotency, and a queued next package
   assert.equal(second.startsAt, first.endsAt);
   assert.equal(second.endsAt, Date.UTC(2026, 2, 28));
   await assert.rejects(purchase(args(db, { businessUid: "different" })), /request-conflict/);
+});
+
+test("purchase status only recognizes a transaction for its owner and business", async () => {
+  const db = fakeDb({
+    "isherTestTransactions/known-request": {
+      uid: "owner",
+      businessUid: "shop",
+    },
+  });
+  assert.equal(await purchaseExists({
+    db, uid: "owner", businessUid: "shop", requestId: "known-request",
+  }), true);
+  assert.equal(await purchaseExists({
+    db, uid: "other", businessUid: "shop", requestId: "known-request",
+  }), false);
+  assert.equal(await purchaseExists({
+    db, uid: "owner", businessUid: "other", requestId: "known-request",
+  }), false);
+  assert.equal(await purchaseExists({
+    db, uid: "owner", businessUid: "shop", requestId: "not-found",
+  }), false);
 });
 
 test("purchase activates immediately when the active package quota is depleted", async () => {
@@ -184,6 +206,102 @@ test("existing queued package is activated on subscription refresh after quota d
   assert.equal(db.docs.get(`isherTestSubscriptions/${queuedId}`).startsAt, Date.UTC(2026, 0, 31));
   assert.equal(db.docs.get("isherTestSchedules/shop").activeId, queuedId);
   assert.deepEqual(db.docs.get("isherTestSchedules/shop").queuedIds, []);
+});
+
+test("queued package activates after the active package expires by date", async () => {
+  const active = {
+    uid: "owner",
+    businessUid: "shop",
+    package: { ...DEFAULT_PACKAGES[0] },
+    startsAt: Date.UTC(2026, 0, 1),
+    endsAt: Date.UTC(2026, 1, 1),
+    status: "active",
+    remainingChats: 12,
+    remainingVoiceSessions: 2,
+  };
+  const queuedId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+  const queued = {
+    uid: "owner",
+    businessUid: "shop",
+    package: { ...DEFAULT_PACKAGES[1] },
+    startsAt: active.endsAt,
+    endsAt: Date.UTC(2026, 2, 1),
+    status: "queued",
+    remainingChats: DEFAULT_PACKAGES[1].chats,
+    remainingVoiceSessions: DEFAULT_PACKAGES[1].voiceSessions,
+  };
+  const db = fakeDb({
+    "isherTestSchedules/shop": {
+      activeId: "previous",
+      endAt: queued.endsAt,
+      queuedIds: [queuedId],
+      latestId: queuedId,
+      packageRequired: true,
+    },
+    "isherTestSubscriptions/previous": active,
+    [`isherTestSubscriptions/${queuedId}`]: queued,
+  });
+
+  const changed = await activateQueuedIfDepleted({
+    db,
+    businessUid: "shop",
+    timestamp: () => Date.UTC(2026, 1, 2),
+  });
+
+  assert.equal(changed, true);
+  assert.equal(db.docs.get("isherTestSubscriptions/previous").status, "expired");
+  assert.equal(db.docs.get(`isherTestSubscriptions/${queuedId}`).status, "active");
+  assert.equal(
+    db.docs.get(`isherTestSubscriptions/${queuedId}`).startsAt,
+    Date.UTC(2026, 1, 2),
+  );
+  assert.equal(db.docs.get("isherTestSchedules/shop").activeId, queuedId);
+  assert.deepEqual(db.docs.get("isherTestSchedules/shop").queuedIds, []);
+});
+
+test("queued package activates when expiry was already marked", async () => {
+  const expired = {
+    uid: "owner",
+    businessUid: "business",
+    package: { ...DEFAULT_PACKAGES[0] },
+    startsAt: Date.UTC(2026, 0, 1),
+    endsAt: Date.UTC(2026, 1, 1),
+    status: "expired",
+    remainingChats: 12,
+    remainingVoiceSessions: 2,
+  };
+  const queuedId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+  const queued = {
+    uid: "owner",
+    businessUid: "business",
+    startsAt: expired.endsAt,
+    endsAt: Date.UTC(2026, 2, 1),
+    status: "queued",
+    package: { ...DEFAULT_PACKAGES[1] },
+    remainingChats: DEFAULT_PACKAGES[1].chats,
+    remainingVoiceSessions: DEFAULT_PACKAGES[1].voiceSessions,
+  };
+  const db = fakeDb({
+    "isherTestSchedules/business": {
+      activeId: "test-one",
+      endAt: queued.endsAt,
+      queuedIds: [queuedId],
+      latestId: queuedId,
+      packageRequired: true,
+    },
+    "isherTestSubscriptions/test-one": expired,
+    [`isherTestSubscriptions/${queuedId}`]: queued,
+  });
+
+  const changed = await activateQueuedIfDepleted({
+    db,
+    businessUid: "business",
+    timestamp: () => 1000,
+  });
+
+  assert.equal(changed, true);
+  assert.equal(db.docs.get(`isherTestSubscriptions/${queuedId}`).status, "active");
+  assert.equal(db.docs.get("isherTestSchedules/business").activeId, queuedId);
 });
 
 test("existing queued package is activated by a request for its depleted quota", async () => {

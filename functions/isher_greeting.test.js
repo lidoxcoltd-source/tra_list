@@ -36,6 +36,14 @@ test("greeting variants are localized, personalized, and distinct", () => {
   assert.throws(() => greeting.greetingText("sw", "", 3), /invalid-greeting/);
 });
 
+test("generated business greeting text is bounded and validated", () => {
+  const text = "Habari Lidox, za asubuhi. Mapato yaliyorekodiwa ni TZS 120,000.";
+  assert.equal(greeting.greetingText("sw", "Lidox", 0, text), text);
+  assert.throws(() => greeting.greetingText("sw", "Lidox", 0, " "), /invalid-greeting-text/);
+  assert.throws(() => greeting.greetingText("sw", "Lidox", 0, "bad\ntext"), /invalid-greeting-text/);
+  assert.throws(() => greeting.greetingText("sw", "Lidox", 0, "x".repeat(1601)), /invalid-greeting-text/);
+});
+
 test("outstanding reservations count toward the daily limit", async () => {
   const db = database();
   for (let i = 0; i < 3; i++) await greeting.reserve(db, "user");

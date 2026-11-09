@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:get/get.dart' hide navigator;
-import 'package:tra_list/business_intelligence/ai_chat.dart';
+import 'package:intl/intl.dart';
 import 'package:tra_list/business_intelligence/ai_models.dart';
 import 'package:tra_list/business_intelligence/ai_models_ui.dart';
 import 'package:tra_list/business_intelligence/gemini_voice_session.dart';
@@ -20,6 +19,7 @@ import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/voice_business_tools.dart';
 import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
+import 'package:tra_list/business_intelligence/voice_signaling_socket.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/services/business_access_service.dart';
@@ -31,6 +31,23 @@ String voiceServiceUrl(String configuredUrl, String firebaseProjectId) {
   }
   return '';
 }
+
+@visibleForTesting
+Map<String, dynamic> voicePeerConfiguration({required bool web}) => {
+  'iceServers': web
+      ? [
+          {'urls': 'stun:stun.l.google.com:19302'},
+        ]
+      : <Map<String, String>>[],
+};
+
+@visibleForTesting
+List<String> voiceEnginesForPlatform(
+  List<String> configuredEngines, {
+  required bool web,
+}) => web
+    ? configuredEngines.where((engine) => engine == 'openai').toList()
+    : List<String>.of(configuredEngines);
 
 @visibleForTesting
 double? microphoneLevel(List<StatsReport> reports) {
@@ -52,6 +69,110 @@ bool? openAiPlaybackState(String? type) => switch (type) {
   'output_audio_buffer.stopped' || 'output_audio_buffer.cleared' => false,
   _ => null,
 };
+
+@visibleForTesting
+String voiceSummaryText(
+  Map<String, dynamic> context, {
+  required String language,
+}) {
+  final sw = language == 'sw';
+  final lines = <String>[];
+  final profile = context['businessProfile'] is Map
+      ? context['businessProfile'] as Map
+      : const <Object?, Object?>{};
+  final transactions = context['transactions'] is Map
+      ? context['transactions'] as Map
+      : const <Object?, Object?>{};
+  final money = NumberFormat('#,##0.##', 'en_US');
+  final currency = context['currency']?.toString() ?? 'TZS';
+  String label(String en, String swahili) => sw ? swahili : en;
+  String amount(Object? value) => value is num ? money.format(value) : '';
+
+  lines.add(label('Business summary', 'Muhtasari wa biashara'));
+  final name = context['businessName']?.toString().trim() ?? '';
+  if (name.isNotEmpty) lines.add('${label('Business', 'Biashara')}: $name');
+  for (final (key, en, swahili) in [
+    ('businessType', 'Business type', 'Aina ya biashara'),
+    ('businessDescription', 'Business activity', 'Shughuli za biashara'),
+  ]) {
+    final value = profile[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) lines.add('${label(en, swahili)}: $value');
+  }
+
+  final start = DateTime.tryParse(context['periodStart']?.toString() ?? '');
+  final endExclusive = DateTime.tryParse(
+    context['periodEndExclusive']?.toString() ?? '',
+  );
+  if (start != null && endExclusive != null && endExclusive.isAfter(start)) {
+    final end = endExclusive.subtract(const Duration(days: 1));
+    lines.add(
+      '${label('Period', 'Kipindi')}: ${DateFormat('yyyy-MM-dd').format(start)} ${label('to', 'hadi')} ${DateFormat('yyyy-MM-dd').format(end)}',
+    );
+  }
+
+  for (final (key, en, swahili) in [
+    ('income', 'Recorded income', 'Mapato yaliyorekodiwa'),
+    ('expenses', 'Recorded expenses', 'Matumizi yaliyorekodiwa'),
+  ]) {
+    final value = amount(transactions[key]);
+    if (value.isNotEmpty) lines.add('${label(en, swahili)}: $currency $value');
+  }
+  final income = transactions['income'];
+  final expenses = transactions['expenses'];
+  if (income is num && expenses is num) {
+    lines.add(
+      '${label('Cash flow (not profit)', 'Salio la fedha (si faida)')}: $currency ${money.format(income - expenses)}',
+    );
+  }
+  if (transactions['count'] is num) {
+    lines.add(
+      '${label('Recorded transactions', 'Miamala iliyorekodiwa')}: ${transactions['count']}',
+    );
+  }
+
+  final pos = context['pos'];
+  if (pos is Map && pos['total'] is num) {
+    lines.add(
+      '${label('POS sales', 'Mauzo ya POS')}: $currency ${money.format(pos['total'])}',
+    );
+  }
+  final debts = context['debts'];
+  if (debts is Map) {
+    for (final (key, en, swahili) in [
+      ('receivable', 'Customer debts', 'Madeni ya wateja'),
+      ('payable', 'Business debts', 'Madeni ya biashara'),
+    ]) {
+      final value = amount(debts[key]);
+      if (value.isNotEmpty)
+        lines.add('${label(en, swahili)}: $currency $value');
+    }
+  }
+  final purchases = context['purchases'];
+  if (purchases is Map && purchases['total'] is num) {
+    lines.add(
+      '${label('Received purchases', 'Manunuzi yaliyopokelewa')}: $currency ${money.format(purchases['total'])}',
+    );
+  }
+  final lowStock = context['lowStock'];
+  if (lowStock is List && lowStock.isNotEmpty) {
+    final names = lowStock
+        .take(5)
+        .map((item) => item is Map ? item['name']?.toString() : item.toString())
+        .whereType<String>()
+        .where((item) => item.isNotEmpty)
+        .join(', ');
+    if (names.isNotEmpty) {
+      lines.add('${label('Low stock', 'Bidhaa zenye akiba ndogo')}: $names');
+    }
+  }
+  final limitations = context['limitations'];
+  if (limitations is List && limitations.isNotEmpty) {
+    lines.add(label('Limitations', 'Mipaka ya taarifa'));
+    lines.addAll(limitations.take(3).map((item) => '- $item'));
+  }
+  final runes = lines.join('\n').runes.toList();
+  return String.fromCharCodes(runes.take(2000));
+}
 
 @visibleForTesting
 Map<String, dynamic> voiceConnectedGreeting(String language) => {
@@ -95,7 +216,8 @@ class _VoiceSession implements VoiceSession {
   final VoiceToolHandler toolHandler;
   RTCPeerConnection? _peer;
   MediaStream? _microphone;
-  WebSocket? _socket;
+  VoiceSignalingSocket? _socket;
+  RTCVideoRenderer? _remoteAudioRenderer;
   bool _closed = false;
   bool _reported = false;
   bool _muted = true;
@@ -123,7 +245,9 @@ class _VoiceSession implements VoiceSession {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) throw StateError('Not signed in');
     _checkOpen();
-    final peer = await createPeerConnection({'iceServers': []});
+    final peer = await createPeerConnection(
+      voicePeerConfiguration(web: kIsWeb),
+    );
     _peer = peer;
     if (_closed) {
       await peer.close();
@@ -135,6 +259,14 @@ class _VoiceSession implements VoiceSession {
         _ended('bi_voice_connection_error');
       }
     };
+    if (kIsWeb) {
+      final renderer = RTCVideoRenderer();
+      _remoteAudioRenderer = renderer;
+      await renderer.initialize();
+      peer.onTrack = (event) {
+        unawaited(_attachRemoteAudio(renderer, event));
+      };
+    }
     final stream = await navigator.mediaDevices.getUserMedia({
       'audio': {
         'echoCancellation': true,
@@ -155,7 +287,7 @@ class _VoiceSession implements VoiceSession {
       track.enabled = false;
       await peer.addTrack(track, stream);
     }
-    await Helper.setSpeakerphoneOnButPreferBluetooth();
+    if (!kIsWeb) await Helper.setSpeakerphoneOnButPreferBluetooth();
     final events = await peer.createDataChannel(
       'oai-events',
       RTCDataChannelInit(),
@@ -215,9 +347,9 @@ class _VoiceSession implements VoiceSession {
     _checkOpen();
     final sdp = (await peer.getLocalDescription())?.sdp;
     if (sdp == null) throw StateError('Missing SDP offer');
-    final socket = await WebSocket.connect(
-      endpoint.toString(),
-    ).timeout(const Duration(seconds: 15));
+    final socket = await connectVoiceSignalingSocket(
+      endpoint,
+    ).timeout(const Duration(seconds: 20));
     _socket = socket;
     if (_closed) {
       await socket.close();
@@ -225,7 +357,7 @@ class _VoiceSession implements VoiceSession {
     }
     final answer = Completer<String>();
     var established = false;
-    socket.listen(
+    socket.messages.listen(
       (message) {
         try {
           final data = jsonDecode(message as String) as Map<String, dynamic>;
@@ -281,7 +413,7 @@ class _VoiceSession implements VoiceSession {
       throw StateError('Voice data channel closed');
     }
     _checkOpen();
-    if (socket.readyState != WebSocket.open) {
+    if (!socket.isOpen) {
       throw StateError('Voice connection closed');
     }
     await events.send(
@@ -293,6 +425,25 @@ class _VoiceSession implements VoiceSession {
     _levelTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
       unawaited(_readMicrophoneLevel());
     });
+  }
+
+  Future<void> _attachRemoteAudio(
+    RTCVideoRenderer renderer,
+    RTCTrackEvent event,
+  ) async {
+    if (_closed) return;
+    try {
+      final stream = event.streams.isNotEmpty
+          ? event.streams.first
+          : await createLocalMediaStream('isher-remote-audio');
+      if (event.streams.isEmpty) await stream.addTrack(event.track);
+      if (_closed) return;
+      renderer.srcObject = stream;
+    } catch (error, stack) {
+      debugPrint('Could not play remote voice audio: $error');
+      debugPrintStack(stackTrace: stack);
+      _ended('bi_voice_connection_error');
+    }
   }
 
   Future<void> _handleToolCalls(RTCDataChannel events, List output) async {
@@ -406,6 +557,7 @@ class _VoiceSession implements VoiceSession {
           await _socket!.close().timeout(const Duration(seconds: 5));
         }),
       if (_peer != null) cleanup(_peer!.close),
+      if (_remoteAudioRenderer != null) cleanup(_remoteAudioRenderer!.dispose),
     ]);
     if (_microphone != null) await cleanup(_microphone!.dispose);
   }
@@ -444,6 +596,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const _voiceUrl = String.fromEnvironment('MJASI_VOICE_URL');
   VoiceSession? _session;
+  AiSnapshot? _voiceSnapshot;
   List<String> _engines = const ['openai'];
   Map<String, String> _providerNicknames = const {};
   String _engine = 'openai';
@@ -451,6 +604,9 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   bool _enginesLoading = false;
   bool _transactionReviewOpen = false;
   bool _navigationReviewOpen = false;
+  bool _summaryDialogOpen = false;
+  bool _summaryRaised = false;
+  bool _summaryLoading = false;
   bool _busy = false;
   bool _active = false;
   bool _paused = false;
@@ -487,8 +643,9 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       duration: const Duration(seconds: 4),
     );
     _engineReady = widget.sessionFactory != null;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      if (widget.sessionFactory == null &&
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
+      if (!kIsWeb &&
+          widget.sessionFactory == null &&
           GeminiVoiceRetention.instance.available(
             widget.businessContext,
             FirebaseAuth.instance.currentUser?.uid,
@@ -506,17 +663,24 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     _enginesLoading = true;
     try {
       final repository = AiModelRepository();
-      final engines = await repository.voiceProviders();
+      final configuredEngines = await repository.voiceProviders();
+      final engines = voiceEnginesForPlatform(configuredEngines, web: kIsWeb);
       final catalog = await repository.available();
       await AiVoiceEngineSelection.load();
-      if (!mounted || engines.isEmpty) return;
+      if (!mounted) return;
       setState(() {
         _engines = engines;
         _providerNicknames = catalog.providerNicknames;
-        _syncEngine();
-        _engineReady = true;
+        if (engines.isEmpty) {
+          _engineReady = true;
+        } else {
+          _syncEngine();
+          _engineReady = true;
+        }
       });
-      AiVoiceEngineSelection.selected.addListener(_onEngineChanged);
+      if (engines.isNotEmpty) {
+        AiVoiceEngineSelection.selected.addListener(_onEngineChanged);
+      }
     } catch (error) {
       debugPrint('Voice engines load failed: $error');
       if (mounted) {
@@ -702,6 +866,75 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     );
   }
 
+  Future<void> _showVoiceSummary(Map<String, dynamic> summary) async {
+    if (!mounted ||
+        !widget.visible ||
+        !widget.isCurrent() ||
+        _summaryDialogOpen) {
+      return;
+    }
+    final text = voiceSummaryText(
+      summary,
+      language: supportedAiLanguage(Get.locale?.languageCode),
+    );
+    _summaryDialogOpen = true;
+    setState(() => _summaryRaised = true);
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      if (!mounted || !widget.visible || !widget.isCurrent()) return;
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'close'.tr,
+        barrierColor: Colors.black54,
+        transitionDuration: const Duration(milliseconds: 320),
+        transitionBuilder: (context, animation, _, child) {
+          final curve = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+          return FadeTransition(
+            opacity: curve,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.1),
+                end: Offset.zero,
+              ).animate(curve),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.94, end: 1).animate(curve),
+                child: child,
+              ),
+            ),
+          );
+        },
+        pageBuilder: (context, _, _) => AlertDialog(
+          title: Text('bi_voice_summary_title'.tr),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.58,
+              maxWidth: 520,
+            ),
+            child: SingleChildScrollView(
+              child: _TypewriterSummary(
+                key: const ValueKey('voice_summary_typewriter'),
+                text: text,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('close'.tr),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _summaryDialogOpen = false;
+      if (mounted) setState(() => _summaryRaised = false);
+    }
+  }
+
   @override
   void didUpdateWidget(covariant BusinessRealtimeVoice oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -787,6 +1020,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     _generation++;
     final session = _session;
     _session = null;
+    _voiceSnapshot = null;
     _geminiScope = null;
     _geminiUid = null;
     await session?.close();
@@ -897,6 +1131,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
             _session != pausedSession) {
           return;
         }
+        _voiceSnapshot = snapshot;
         final resumed = await pausedSession.resume(
           () =>
               mounted &&
@@ -933,6 +1168,12 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       await _loadEngines();
       return;
     }
+    if (kIsWeb && !_engines.contains('openai')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('bi_voice_web_provider_unavailable'.tr)),
+      );
+      return;
+    }
     final useGemini = _engine == 'gemini' && widget.sessionFactory == null;
     final serviceUrl = voiceServiceUrl(
       _voiceUrl,
@@ -958,60 +1199,14 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
           generation != _generation) {
         return;
       }
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => Obx(
-          () => AlertDialog(
-            title: Text('bi_voice_review'.tr),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'bi_voice_privacy'.trParams({
-                      'provider': useGemini ? 'Google Gemini' : 'OpenAI',
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  SelectableText(
-                    const JsonEncoder.withIndent('  ').convert(
-                      localizedAiSnapshot(
-                        snapshot.context,
-                        Get.locale?.languageCode ?? 'en',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text('cancel'.tr),
-              ),
-              if (widget.isCurrent())
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: Text('bi_voice_consent'.tr),
-                ),
-            ],
-          ),
-        ),
-      );
-      if (confirmed != true ||
-          !mounted ||
-          !widget.visible ||
-          !widget.isCurrent() ||
-          generation != _generation) {
-        return;
-      }
       if (useGemini) {
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid == null) throw StateError('Not signed in');
         _geminiScope = _snapshotScope(snapshot, uid);
         _geminiUid = uid;
       }
-      final tools = _voiceTools();
+      _voiceSnapshot = snapshot;
+      final tools = _voiceTools(snapshot);
       widget.onToolsReady?.call(tools.call);
       final factory =
           widget.sessionFactory ??
@@ -1046,7 +1241,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         endpoint: endpoint ?? Uri(),
         snapshot: snapshot,
         businessId: widget.businessContext.businessId,
-        language: Get.locale?.languageCode ?? 'en',
+        language: supportedAiLanguage(Get.locale?.languageCode),
       );
       if (!mounted ||
           !widget.visible ||
@@ -1087,9 +1282,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     }
   }
 
-  VoiceBusinessTools _voiceTools() => VoiceBusinessTools(
+  VoiceBusinessTools _voiceTools([AiSnapshot? snapshot]) => VoiceBusinessTools(
     provider: widget.provider,
     business: widget.businessContext,
+    initialSnapshot: snapshot ?? _voiceSnapshot,
     isCurrent: () =>
         mounted &&
         _foreground &&
@@ -1099,11 +1295,17 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     onDocument: widget.onOpenDocument,
     onTransaction: _reviewVoiceTransaction,
     onNavigate: _openVoicePage,
+    onSummary: (summary) => unawaited(_showVoiceSummary(summary)),
+    onSummaryLoading: (loading) {
+      if (mounted && widget.visible && widget.isCurrent()) {
+        setState(() => _summaryLoading = loading);
+      }
+    },
   );
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1123,8 +1325,12 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         ),
       );
     }
-    final status = _busy
+    final status = _summaryLoading
+        ? 'bi_voice_summary_loading'
+        : _busy
         ? 'bi_voice_connecting'
+        : kIsWeb && _engineReady && _engines.isEmpty
+        ? 'bi_voice_web_provider_unavailable'
         : _active
         ? (_muted ? 'bi_voice_muted' : 'bi_voice_live')
         : _paused
@@ -1155,12 +1361,24 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       const SizedBox(height: 16),
-                      _IsherOrb(
-                        animation: _orbAnimation,
-                        active: _active && !_muted,
-                        busy: _busy,
-                        level: _active && !_muted ? _microphoneLevel : 0,
-                        speaking: _aiSpeaking,
+                      AnimatedSlide(
+                        offset: _summaryRaised
+                            ? const Offset(0, -0.75)
+                            : Offset.zero,
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutCubic,
+                        child: AnimatedScale(
+                          scale: _summaryRaised ? 0.58 : 1,
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeOutCubic,
+                          child: _IsherOrb(
+                            animation: _orbAnimation,
+                            active: _active && !_muted,
+                            busy: _busy,
+                            level: _active && !_muted ? _microphoneLevel : 0,
+                            speaking: _aiSpeaking,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 28),
                       Text(
@@ -1176,23 +1394,18 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        status == 'bi_voice_live'
-                            ? status.trParams({
-                                'provider': _engine == 'gemini'
-                                    ? 'Google Gemini'
-                                    : 'OpenAI',
-                              })
-                            : status.tr,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Color(0xFFBDB9D0),
-                          fontSize: 14,
-                          height: 1.5,
+                      if (status != 'bi_voice_live')
+                        Text(
+                          status.tr,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFBDB9D0),
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 22),
-                      if (_busy)
+                      if (_busy || _summaryLoading)
                         const SizedBox(
                           width: 22,
                           height: 22,
@@ -1228,6 +1441,19 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                         ),
                         const SizedBox(height: 14),
                       ],
+                      if (kIsWeb)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'bi_voice_web_requirements'.tr,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
                       if (_active && !_muted && _microphoneLevel == null)
                         Text(
                           'bi_voice_level_unavailable'.tr,
@@ -1254,6 +1480,8 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                           child: InkWell(
                             customBorder: const CircleBorder(),
                             onTap: _busy
+                                ? null
+                                : (kIsWeb && !_engines.contains('openai'))
                                 ? null
                                 : (_active ? _toggleMute : _start),
                             child: Container(
@@ -1336,6 +1564,48 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       ),
     );
   }
+}
+
+class _TypewriterSummary extends StatefulWidget {
+  const _TypewriterSummary({super.key, required this.text});
+
+  final String text;
+
+  @override
+  State<_TypewriterSummary> createState() => _TypewriterSummaryState();
+}
+
+class _TypewriterSummaryState extends State<_TypewriterSummary> {
+  Timer? _timer;
+  late final List<int> _runes;
+  var _visibleRunes = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _runes = widget.text.runes.toList();
+    _timer = Timer.periodic(const Duration(milliseconds: 18), (timer) {
+      if (_visibleRunes >= _runes.length) {
+        timer.cancel();
+        return;
+      }
+      setState(
+        () => _visibleRunes = (_visibleRunes + 5).clamp(0, _runes.length),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: widget.text,
+    child: SelectableText(String.fromCharCodes(_runes.take(_visibleRunes))),
+  );
 }
 
 class _VoiceControl extends StatelessWidget {

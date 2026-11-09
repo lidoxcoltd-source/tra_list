@@ -10,7 +10,7 @@ class ChatPeriodResult {
 }
 
 bool isTransactionCommand(String text) => RegExp(
-  r'^\s*(record|rekodi|sajili|hifadhi|andika)\s+(?:ya\s+)?(matumizi|mapato|expense|income)\b',
+  r'^\s*(?:(?:please|tafadhali|naomba|nataka|i\s+want\s+to)\s+)*(?:u?(?:record|rekodi|sajili|hifadhi|andika)|kurekodi|weka)\s+(?:ya\s+)?(matumizi|mapato|expense|income)\b',
   caseSensitive: false,
 ).hasMatch(text);
 

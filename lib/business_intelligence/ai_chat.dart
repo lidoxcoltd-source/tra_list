@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -56,6 +55,13 @@ Object? localizedAiSnapshot(
   if (language != 'sw') return value ?? 'Unavailable';
   const keys = <String, String>{
     'businessName': 'Jina la biashara',
+    'businessProfile': 'Taarifa za biashara',
+    'businessType': 'Aina ya biashara',
+    'businessDescription': 'Shughuli za biashara',
+    'address': 'Anwani',
+    'phone': 'Simu',
+    'website': 'Tovuti',
+    'socialHandle': 'Jina la mtandao wa kijamii',
     'periodStart': 'Mwanzo wa kipindi (UTC)',
     'periodEndExclusive': 'Mwisho wa kipindi usiojumuishwa (UTC)',
     'updatedAt': 'Muhtasari umesasishwa (UTC)',
@@ -101,6 +107,8 @@ Object? localizedAiSnapshot(
         'Mauzo ya POS hayajumuishi oda za baa, marejesho au ankara zilizofutwa; thamani za bidhaa hazijumuishi marekebisho ya ankara.',
     'Daily income is grouped by UTC date. Business type, customer history, staff and job records are unavailable.':
         'Mapato ya kila siku yamepangwa kwa tarehe ya UTC. Aina ya biashara, historia ya wateja, wafanyakazi na rekodi za kazi za wateja havipatikani.',
+    'Business type and activity description are not provided in the business profile.':
+        'Aina na maelezo ya shughuli za biashara hazijawekwa kwenye wasifu wa biashara.',
     'Purchases are business-wide received stock purchases by purchase date, not necessarily paid expenses. Purchases may overlap recorded expenses; do not add them. Records without valid dates are excluded.':
         'Manunuzi ni ya bidhaa zilizopokelewa katika biashara nzima kwa tarehe ya manunuzi, si lazima yawe matumizi yaliyolipwa. Yanaweza kuingiliana na matumizi yaliyorekodiwa; usiyajumlishe pamoja. Rekodi zisizo na tarehe sahihi hazijajumuishwa.',
     'Purchase data is unavailable to this account.':
@@ -236,6 +244,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
   final _messages = <AiChatMessage>[];
+  final _expandedMessageIds = <String>{};
   bool _loading = true;
   bool _loadingOlder = false;
   bool _hasMore = false;
@@ -245,8 +254,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
   ReportingPeriod? _conversationPeriod;
   bool _busy = false;
   bool _awaitingResponse = false;
-  AiDocumentReview? _documentReview;
-  Completer<bool>? _documentReviewDecision;
   bool _guidingInvoice = false;
   bool _openingDraft = false;
   bool _invoiceSaveFailed = false;
@@ -278,6 +285,13 @@ class BusinessAiChatState extends State<BusinessAiChat> {
 
   void _cacheHistory() {
     widget.historyCache?.store(widget.businessContext, _messages, _hasMore);
+  }
+
+  String _messageText(AiChatMessage message, bool showTransactionSuggestions) {
+    if (showTransactionSuggestions && identical(message, _messages.last)) {
+      return 'bi_transaction_suggestion_prompt'.tr;
+    }
+    return decodeDocumentHistoryEvent(message)?.text ?? message.content;
   }
 
   Future<void> _loadHistory() async {
@@ -344,33 +358,9 @@ class BusinessAiChatState extends State<BusinessAiChat> {
 
   @override
   void dispose() {
-    if (_documentReviewDecision?.isCompleted == false) {
-      _documentReviewDecision!.complete(false);
-    }
     _input.dispose();
     _inputFocus.dispose();
     super.dispose();
-  }
-
-  Future<bool> _reviewDocumentInChat(AiDocumentReview review) async {
-    final decision = Completer<bool>();
-    setState(() {
-      _documentReview = review;
-      _documentReviewDecision = decision;
-    });
-    final confirmed = await decision.future;
-    if (mounted) {
-      setState(() {
-        _documentReview = null;
-        _documentReviewDecision = null;
-      });
-    }
-    return confirmed;
-  }
-
-  void _resolveDocumentReview(bool confirmed) {
-    final decision = _documentReviewDecision;
-    if (decision != null && !decision.isCompleted) decision.complete(confirmed);
   }
 
   bool get _canEditMessage =>
@@ -696,8 +686,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
         );
         if (!mounted || !widget.isCurrent()) return;
         if (review != null) {
-          final confirmed = await _reviewDocumentInChat(review);
-          if (!confirmed || !mounted || !widget.isCurrent()) return;
           snapshot = AiSnapshot(snapshot.context, review.token);
         }
       }
@@ -754,7 +742,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
         context: requestContext,
         snapshot: snapshot,
         messages: history,
-        language: Get.locale?.languageCode ?? 'en',
+        language: supportedAiLanguage(Get.locale?.languageCode),
         messageId: userMessage.id,
       );
       if (!mounted || !widget.isCurrent()) return;
@@ -810,6 +798,10 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                                     (e.details as Map)['reason'] ==
                                         'ai-model-unavailable'
                               ? 'bi_chat_model_unavailable'.tr
+                              : e.details is Map &&
+                                    (e.details as Map)['reason'] ==
+                                        'ai-web-search-provider-required'
+                              ? 'bi_chat_web_search_gemini_required'.tr
                               : 'bi_chat_snapshot_error'.tr,
                         'unavailable' || 'deadline-exceeded' =>
                           (isTransactionCommand(prompt) ||
@@ -1367,75 +1359,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                       reverse: true,
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                       children: [
-                        if (_documentReview case final AiDocumentReview review)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 520),
-                              child: Card(
-                                color: const Color(0xFF25213D),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(14),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'bi_document_review_title'.tr,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'bi_document_review_notice'.tr,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 240,
-                                        ),
-                                        child: SingleChildScrollView(
-                                          child: SelectableText(
-                                            const JsonEncoder.withIndent(
-                                              '  ',
-                                            ).convert(review.details),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      Wrap(
-                                        spacing: 8,
-                                        children: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                _resolveDocumentReview(false),
-                                            child: Text('cancel'.tr),
-                                          ),
-                                          FilledButton(
-                                            onPressed: widget.isCurrent()
-                                                ? () => _resolveDocumentReview(
-                                                    true,
-                                                  )
-                                                : null,
-                                            child: Text(
-                                              'bi_document_review_send'.tr,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                         if (_awaitingResponse) const IsherThinkingIndicator(),
                         if (_guidingInvoice)
                           AiInvoiceGuide(
@@ -1524,23 +1447,65 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           SelectableText(
-                                            showTransactionSuggestions &&
-                                                    identical(
-                                                      message,
-                                                      _messages.last,
-                                                    )
-                                                ? 'bi_transaction_suggestion_prompt'
-                                                      .tr
-                                                : decodeDocumentHistoryEvent(
-                                                        message,
-                                                      )?.text ??
-                                                      message.content,
+                                            _messageText(
+                                              message,
+                                              showTransactionSuggestions,
+                                            ),
+                                            maxLines:
+                                                _messageText(
+                                                          message,
+                                                          showTransactionSuggestions,
+                                                        ).length >
+                                                        500 &&
+                                                    !_expandedMessageIds
+                                                        .contains(message.id)
+                                                ? 8
+                                                : null,
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 14,
                                               height: 1.4,
                                             ),
                                           ),
+                                          if (_messageText(
+                                                message,
+                                                showTransactionSuggestions,
+                                              ).length >
+                                              500)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: TextButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    if (!_expandedMessageIds
+                                                        .add(message.id)) {
+                                                      _expandedMessageIds
+                                                          .remove(message.id);
+                                                    }
+                                                  });
+                                                },
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: const Color(
+                                                    0xFFC7A9FF,
+                                                  ),
+                                                  padding: EdgeInsets.zero,
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    32,
+                                                  ),
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                ),
+                                                child: Text(
+                                                  _expandedMessageIds.contains(
+                                                        message.id,
+                                                      )
+                                                      ? 'market_read_less'.tr
+                                                      : 'market_read_more'.tr,
+                                                ),
+                                              ),
+                                            ),
                                           if (decodeDocumentHistoryEvent(
                                                 message,
                                               )?.invoiceId
@@ -1665,7 +1630,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                               onPressed:
                                   _loadingOlder ||
                                       _guidingInvoice ||
-                                      _documentReview != null ||
                                       _openingDraft ||
                                       _loading ||
                                       _historyError != null
@@ -1799,7 +1763,6 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                       focusNode: _inputFocus,
                       enabled:
                           !_guidingInvoice &&
-                          _documentReview == null &&
                           !_openingDraft &&
                           !_loading &&
                           _historyError == null &&
@@ -1850,22 +1813,28 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed:
-                        _busy ||
-                            _guidingInvoice ||
-                            _openingDraft ||
-                            _loading ||
-                            _historyError != null ||
-                            _unsavedAnswer != null
-                        ? null
-                        : () => _send(),
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF7656D6),
-                      foregroundColor: Colors.white,
+                  Tooltip(
+                    message: 'bi_chat_send_confirm'.tr,
+                    child: FilledButton.icon(
+                      onPressed:
+                          _busy ||
+                              _guidingInvoice ||
+                              _openingDraft ||
+                              _loading ||
+                              _historyError != null ||
+                              _unsavedAnswer != null
+                          ? null
+                          : () => _send(),
+                      icon: const Icon(Icons.send, size: 18),
+                      label: Text('bi_chat_send_button'.tr),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF7656D6),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF493A75),
+                        disabledForegroundColor: Colors.white70,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
                     ),
-                    tooltip: 'bi_chat_send_confirm'.tr,
                   ),
                 ],
               ),

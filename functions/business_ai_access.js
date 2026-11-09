@@ -16,7 +16,22 @@ async function businessAccess(db, uid, businessUid) {
     modern: modern.data(), legacy: legacy.data(),
     barEnabled: bar.data()?.enabled === true,
   });
-  return { scope, name: String(profile.data()?.name || "").trim().slice(0, 120) };
+  const data = profile.data() || {};
+  const profileText = (key, maxLength) => typeof data[key] === "string"
+    ? data[key].trim().slice(0, maxLength)
+    : "";
+  return {
+    scope,
+    name: profileText("name", 120),
+    businessProfile: {
+      businessType: profileText("businessType", 120),
+      businessDescription: profileText("businessDescription", 1000),
+      address: profileText("address", 300),
+      phone: profileText("phone", 80),
+      website: profileText("website", 200),
+      socialHandle: profileText("handle", 120),
+    },
+  };
 }
 
 module.exports = { businessAccess };

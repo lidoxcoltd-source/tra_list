@@ -18,24 +18,43 @@ void main() {
   });
 
   test('incomplete and invalid dates require selection', () {
-    expect(resolveChatPeriod('biashara tarhe 2 ilienda je', now).kind,
-        ChatPeriodKind.needsSelection);
-    expect(resolveChatPeriod('tarehe 31/02/2024', now).kind,
-        ChatPeriodKind.needsSelection);
-    expect(resolveChatPeriod('mauzo wiki iliyopita', now).kind,
-        ChatPeriodKind.needsSelection);
+    expect(
+      resolveChatPeriod('biashara tarhe 2 ilienda je', now).kind,
+      ChatPeriodKind.needsSelection,
+    );
+    expect(
+      resolveChatPeriod('tarehe 31/02/2024', now).kind,
+      ChatPeriodKind.needsSelection,
+    );
+    expect(
+      resolveChatPeriod('mauzo wiki iliyopita', now).kind,
+      ChatPeriodKind.needsSelection,
+    );
   });
 
-  test('follow-ups retain period and comparisons are not silently aggregated', () {
-    expect(resolveChatPeriod('Je, matumizi?', now).kind, ChatPeriodKind.none);
-    expect(resolveChatPeriod('Linganisha mwezi huu na uliopita', now).kind,
-        ChatPeriodKind.comparison);
-    final yesterday = resolveChatPeriod('jana', now);
-    expect(yesterday.period!.start, DateTime(2026, 11, 6));
-    expect(yesterday.period!.end, DateTime(2026, 11, 7));
-  });
+  test(
+    'follow-ups retain period and comparisons are not silently aggregated',
+    () {
+      expect(resolveChatPeriod('Je, matumizi?', now).kind, ChatPeriodKind.none);
+      expect(
+        resolveChatPeriod('Linganisha mwezi huu na uliopita', now).kind,
+        ChatPeriodKind.comparison,
+      );
+      final yesterday = resolveChatPeriod('jana', now);
+      expect(yesterday.period!.start, DateTime(2026, 11, 6));
+      expect(yesterday.period!.end, DateTime(2026, 11, 7));
+    },
+  );
 
   test('transaction descriptions do not trigger report period selection', () {
+    expect(
+      resolveChatPeriod('Naomba urekodi mapato', now).kind,
+      ChatPeriodKind.none,
+    );
+    expect(
+      resolveChatPeriod('Nataka kurekodi matumizi jana', now).kind,
+      ChatPeriodKind.none,
+    );
     expect(
       resolveChatPeriod(
         'rekodi matumizi 30000; kundi: Kodi; maelezo: Kodi ya mwezi huu',

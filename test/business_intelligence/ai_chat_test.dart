@@ -600,8 +600,11 @@ void main() {
     expect(find.byType(AiTransactionSuggestions), findsNothing);
   });
 
-  testWidgets('document details require review before sending', (tester) async {
+  testWidgets('document details are sent without repeated review', (
+    tester,
+  ) async {
     final provider = FakeReviewProvider();
+    provider.pendingAnswer = Completer<String>();
     final history = FakeHistory();
     final business = BusinessContext(
       businessId: 'business',
@@ -632,26 +635,26 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.send), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'historia ya wateja');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Kagua taarifa za nyaraka'), findsOneWidget);
+    provider.pendingAnswer!.complete(
+      List.filled(80, 'Taarifa za biashara zinaendelea.').join(' '),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Kagua taarifa za nyaraka'), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.textContaining('INV-1'), findsOneWidget);
-    expect(tester.widget<TextField>(find.byType(TextField)).enabled, false);
-    expect(provider.sends, 0);
-    expect(history.messages, isEmpty);
-    await tester.tap(find.text('cancel'.tr));
-    await tester.pumpAndSettle();
-    expect(provider.sends, 0);
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text('Tuma taarifa zilizokaguliwa'));
-    await tester.pumpAndSettle();
     expect(provider.sends, 1);
     expect(provider.sentToken, 'reviewed-token');
+    expect(history.messages.map((message) => message.role), [
+      'user',
+      'assistant',
+    ]);
+    expect(find.text('Soma zaidi'), findsOneWidget);
+    await tester.tap(find.text('Soma zaidi'));
+    await tester.pumpAndSettle();
+    expect(find.text('Punguza'), findsOneWidget);
   });
 
   testWidgets(

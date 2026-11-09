@@ -32,6 +32,8 @@ class _ProfilePageState extends State<ProfilePage> {
       : Get.put(LanguageController());
 
   final nameC = TextEditingController();
+  final businessTypeC = TextEditingController();
+  final businessDescriptionC = TextEditingController();
   final shopNicknameC = TextEditingController();
   final addressC = TextEditingController();
   final phoneC = TextEditingController();
@@ -101,6 +103,8 @@ class _ProfilePageState extends State<ProfilePage> {
       final data = await ProfileService.loadOrCreate();
       if (!mounted) return;
       nameC.text = data['name']?.toString() ?? '';
+      businessTypeC.text = data['businessType']?.toString() ?? '';
+      businessDescriptionC.text = data['businessDescription']?.toString() ?? '';
       shopNicknameC.text = data['shopNickname']?.toString() ?? '';
       addressC.text = data['address']?.toString() ?? '';
       phoneC.text = data['phone']?.toString() ?? '';
@@ -158,6 +162,8 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     nameC.dispose();
+    businessTypeC.dispose();
+    businessDescriptionC.dispose();
     shopNicknameC.dispose();
     addressC.dispose();
     phoneC.dispose();
@@ -636,6 +642,19 @@ class _ProfilePageState extends State<ProfilePage> {
           children: [
             _buildTextField(nameC, 'Company Name', Icons.label_outline),
             _buildTextField(
+              businessTypeC,
+              'profile_business_type'.tr,
+              Icons.category_outlined,
+              maxLength: 120,
+            ),
+            _buildTextField(
+              businessDescriptionC,
+              'profile_business_description'.tr,
+              Icons.description_outlined,
+              maxLines: 3,
+              maxLength: 1000,
+            ),
+            _buildTextField(
               shopNicknameC,
               'profile_shop_nickname'.tr,
               Icons.storefront_outlined,
@@ -983,6 +1002,7 @@ class _ProfilePageState extends State<ProfilePage> {
     IconData icon, {
     bool enabled = true,
     TextInputType? keyboardType,
+    int? maxLines,
     int? maxLength,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: MjasiSpacing.md),
@@ -990,6 +1010,7 @@ class _ProfilePageState extends State<ProfilePage> {
       controller: controller,
       enabled: enabled,
       keyboardType: keyboardType,
+      maxLines: maxLines,
       maxLength: maxLength,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
@@ -1508,6 +1529,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await ProfileService.save({
         'name': nameC.text.trim(),
+        'businessType': businessTypeC.text.trim(),
+        'businessDescription': businessDescriptionC.text.trim(),
         'shopNickname': shopNicknameC.text.trim(),
         'address': addressC.text.trim(),
         'phone': phoneC.text.trim(),

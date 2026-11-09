@@ -51,7 +51,7 @@ class ProfileService {
       'handle': '',
       'logoUrl': '',
       'logoSource': 'firebase',
-      'language': 'en',
+      'language': 'sw',
       'beneficiary': '',
       'bank': '',
       'account': '',
@@ -98,6 +98,8 @@ class ProfileService {
       }
       return {
         'name': d['name']?.toString() ?? '',
+        'businessType': d['businessType']?.toString() ?? '',
+        'businessDescription': d['businessDescription']?.toString() ?? '',
         'shopNickname': d['shopNickname']?.toString() ?? '',
         'ownerName': storedOwnerName.isNotEmpty
             ? storedOwnerName
@@ -143,6 +145,8 @@ class ProfileService {
     final accountOwnerName = currentUser?.displayName?.trim() ?? '';
     final init = {
       'name': accountOwnerName,
+      'businessType': '',
+      'businessDescription': '',
       'shopNickname': '',
       'ownerName': accountOwnerName,
       'address': '',
@@ -154,7 +158,7 @@ class ProfileService {
       'handle': '',
       'logoUrl': '',
       'logoSource': 'firebase',
-      'language': 'en',
+      'language': 'sw',
       'beneficiary': '',
       'bank': '',
       'account': '',

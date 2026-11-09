@@ -1534,7 +1534,8 @@ class _HomePageState extends State<HomePage> {
   );
 
   Widget _buildStaffSalesSection() => Obx(() {
-    if (staffStats.isEmpty || !BusinessAccessService.barModeEnabled.value) {
+    final barModeEnabled = BusinessAccessService.barModeEnabled.value;
+    if (staffStats.isEmpty || !barModeEnabled) {
       return const SizedBox.shrink();
     }
     return Column(

@@ -10,7 +10,7 @@ class LanguageController extends GetxController {
 
   Locale _loadLocaleFromBox() {
     final localeString = _box.read(_key) as String?;
-    if (localeString == null) return const Locale('en', 'US');
+    if (localeString == null) return const Locale('sw', 'TZ');
     final parts = localeString.split('_');
     return Locale(parts[0], parts[1]);
   }

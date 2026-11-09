@@ -228,6 +228,7 @@ const Map<String, String> enUsTranslations = {
       'Comparing separate periods is not yet supported. Ask about one period at a time.',
   'bi_chat_user': 'You',
   'bi_chat_assistant': 'Assistant',
+  'bi_chat_send_button': 'Send',
   'bi_chat_send_confirm': 'Send to selected AI provider',
   'bi_chat_too_long': 'Your question must be at most 2,000 characters.',
   'bi_chat_access_error':
@@ -237,6 +238,8 @@ const Map<String, String> enUsTranslations = {
       'The report expired or access changed. Prepare and review it again.',
   'bi_chat_model_unavailable':
       'The selected model is no longer available. Open the model picker and choose an available model.',
+  'bi_chat_web_search_gemini_required':
+      'Online business research requires a Gemini model. Select Gemini in the model picker and try again.',
   'bi_chat_limit_error':
       'The request or record limit was reached. Check AI usage, try later or choose a shorter period.',
   'bi_chat_quota_exhausted':
@@ -314,7 +317,12 @@ const Map<String, String> enUsTranslations = {
       'The question could not be saved. It was not sent to the AI provider; retry with the same question.',
   'bi_retry_save': 'Retry saving answer',
   'bi_load_older': 'Load older messages',
-  'bi_voice_android_only': 'Live voice is currently available only on Android.',
+  'bi_voice_android_only':
+      'Live voice is available on Android and supported web browsers.',
+  'bi_voice_web_provider_unavailable':
+      'Live voice on the web requires OpenAI voice to be enabled by your administrator.',
+  'bi_voice_web_requirements':
+      'Open this app over HTTPS and allow microphone access when your browser asks.',
   'bi_voice_title': 'Live voice conversation',
   'bi_voice_welcome': 'Talk to your business assistant',
   'bi_voice_session_title': 'Voice conversation',
@@ -339,6 +347,9 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_transaction_description': 'Description',
   'bi_voice_transaction_today': 'Date: today when saved.',
   'bi_voice_transaction_chat': 'Continue in chat',
+  'bi_voice_summary_title': 'Business summary',
+  'bi_voice_summary_loading':
+      'Preparing your business report. Please wait a moment.',
   'bi_voice_consent': 'Agree and start',
   'bi_voice_start': 'Start voice',
   'bi_voice_live':
@@ -368,7 +379,7 @@ const Map<String, String> enUsTranslations = {
   'isher_usage': 'Usage',
   'isher_loading': 'Preparing your business...',
   'isher_welcome_title': 'Welcome to Isher AI',
-  'isher_welcome_subtitle': 'Your intelligent business companion',
+  'isher_welcome_subtitle': 'Your Intelligent Business Assistant',
   'isher_wake_listening': 'Listening for “Isher” or “Aisha” — tap to turn off',
   'isher_wake_waiting_choice':
       'Yes, hello! Would you like to chat or make a call?',
@@ -1937,6 +1948,8 @@ const Map<String, String> enUsTranslations = {
   'profile_save_changes': 'Save Changes',
   'profile_uploading': 'Uploading...',
   'profile_company_details': 'Company Details',
+  'profile_business_type': 'Business type',
+  'profile_business_description': 'What does your business do?',
   'profile_payment_details': 'Payment Details',
   'profile_branding': 'Branding & Theming',
   'analytics_all': 'All',

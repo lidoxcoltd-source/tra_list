@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/isher_greeting_voice.dart';
 import 'package:tra_list/business_intelligence/isher_welcome_screen.dart';
 import 'package:tra_list/invoice/app_translations.dart';
@@ -32,7 +34,56 @@ class FakeGreetingVoice implements IsherGreetingVoice {
   }
 }
 
+BusinessContext _businessContext() => BusinessContext(
+  businessId: 'business',
+  businessName: 'Duka Asha',
+  period: ReportingPeriod(DateTime(2026, 11, 1), DateTime(2026, 12, 1)),
+  updatedAt: DateTime.utc(2026, 11, 9),
+  income: 120000,
+  expenses: 30000,
+  transactionCount: 8,
+  expenseCategories: const {},
+  lowStock: const ['Mchele (2 kg)'],
+  receivable: 5000,
+  payable: 0,
+  limitations: const [],
+);
+
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('introduction is due on first use and after seven inactive days', () {
+    final now = DateTime.utc(2026, 11, 9);
+    expect(shouldIntroduceIsher(null, now), isTrue);
+    expect(
+      shouldIntroduceIsher(now.subtract(const Duration(days: 6)), now),
+      isFalse,
+    );
+    expect(
+      shouldIntroduceIsher(now.subtract(const Duration(days: 7)), now),
+      isTrue,
+    );
+  });
+
+  test(
+    'welcome greeting uses Tanzania time and includes a business summary',
+    () {
+      final greeting = isherWelcomeGreeting(
+        language: 'sw',
+        name: 'Lidox',
+        now: DateTime.utc(2026, 11, 9, 6),
+        introduce: true,
+        business: _businessContext(),
+      );
+      expect(greeting, contains('Habari Lidox, za asubuhi.'));
+      expect(greeting, contains('Naitwa Isher AI'));
+      expect(greeting, contains('Mapato yaliyorekodiwa ni TZS 120,000'));
+      expect(greeting, contains('Matumizi yaliyorekodiwa ni TZS 30,000'));
+      expect(greeting, contains('Salio la fedha, si faida ni TZS 90,000'));
+      expect(greeting, contains('Bidhaa zenye akiba ndogo'));
+    },
+  );
+
   testWidgets('shows three capabilities without speech controls', (
     tester,
   ) async {
@@ -59,7 +110,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Isher AI'), findsOneWidget);
-    expect(find.text('Msaidizi wako mahiri wa biashara'), findsOneWidget);
+    expect(find.text('Msaidizi wako Mahiri wa Biashara'), findsOneWidget);
     expect(find.text('Chambua biashara'), findsOneWidget);
     expect(find.text('Andaa rasimu za hati'), findsOneWidget);
     expect(find.text('Rekodi miamala'), findsOneWidget);
@@ -67,7 +118,7 @@ void main() {
     expect(find.byTooltip('Sikiliza salamu'), findsNothing);
   });
 
-  testWidgets('greeting plays while the business report is still loading', (
+  testWidgets('greeting waits until the business summary is ready', (
     tester,
   ) async {
     final voice = FakeGreetingVoice();
@@ -81,6 +132,8 @@ void main() {
         error: '',
         businessName: 'Duka Asha',
         businessId: 'business',
+        greetingName: 'Lidox',
+        businessContext: !loading ? _businessContext() : null,
         greetingVoice: voice,
         onRetry: () {},
         onChat: () {},
@@ -92,14 +145,14 @@ void main() {
     await tester.pumpWidget(screen(true));
     await tester.pump();
     await tester.pump();
-    expect(voice.spoken, hasLength(1));
-    expect(voice.spoken.single, startsWith('sw:'));
-    expect(voice.spoken.single, contains('Duka Asha'));
+    expect(voice.spoken, isEmpty);
     expect(find.textContaining('Duka Asha'), findsNothing);
     expect(find.text('bi_tab_chat'.tr), findsNothing);
     await tester.pumpWidget(screen(false));
     await tester.pump();
     expect(voice.spoken, hasLength(1));
+    expect(voice.spoken.single, contains('Habari Lidox, za'));
+    expect(voice.spoken.single, contains('Muhtasari wa biashara yako'));
     expect(find.text('bi_tab_chat'.tr), findsOneWidget);
   });
 
@@ -118,6 +171,8 @@ void main() {
             ready: ready,
             businessName: name,
             businessId: 'business',
+            greetingName: 'Lidox',
+            businessContext: ready ? _businessContext() : null,
             greetingReady: ready,
             greetingVoice: voice,
             onRetry: () {},
@@ -136,7 +191,7 @@ void main() {
     expect(find.textContaining('Duka Asha'), findsNothing);
     expect(voice.spoken, hasLength(1));
     expect(voice.spoken.single, startsWith('sw:'));
-    expect(voice.spoken.single, contains('Duka Asha'));
+    expect(voice.spoken.single, contains('Lidox'));
     await tester.pumpWidget(screen());
     await tester.pump();
     expect(voice.spoken, hasLength(1));
@@ -160,6 +215,8 @@ void main() {
         error: '',
         businessName: 'Duka Asha',
         businessId: 'business',
+        greetingName: 'Lidox',
+        businessContext: _businessContext(),
         greetingVoice: voice,
         onRetry: () {},
         onChat: () {},
@@ -224,6 +281,7 @@ void main() {
           ready: true,
           businessName: 'Duka',
           businessId: 'business',
+          greetingName: 'Lidox',
           greetingReady: true,
           greetingVoice: voice,
           onRetry: () {},
@@ -257,6 +315,7 @@ void main() {
         greetingReady: access,
         businessName: 'Duka',
         businessId: access ? 'business' : null,
+        greetingName: 'Lidox',
         greetingVoice: voice,
         onRetry: () {},
         onChat: () {},

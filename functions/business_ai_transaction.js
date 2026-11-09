@@ -1,9 +1,52 @@
-const COMMAND = /^(?:record|rekodi|sajili|hifadhi|andika)\s+(?:ya\s+)?(matumizi|mapato|expense|income)\b/i;
-const FORMAT = /^(?:record|rekodi|sajili|hifadhi|andika)\s+(?:ya\s+)?(matumizi|mapato|expense|income)\s+(?:ya\s+)?(?:tsh\s*|tzs\s*)?(\d{1,3}(?:,\d{3})+|\d+)\s*;\s*(?:category|kundi)\s*:\s*([^;]{1,100})\s*;\s*(?:description|maelezo)\s*:\s*([^;]{1,300})\s*$/i;
-const AMOUNT_ONLY = /^(?:record|rekodi|sajili|hifadhi|andika)\s+(?:ya\s+)?(matumizi|mapato|expense|income)\s+(?:ya\s+)?(?:tsh\s*|tzs\s*)?(\d{1,3}(?:,\d{3})+|\d+)\s*$/i;
+const PREFIX = String.raw`^(?:(?:please|tafadhali|naomba|nataka|i\s+want\s+to)\s+)*(?:u?(?:record|rekodi|sajili|hifadhi|andika)|kurekodi|weka)\s+`;
+const TYPE = String.raw`(?:ya\s+)?(matumizi|mapato|expense|income)\b`;
+const COMMAND = new RegExp(String.raw`${PREFIX}${TYPE}`, "i");
+const FORMAT = new RegExp(
+  String.raw`${PREFIX}${TYPE}\s+(?:ya\s+)?(?:tsh\s*|tzs\s*)?(\d{1,3}(?:,\d{3})+|\d+)\s*;\s*(?:category|kundi)\s*:\s*([^;]{1,100})\s*;\s*(?:description|maelezo)\s*:\s*([^;]{1,300})\s*$`,
+  "i",
+);
+const AMOUNT_ONLY = new RegExp(
+  String.raw`${PREFIX}${TYPE}\s+(?:ya\s+)?(?:tsh\s*|tzs\s*)?(\d{1,3}(?:,\d{3})+|\d+)\s*$`,
+  "i",
+);
 const DETAILS = /^(?:category|kundi)\s*:\s*([^;]{1,100})\s*;\s*(?:description|maelezo)\s*:\s*([^;]{1,300})\s*$/i;
 const FOLLOWUP_SW = "Tafadhali tuma kundi na maelezo kwa muundo: kundi: Kodi; maelezo: Kodi ya duka. Tumia kundi lililopo; tarehe itakuwa leo.";
 const FOLLOWUP_EN = "Please send the category and description in this format: category: Rent; description: Shop rent. Use an existing category; the date will be today.";
+const TYPE_FOLLOWUP_SW = "Unataka kurekodi mapato au matumizi? Chagua aina moja kwanza.";
+const TYPE_FOLLOWUP_EN = "Would you like to record income or an expense? Please choose one first.";
+
+function amountFollowup(type, language) {
+  return language === "Swahili"
+    ? `Tuma kiasi cha ${type === "income" ? "mapato" : "matumizi"} unachotaka kurekodi.`
+    : `Send the amount of ${type} you want to record.`;
+}
+
+function amountReply(text) {
+  const match = /^(?:(?:tsh|tzs)\s*)?(\d{1,3}(?:,\d{3})+|\d+)$/i.exec(text.trim());
+  if (!match) return null;
+  const amount = Number(match[1].replace(/,/g, ""));
+  return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
+}
+
+function typeReply(text) {
+  if (/^(?:mapato|income)$/i.test(text.trim())) return "income";
+  if (/^(?:matumizi|expense)$/i.test(text.trim())) return "expense";
+  return null;
+}
+
+function typeForAmountReply(messages, promptIndex) {
+  const prompt = messages[promptIndex];
+  const request = messages[promptIndex - 1];
+  if (prompt?.role !== "assistant" || request?.role !== "user") return null;
+  const direct = parseTransactionCommand(request.content);
+  if (direct?.incomplete && direct.type && !direct.amount) return direct.type;
+  const typePrompt = messages[promptIndex - 2];
+  const ambiguousRequest = parseTransactionCommand(messages[promptIndex - 3]?.content);
+  if (typePrompt?.role !== "assistant" ||
+      ![TYPE_FOLLOWUP_SW, TYPE_FOLLOWUP_EN].includes(typePrompt.content) ||
+      !ambiguousRequest?.incomplete || ambiguousRequest.type) return null;
+  return typeReply(request.content);
+}
 
 function amountCommand(match) {
   const amount = Number(match[2].replace(/,/g, ""));
@@ -16,11 +59,28 @@ function amountCommand(match) {
 
 function parseTransactionCommand(text) {
   if (typeof text !== "string" || !COMMAND.test(text.trim())) return null;
-  const match = FORMAT.exec(text.trim());
+  const commandText = text.trim();
+  const match = FORMAT.exec(commandText);
   if (!match) {
-    const partial = AMOUNT_ONLY.exec(text.trim());
+    const partial = AMOUNT_ONLY.exec(commandText);
     const value = partial && amountCommand(partial);
-    return value ? { incomplete: true, ...value } : { incomplete: true };
+    if (value) return { incomplete: true, ...value };
+    const hasIncome = /\b(?:mapato|income)\b/i.test(commandText);
+    const hasExpense = /\b(?:matumizi|expense)\b/i.test(commandText);
+    if (hasIncome && hasExpense) return { incomplete: true };
+    const typeMatch = COMMAND.exec(commandText);
+    const remaining = typeMatch
+      ? commandText.slice(typeMatch[0].length)
+      : "";
+    if (/^\s*(?:ya\s+)?(?:(?:tsh|tzs)\s*)?\d/i.test(remaining)) {
+      return { incomplete: true };
+    }
+    return {
+      incomplete: true,
+      ...(typeMatch
+        ? { type: /^(matumizi|expense)$/i.test(typeMatch[1]) ? "expense" : "income" }
+        : {}),
+    };
   }
   const value = amountCommand(match);
   const category = match[3].trim();
@@ -36,15 +96,42 @@ function parseConversation(messages) {
   if (messages.length < 3 || last?.role !== "user") return null;
   const previous = messages[messages.length - 2];
   const original = messages[messages.length - 3];
-  if (previous?.role !== "assistant" ||
-      ![FOLLOWUP_SW, FOLLOWUP_EN].includes(previous.content) ||
-      original?.role !== "user") return null;
+  if (previous?.role !== "assistant" || original?.role !== "user") return null;
   const partial = parseTransactionCommand(original.content);
-  if (!partial?.incomplete || !partial.type || !partial.amount) return null;
+  if ([TYPE_FOLLOWUP_SW, TYPE_FOLLOWUP_EN].includes(previous.content)) {
+    if (!partial?.incomplete || partial.type) return null;
+    const type = typeReply(last.content);
+    return type ? { incomplete: true, type } : null;
+  }
+  const amountPrompts = [
+    amountFollowup("income", "Swahili"),
+    amountFollowup("expense", "Swahili"),
+    amountFollowup("income", "English"),
+    amountFollowup("expense", "English"),
+  ];
+  if (amountPrompts.includes(previous.content)) {
+    const type = typeForAmountReply(messages, messages.length - 2);
+    if (!type) return null;
+    const amount = amountReply(last.content);
+    return amount ? { incomplete: true, type, amount } : null;
+  }
+  if (![FOLLOWUP_SW, FOLLOWUP_EN].includes(previous.content)) return null;
+
+  let transaction = partial;
+  if (!transaction?.type || !transaction.amount) {
+    const amount = amountReply(original.content);
+    const amountPromptIndex = messages.length - 4;
+    const amountAssistant = messages[amountPromptIndex];
+    const type = amountPrompts.includes(amountAssistant?.content)
+      ? typeForAmountReply(messages, amountPromptIndex)
+      : null;
+    if (!type || !amount) return null;
+    transaction = { type, amount };
+  }
   const details = DETAILS.exec(last.content.trim());
   if (!details || !details[1].trim() || !details[2].trim()) return null;
   return {
-    type: partial.type, amount: partial.amount,
+    type: transaction.type, amount: transaction.amount,
     category: details[1].trim(), description: details[2].trim(),
   };
 }
@@ -112,7 +199,10 @@ async function saveOwnerTransaction({ db, uid, businessUid, scope, command, mess
   });
 }
 
-module.exports = { parseTransactionCommand, parseConversation, FOLLOWUP_SW, FOLLOWUP_EN, saveOwnerTransaction };
+module.exports = {
+  parseTransactionCommand, parseConversation, FOLLOWUP_SW, FOLLOWUP_EN,
+  TYPE_FOLLOWUP_SW, TYPE_FOLLOWUP_EN, amountFollowup, saveOwnerTransaction,
+};
 const { Timestamp } = require("firebase-admin/firestore");
 const { HttpsError } = require("firebase-functions/v2/https");
 const bi = require("./business_intelligence");

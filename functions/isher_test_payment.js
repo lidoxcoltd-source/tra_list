@@ -101,6 +101,17 @@ async function purchase({ db, uid, businessUid, packageId, expectedPackage, requ
   });
 }
 
+async function purchaseExists({ db, uid, businessUid, requestId }) {
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(
+      db.doc(`isherTestTransactions/${requestId}`),
+    );
+    if (!snapshot.exists) return false;
+    const transaction = snapshot.data();
+    return transaction.uid === uid && transaction.businessUid === businessUid;
+  });
+}
+
 async function activateQueuedIfDepleted({ db, businessUid, timestamp = Date.now }) {
   const scheduleRef = db.doc(`isherTestSchedules/${businessUid}`);
   return db.runTransaction(async (tx) => {
@@ -108,20 +119,32 @@ async function activateQueuedIfDepleted({ db, businessUid, timestamp = Date.now 
     if (!scheduleSnapshot.exists) return false;
     const schedule = scheduleSnapshot.data();
     const activeId = typeof schedule.activeId === "string" ? schedule.activeId : "";
-    if (!activeId) return false;
-    const activeRef = db.doc(`isherTestSubscriptions/${activeId}`);
-    const activeSnapshot = await tx.get(activeRef);
-    if (!activeSnapshot.exists ||
-        activeSnapshot.data().status !== "active" ||
-        !hasDepletedUsageQuota(activeSnapshot.data())) {
-      return false;
-    }
-
     const queuedIds = Array.isArray(schedule.queuedIds)
       ? [...new Set(schedule.queuedIds.filter(
         (id) => typeof id === "string" && /^[a-f0-9-]{1,48}$/.test(id),
       ))].slice(0, 6)
       : [];
+    if (!queuedIds.length) return false;
+
+    const now = timestamp();
+    const activeRef = activeId
+      ? db.doc(`isherTestSubscriptions/${activeId}`)
+      : null;
+    const activeSnapshot = activeRef ? await tx.get(activeRef) : null;
+    const active = activeSnapshot?.exists ? activeSnapshot.data() : null;
+    let activeStatus = null;
+    if (active?.status === "active") {
+      if (active.endsAt <= now) {
+        activeStatus = "expired";
+      } else if (hasDepletedUsageQuota(active)) {
+        activeStatus = "exhausted";
+      } else {
+        return false;
+      }
+    } else if (active && !["expired", "exhausted"].includes(active.status)) {
+      return false;
+    }
+
     const queuedRefs = queuedIds.map((id) => db.doc(`isherTestSubscriptions/${id}`));
     const queuedSnapshots = await Promise.all(queuedRefs.map((ref) => tx.get(ref)));
     const queued = queuedSnapshots
@@ -131,8 +154,11 @@ async function activateQueuedIfDepleted({ db, businessUid, timestamp = Date.now 
         snapshot.data().status === "queued" &&
         snapshot.data().businessUid === businessUid,
       );
-    const now = timestamp();
-    tx.update(activeRef, { status: "exhausted", exhaustedAt: now });
+    if (activeStatus === "expired") {
+      tx.update(activeRef, { status: "expired", expiredAt: now });
+    } else if (activeStatus === "exhausted") {
+      tx.update(activeRef, { status: "exhausted", exhaustedAt: now });
+    }
     const [next, ...remaining] = queued;
     if (!next) {
       tx.set(scheduleRef, {
@@ -185,5 +211,6 @@ module.exports = {
   validateSettings,
   addMonth,
   purchase,
+  purchaseExists,
   activateQueuedIfDepleted,
 };
