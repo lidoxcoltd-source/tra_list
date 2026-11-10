@@ -108,9 +108,11 @@ class GeminiVoiceSession implements VoiceSession {
       String language,
     )?
     grantFactory,
+    @visibleForTesting Future<void> Function(String leaseId)? releaseLease,
     @visibleForTesting Future<WebSocket> Function(String url)? socketFactory,
   }) : _recorderFactory = recorderFactory ?? AudioRecorder.new,
        _grantFactory = grantFactory,
+       _releaseLease = releaseLease ?? _releaseServerLease,
        _socketFactory = socketFactory ?? WebSocket.connect,
        _onAiSpeaking = onAiSpeaking ?? _ignoreSpeaking {
     _playbackIndicator = GeminiPlaybackIndicator((speaking) {
@@ -122,11 +124,21 @@ class GeminiVoiceSession implements VoiceSession {
   void Function(double?) onMicrophoneLevel;
   VoiceToolHandler? toolHandler;
   void Function(bool) _onAiSpeaking;
+  void Function(String)? _onTranscript;
+  final StringBuffer _outputTranscript = StringBuffer();
   final AudioRecorder Function() _recorderFactory;
   final Future<Map<String, dynamic>> Function(String, String, String)?
   _grantFactory;
+  final Future<void> Function(String) _releaseLease;
   final Future<WebSocket> Function(String) _socketFactory;
   late final GeminiPlaybackIndicator _playbackIndicator;
+
+  static Future<void> _releaseServerLease(String leaseId) async {
+    await FirebaseFunctions.instance
+        .httpsCallable('endGeminiVoice')
+        .call({'leaseId': leaseId})
+        .timeout(const Duration(seconds: 5));
+  }
 
   void setCallbacks({
     required void Function(String) onEnded,
@@ -138,6 +150,11 @@ class GeminiVoiceSession implements VoiceSession {
     this.onMicrophoneLevel = onMicrophoneLevel;
     _onAiSpeaking = onAiSpeaking;
     this.toolHandler = toolHandler;
+  }
+
+  @override
+  void setTranscriptCallback(void Function(String text) callback) {
+    _onTranscript = callback;
   }
 
   WebSocket? _socket;
@@ -152,6 +169,7 @@ class GeminiVoiceSession implements VoiceSession {
   bool _reported = false;
   bool _muted = true;
   bool _paused = false;
+  String? _leaseId;
   Future<void>? _pauseFuture;
   DateTime _playUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -256,6 +274,10 @@ class GeminiVoiceSession implements VoiceSession {
       rethrow;
     }
     if (_closed) throw StateError('Voice session closed');
+    final leaseId = grant['leaseId'];
+    if (leaseId is String && RegExp(r'^[a-f0-9-]{36}$').hasMatch(leaseId)) {
+      _leaseId = leaseId;
+    }
 
     final socket = await _socketFactory(
       '$_liveSocket?access_token=${Uri.encodeQueryComponent(grant['token'] as String)}',
@@ -292,6 +314,7 @@ class GeminiVoiceSession implements VoiceSession {
         'generationConfig': {
           'responseModalities': ['AUDIO'],
         },
+        'outputAudioTranscription': {},
         'systemInstruction': {
           'parts': [
             {'text': grant['instruction'] as String},
@@ -341,6 +364,22 @@ class GeminiVoiceSession implements VoiceSession {
     });
   }
 
+  @override
+  Future<void> sendText(String text) async {
+    if (_closed || _paused) throw StateError('Voice session unavailable');
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || trimmed.length > 2000) {
+      throw const FormatException('Invalid voice text prompt');
+    }
+    final socket = _socket;
+    if (socket == null || socket.readyState != WebSocket.open) {
+      throw StateError('Voice connection is not ready');
+    }
+    _send({
+      'realtimeInput': {'text': trimmed},
+    });
+  }
+
   void _onMessage(String text, Completer<void> ready) {
     final Map<String, dynamic> message;
     try {
@@ -358,6 +397,15 @@ class GeminiVoiceSession implements VoiceSession {
     }
     final content = message['serverContent'];
     if (content is! Map) return;
+    final transcription = content['outputTranscription'];
+    if (transcription is Map && transcription['text'] is String) {
+      _outputTranscript.write(transcription['text']);
+    }
+    if (content['turnComplete'] == true && _outputTranscript.isNotEmpty) {
+      final transcript = _outputTranscript.toString().trim();
+      _outputTranscript.clear();
+      if (transcript.isNotEmpty) _onTranscript?.call(transcript);
+    }
     if (content['interrupted'] == true) {
       _playUntil = DateTime.now();
       _playbackIndicator.stop();
@@ -448,6 +496,8 @@ class GeminiVoiceSession implements VoiceSession {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    final leaseId = _leaseId;
+    _leaseId = null;
     _playbackIndicator.stop();
     _limitTimer?.cancel();
     Future<void> cleanup(Future<void> Function() action) async {
@@ -471,6 +521,14 @@ class GeminiVoiceSession implements VoiceSession {
       await _socket?.close();
     } catch (error) {
       debugPrint('Gemini voice socket close failed: ${error.runtimeType}');
+    }
+    if (leaseId != null) {
+      try {
+        await _releaseLease(leaseId);
+      } catch (error, stack) {
+        debugPrint('Gemini voice lease release failed: ${error.runtimeType}');
+        debugPrintStack(stackTrace: stack);
+      }
     }
   }
 }

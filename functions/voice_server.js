@@ -25,11 +25,7 @@ const server = http.createServer((req, res) => {
 const sockets = new WebSocketServer({ server, maxPayload: 160000, perMessageDeflate: false });
 
 async function release(uid, id) {
-  const ref = db.doc(`businessAiQuota/${uid}`);
-  await db.runTransaction(async (tx) => {
-    const data = (await tx.get(ref)).data();
-    if (data?.activeId === id) tx.update(ref, { activeUntil: 0 });
-  });
+  await aiQuota.releaseVoiceReservation(db, uid, id);
 }
 
 sockets.on("connection", (socket) => {
@@ -118,7 +114,10 @@ sockets.on("connection", (socket) => {
       const deadline = Date.now() + settings.voiceMinutes * 60000;
       const answer = await response.text();
       await getFunctions().taskQueue("locations/us-central1/functions/endBusinessAiVoice")
-        .enqueue({ callId }, { scheduleTime: new Date(deadline), dispatchDeadlineSeconds: 60 });
+        .enqueue(
+          { callId, uid, leaseId: id },
+          { scheduleTime: new Date(deadline), dispatchDeadlineSeconds: 60 },
+        );
       if (closed || socket.readyState !== WebSocket.OPEN) {
         await hangUp(callId, apiKey);
         await aiQuota.rollbackVoiceReservation(db, uid, id, reservationCharge);

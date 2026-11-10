@@ -10,9 +10,7 @@ import 'package:tra_list/business_intelligence/ai_quota_page.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
 import 'package:tra_list/business_intelligence/realtime_voice.dart';
-import 'package:tra_list/business_intelligence/staff_ai_review_page.dart';
 import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
-import 'package:tra_list/services/business_access_service.dart';
 
 class AiAssistantPage extends StatefulWidget {
   const AiAssistantPage({
@@ -99,26 +97,6 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
         backgroundColor: const Color(0xFF080817),
         foregroundColor: Colors.white,
         actions: [
-          Obx(() {
-            final business = widget.business.value;
-            if (business == null ||
-                !BusinessAccessService.isOwner.value ||
-                !BusinessAccessService.hasBusinessAccess) {
-              return const SizedBox.shrink();
-            }
-            return IconButton(
-              tooltip: 'bi_staff_review_title'.tr,
-              icon: const Icon(Icons.fact_check_outlined),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => StaffAiReviewPage(
-                    businessId: business.businessId,
-                    isCurrent: () => widget.business.value == business,
-                  ),
-                ),
-              ),
-            );
-          }),
           if (_tab == 0)
             IconButton(
               tooltip: 'bi_tab_call'.tr,

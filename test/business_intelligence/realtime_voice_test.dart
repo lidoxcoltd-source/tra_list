@@ -50,6 +50,8 @@ class _FakeVoiceSession implements VoiceSession {
   _FakeVoiceSession(this.onLevel, this.onSpeaking);
   final void Function(double?) onLevel;
   final void Function(bool) onSpeaking;
+  final sentText = <String>[];
+  void Function(String)? onTranscript;
   bool muted = false;
   bool closed = false;
 
@@ -60,6 +62,16 @@ class _FakeVoiceSession implements VoiceSession {
     required String businessId,
     required String language,
   }) async {}
+
+  @override
+  Future<void> sendText(String text) async {
+    sentText.add(text);
+  }
+
+  @override
+  void setTranscriptCallback(void Function(String text) callback) {
+    onTranscript = callback;
+  }
 
   @override
   void setMuted(bool value) {
@@ -304,6 +316,7 @@ void main() {
     final provider = _Provider();
     final business = _business();
     final current = true.obs;
+    final screenAwakeStates = <bool>[];
     var sessionCreated = false;
     await tester.pumpWidget(
       GetMaterialApp(
@@ -318,6 +331,9 @@ void main() {
               sessionCreated = true;
               return _FakeVoiceSession(onLevel, onSpeaking);
             },
+            screenAwakeController: (enabled) async {
+              screenAwakeStates.add(enabled);
+            },
           ),
         ),
       ),
@@ -330,6 +346,10 @@ void main() {
     expect(find.text('Kubali na uanze'), findsNothing);
     expect(sessionCreated, isTrue);
     expect(find.text('Mazungumzo ya sauti'), findsOneWidget);
+    expect(screenAwakeStates, [true]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(screenAwakeStates, [true, false]);
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -366,10 +386,7 @@ void main() {
     provider.nextPreparation = report;
     final pending = tools('get_business_summary', {'period': 'selected'});
     await tester.pump();
-    expect(
-      find.text('Naendelea kuandaa ripoti ya biashara. Subiri kidogo.'),
-      findsOneWidget,
-    );
+    expect(find.text('Naandaa ripoti. Subiri kidogo.'), findsOneWidget);
     report.complete(const AiSnapshot({'businessName': 'Duka'}, 'report-token'));
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Muhtasari wa biashara'), findsOneWidget);
@@ -485,6 +502,110 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('voice guide button opens the localized help page', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => true,
+            provider: _Provider(),
+            sessionFactory: (_, level, speaking) =>
+                _FakeVoiceSession(level, speaking),
+          ),
+        ),
+      ),
+    );
+    final guideButton = find.byKey(const ValueKey('voice_guide_button'));
+    await tester.ensureVisible(guideButton);
+    await tester.tap(guideButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(find.text('Jinsi ya kuzungumza na Isher'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('voice text test sends the question into the active call', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    late _FakeVoiceSession session;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => true,
+            provider: _Provider(),
+            sessionFactory: (_, level, speaking) =>
+                session = _FakeVoiceSession(level, speaking),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Anza sauti').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final orb = find.byKey(const ValueKey('voice_orb_surface'));
+    final orbTopBefore = tester.getTopLeft(orb).dy;
+    await tester.tap(find.byTooltip('Jaribu kwa maandishi'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.byKey(const ValueKey('voice_text_prompt_panel')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<SingleChildScrollView>(
+            find.byType(SingleChildScrollView).first,
+          )
+          .physics,
+      isA<NeverScrollableScrollPhysics>(),
+    );
+    expect(tester.getTopLeft(orb).dy, lessThan(orbTopBefore));
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('voice_orb_mode_scale')),
+          )
+          .scale,
+      lessThan(1),
+    );
+    final input = find.byKey(const ValueKey('voice_text_prompt_input'));
+    await tester.enterText(input, 'Nipe mapato ya mwezi huu');
+    expect(
+      tester.widget<TextField>(input).controller!.text,
+      'Nipe mapato ya mwezi huu',
+    );
+    final sendButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('voice_text_prompt_send')),
+    );
+    expect(sendButton.onPressed, isNotNull);
+    sendButton.onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(session.sentText, ['Nipe mapato ya mwezi huu']);
+    session.onTranscript?.call('Mapato ya mwezi huu ni TZS 500,000.');
+    await tester.pump();
+    expect(find.text('Mapato ya mwezi huu ni TZS 500,000.'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('voice_transcript_feed'))).dy,
+      greaterThan(tester.getTopLeft(input).dy),
+    );
+    expect(find.byKey(const ValueKey('voice_transcript_fade')), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('orb respects reduced motion', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
@@ -510,6 +631,39 @@ void main() {
     final initial = tester.widget<Transform>(eye).transform.storage.toList();
     await tester.pump(const Duration(seconds: 1));
     expect(tester.widget<Transform>(eye).transform.storage, initial);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('orb eyelid briefly closes then opens', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => true,
+            provider: _Provider(),
+            sessionFactory: (_, level, speaking) =>
+                _FakeVoiceSession(level, speaking),
+          ),
+        ),
+      ),
+    );
+    final eyelid = find.byKey(const ValueKey('voice_orb_blink'));
+    double eyeHeightScale() =>
+        tester.widget<Transform>(eyelid).transform.storage[5];
+
+    expect(eyeHeightScale(), 1);
+    await tester.pump(const Duration(milliseconds: 1801));
+    await tester.pump(const Duration(milliseconds: 35));
+    expect(eyeHeightScale(), lessThan(0.9));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(eyeHeightScale(), greaterThan(0.9));
     debugDefaultTargetPlatformOverride = null;
   });
 }

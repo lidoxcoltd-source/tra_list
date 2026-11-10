@@ -152,4 +152,29 @@ async function rollbackVoiceReservation(db, uid, id, charge) {
   });
 }
 
-module.exports = { DEFAULTS, validateSettings, settingsFromDocument, dayInTanzania, usageForDay, consume, reserve, reserveWithCharge, rollbackVoiceReservation };
+async function releaseVoiceReservation(db, uid, id) {
+  if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) {
+    throw new Error("invalid-voice-reservation");
+  }
+  const ref = db.doc(`businessAiQuota/${uid}`);
+  return db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.data();
+    if (!data || data.activeId !== id) return false;
+    tx.update(ref, { activeId: "", activeUntil: 0 });
+    return true;
+  });
+}
+
+module.exports = {
+  DEFAULTS,
+  validateSettings,
+  settingsFromDocument,
+  dayInTanzania,
+  usageForDay,
+  consume,
+  reserve,
+  reserveWithCharge,
+  rollbackVoiceReservation,
+  releaseVoiceReservation,
+};

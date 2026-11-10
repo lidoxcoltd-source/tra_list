@@ -22,7 +22,9 @@ import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
 import 'package:tra_list/business_intelligence/voice_signaling_socket.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
+import 'package:tra_list/business_intelligence/isher_voice_guide_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 String voiceServiceUrl(String configuredUrl, String firebaseProjectId) {
   if (configuredUrl.isNotEmpty) return configuredUrl;
@@ -192,6 +194,8 @@ abstract class VoiceSession {
     required String businessId,
     required String language,
   });
+  Future<void> sendText(String text);
+  void setTranscriptCallback(void Function(String text) callback);
   void setMuted(bool muted);
   Future<void> close();
 }
@@ -217,7 +221,9 @@ class _VoiceSession implements VoiceSession {
   RTCPeerConnection? _peer;
   MediaStream? _microphone;
   VoiceSignalingSocket? _socket;
+  RTCDataChannel? _events;
   RTCVideoRenderer? _remoteAudioRenderer;
+  void Function(String)? _onTranscript;
   bool _closed = false;
   bool _reported = false;
   bool _muted = true;
@@ -227,6 +233,11 @@ class _VoiceSession implements VoiceSession {
 
   void _checkOpen() {
     if (_closed) throw StateError('Voice session closed');
+  }
+
+  @override
+  void setTranscriptCallback(void Function(String text) callback) {
+    _onTranscript = callback;
   }
 
   void _ended(String reason) {
@@ -292,6 +303,7 @@ class _VoiceSession implements VoiceSession {
       'oai-events',
       RTCDataChannelInit(),
     );
+    _events = events;
     final channelOpen = Completer<bool>();
     _channelOpen = channelOpen;
     events.onDataChannelState = (state) {
@@ -311,6 +323,13 @@ class _VoiceSession implements VoiceSession {
       try {
         final event = jsonDecode(message.text);
         if (event is Map) {
+          if (event['type'] == 'response.output_audio_transcript.done' ||
+              event['type'] == 'response.audio_transcript.done') {
+            final transcript = event['transcript'];
+            if (transcript is String && transcript.trim().isNotEmpty) {
+              _onTranscript?.call(transcript.trim());
+            }
+          }
           final speaking = openAiPlaybackState(
             event['type'] is String ? event['type'] as String : null,
           );
@@ -425,6 +444,44 @@ class _VoiceSession implements VoiceSession {
     _levelTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
       unawaited(_readMicrophoneLevel());
     });
+  }
+
+  @override
+  Future<void> sendText(String text) async {
+    _checkOpen();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || trimmed.length > 2000) {
+      throw const FormatException('Invalid voice text prompt');
+    }
+    final events = _events;
+    if (events == null ||
+        events.state != RTCDataChannelState.RTCDataChannelOpen) {
+      throw StateError('Voice data channel is not ready');
+    }
+    await events.send(
+      RTCDataChannelMessage(
+        jsonEncode({
+          'type': 'conversation.item.create',
+          'item': {
+            'type': 'message',
+            'role': 'user',
+            'content': [
+              {'type': 'input_text', 'text': trimmed},
+            ],
+          },
+        }),
+      ),
+    );
+    await events.send(
+      RTCDataChannelMessage(
+        jsonEncode({
+          'type': 'response.create',
+          'response': {
+            'output_modalities': ['audio'],
+          },
+        }),
+      ),
+    );
   }
 
   Future<void> _attachRemoteAudio(
@@ -575,6 +632,7 @@ class BusinessRealtimeVoice extends StatefulWidget {
     this.onOpenTransaction,
     this.sessionFactory,
     this.onToolsReady,
+    this.screenAwakeController,
   });
   final BusinessContext businessContext;
   final bool Function() isCurrent;
@@ -587,6 +645,8 @@ class BusinessRealtimeVoice extends StatefulWidget {
   final VoiceSessionFactory? sessionFactory;
   @visibleForTesting
   final void Function(VoiceToolHandler handler)? onToolsReady;
+  @visibleForTesting
+  final Future<void> Function(bool enabled)? screenAwakeController;
 
   @override
   State<BusinessRealtimeVoice> createState() => _BusinessRealtimeVoiceState();
@@ -597,6 +657,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   static const _voiceUrl = String.fromEnvironment('MJASI_VOICE_URL');
   VoiceSession? _session;
   AiSnapshot? _voiceSnapshot;
+  final _voiceTextController = TextEditingController();
+  final _voiceTextFocus = FocusNode();
+  final _voiceTranscriptScroll = ScrollController();
+  final _voiceTranscripts = <String>[];
   List<String> _engines = const ['openai'];
   Map<String, String> _providerNicknames = const {};
   String _engine = 'openai';
@@ -607,6 +671,8 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   bool _summaryDialogOpen = false;
   bool _summaryRaised = false;
   bool _summaryLoading = false;
+  bool _textPromptOpen = false;
+  bool _sendingVoiceText = false;
   bool _busy = false;
   bool _active = false;
   bool _paused = false;
@@ -935,6 +1001,272 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     }
   }
 
+  Future<void> _openVoiceGuide() async {
+    if (_busy || _summaryLoading) return;
+    if (_active || _paused) await _pauseOrStop();
+    if (!mounted || !widget.visible) return;
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const IsherVoiceGuidePage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curve = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+          return FadeTransition(
+            opacity: curve,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.06, 0),
+                end: Offset.zero,
+              ).animate(curve),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _toggleTextPrompt() {
+    if (!_active || _busy || _summaryLoading || _summaryDialogOpen) return;
+    setState(() => _textPromptOpen = !_textPromptOpen);
+    if (_textPromptOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _textPromptOpen) _voiceTextFocus.requestFocus();
+      });
+    }
+  }
+
+  Future<void> _sendVoiceText() async {
+    final prompt = _voiceTextController.text.trim();
+    final session = _session;
+    if (prompt.isEmpty ||
+        prompt.length > 2000 ||
+        !_active ||
+        _busy ||
+        _sendingVoiceText ||
+        session == null) {
+      return;
+    }
+    setState(() => _sendingVoiceText = true);
+    try {
+      await session.sendText(prompt);
+      if (!mounted || !widget.isCurrent()) return;
+      _voiceTextController.clear();
+      _voiceTextFocus.unfocus();
+    } catch (error, stack) {
+      debugPrint('Voice text request failed: ${error.runtimeType}');
+      debugPrintStack(stackTrace: stack);
+      if (mounted && widget.isCurrent()) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('bi_voice_text_send_error'.tr)));
+      }
+    } finally {
+      if (mounted) setState(() => _sendingVoiceText = false);
+    }
+  }
+
+  void _onVoiceTranscript(String text) {
+    final transcript = text.trim();
+    if (!mounted || transcript.isEmpty) return;
+    setState(() {
+      if (_voiceTranscripts.isEmpty || _voiceTranscripts.last != transcript) {
+        _voiceTranscripts.add(transcript);
+        if (_voiceTranscripts.length > 30) _voiceTranscripts.removeAt(0);
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_voiceTranscriptScroll.hasClients) return;
+      _voiceTranscriptScroll.animateTo(
+        _voiceTranscriptScroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _voiceTranscriptFeed() => ShaderMask(
+    key: const ValueKey('voice_transcript_fade'),
+    blendMode: BlendMode.dstIn,
+    shaderCallback: (bounds) => const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.transparent,
+        Colors.black,
+        Colors.black,
+        Colors.transparent,
+      ],
+      stops: [0, 0.18, 0.82, 1],
+    ).createShader(bounds),
+    child: ListView.builder(
+      key: const ValueKey('voice_transcript_feed'),
+      controller: _voiceTranscriptScroll,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 8),
+      itemCount: _voiceTranscripts.length,
+      itemBuilder: (context, index) {
+        final latest = index == _voiceTranscripts.length - 1;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: SelectableText(
+              _voiceTranscripts[index],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: latest ? Colors.white : const Color(0xFF9EABC0),
+                fontSize: latest ? 17 : 14,
+                fontWeight: latest ? FontWeight.w700 : FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _voiceTextField({bool autofocus = false}) => TextField(
+    key: const ValueKey('voice_text_prompt_input'),
+    controller: _voiceTextController,
+    focusNode: _voiceTextFocus,
+    autofocus: autofocus,
+    maxLength: 2000,
+    minLines: 2,
+    maxLines: autofocus ? 4 : 2,
+    textInputAction: TextInputAction.send,
+    onChanged: (_) => setState(() {}),
+    onSubmitted: (_) => _sendVoiceText(),
+    style: const TextStyle(color: Colors.white, height: 1.4),
+    decoration: InputDecoration(
+      hintText: 'bi_voice_text_hint'.tr,
+      hintStyle: const TextStyle(color: Color(0xFF9BAAC0)),
+      filled: true,
+      fillColor: const Color(0xFF0B1020),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF30445B)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF30445B)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF61E6F2)),
+      ),
+    ),
+  );
+
+  Widget _voiceTextPanel(BuildContext context, double availableHeight) =>
+      Container(
+        key: const ValueKey('voice_text_prompt_panel'),
+        height: math.min(availableHeight * 0.5, 420),
+        margin: const EdgeInsets.only(top: 4, bottom: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xE6121828),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF61E6F2).withValues(alpha: 0.42),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF36D7E5).withValues(alpha: 0.12),
+              blurRadius: 28,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.edit_note_rounded, color: Color(0xFF61E6F2)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'bi_voice_text_title'.tr,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'close'.tr,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    _voiceTextFocus.unfocus();
+                    setState(() => _textPromptOpen = false);
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 19),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            _voiceTextField(autofocus: true),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'bi_voice_text_reply_hint'.tr,
+                    style: const TextStyle(
+                      color: Color(0xFFB8C5D8),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                IconButton.filled(
+                  key: const ValueKey('voice_text_prompt_send'),
+                  tooltip: 'bi_voice_text_send'.tr,
+                  onPressed: !_active || _busy || _sendingVoiceText
+                      ? null
+                      : _sendVoiceText,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E8998),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: _sendingVoiceText
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded, size: 19),
+                ),
+              ],
+            ),
+            const Divider(height: 12, color: Color(0xFF30445B)),
+            Expanded(child: _voiceTranscriptFeed()),
+          ],
+        ),
+      );
+
+  Future<void> _setScreenAwake(bool enabled) async {
+    try {
+      final controller = widget.screenAwakeController;
+      if (controller != null) {
+        await controller(enabled);
+      } else if (widget.sessionFactory != null) {
+        return;
+      } else if (enabled) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (error, stack) {
+      debugPrint('Could not update voice screen-awake state: $error');
+      debugPrintStack(stackTrace: stack);
+    }
+  }
+
   @override
   void didUpdateWidget(covariant BusinessRealtimeVoice oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -958,6 +1290,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     WidgetsBinding.instance.removeObserver(this);
     AiVoiceEngineSelection.selected.removeListener(_onEngineChanged);
     _orbAnimation.dispose();
+    _voiceTranscriptScroll.dispose();
+    _voiceTextController.dispose();
+    _voiceTextFocus.dispose();
+    unawaited(_setScreenAwake(false));
     final session = _session;
     final uid = _geminiUid;
     final scope = _geminiScope;
@@ -1002,6 +1338,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       _microphoneLevel = 0;
       _aiSpeaking = false;
     });
+    await _setScreenAwake(false);
     try {
       await session.pause();
     } catch (error, stack) {
@@ -1018,6 +1355,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     Map<String, String>? noticeParams,
   ]) async {
     _generation++;
+    await _setScreenAwake(false);
     final session = _session;
     _session = null;
     _voiceSnapshot = null;
@@ -1071,6 +1409,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       final generation = ++_generation;
       final tools = _voiceTools();
       widget.onToolsReady?.call(tools.call);
+      session.setTranscriptCallback(_onVoiceTranscript);
       session.setCallbacks(
         onEnded: (reason) {
           if (mounted && generation == _generation) unawaited(_stop(reason));
@@ -1145,6 +1484,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
               _session == pausedSession,
         );
         if (!resumed) return;
+        unawaited(_setScreenAwake(true));
         setState(() {
           _paused = false;
           _active = true;
@@ -1237,6 +1577,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         },
       );
       _session = session;
+      session.setTranscriptCallback(_onVoiceTranscript);
       await session.connect(
         endpoint: endpoint ?? Uri(),
         snapshot: snapshot,
@@ -1250,6 +1591,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         await session.close();
         return;
       }
+      unawaited(_setScreenAwake(true));
       setState(() => _active = true);
     } catch (error, stack) {
       debugPrint('Voice session failed: $error');
@@ -1347,7 +1689,15 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            physics: _textPromptOpen
+                ? const NeverScrollableScrollPhysics()
+                : null,
+            padding: EdgeInsets.fromLTRB(
+              24,
+              _textPromptOpen ? 4 : 16,
+              24,
+              _textPromptOpen ? 4 : 24,
+            ),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 minHeight: constraints.maxHeight > 40
@@ -1360,65 +1710,85 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      const SizedBox(height: 16),
-                      AnimatedSlide(
-                        offset: _summaryRaised
-                            ? const Offset(0, -0.75)
-                            : Offset.zero,
-                        duration: const Duration(milliseconds: 420),
-                        curve: Curves.easeOutCubic,
-                        child: AnimatedScale(
-                          scale: _summaryRaised ? 0.58 : 1,
-                          duration: const Duration(milliseconds: 420),
-                          curve: Curves.easeOutCubic,
-                          child: _IsherOrb(
-                            animation: _orbAnimation,
-                            active: _active && !_muted,
-                            busy: _busy,
-                            level: _active && !_muted ? _microphoneLevel : 0,
-                            speaking: _aiSpeaking,
+                      SizedBox(height: _textPromptOpen ? 4 : 16),
+                      SizedBox(
+                        key: const ValueKey('voice_orb_slot'),
+                        height: _textPromptOpen ? 112 : 216,
+                        child: OverflowBox(
+                          alignment: Alignment.topCenter,
+                          minHeight: 0,
+                          maxHeight: 200,
+                          child: AnimatedSlide(
+                            offset: _textPromptOpen
+                                ? const Offset(0, -0.65)
+                                : _summaryRaised
+                                ? const Offset(0, -0.75)
+                                : Offset.zero,
+                            duration: const Duration(milliseconds: 420),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedScale(
+                              key: const ValueKey('voice_orb_mode_scale'),
+                              scale: _textPromptOpen
+                                  ? 0.42
+                                  : _summaryRaised
+                                  ? 0.58
+                                  : 1,
+                              duration: const Duration(milliseconds: 420),
+                              curve: Curves.easeOutCubic,
+                              child: _IsherOrb(
+                                animation: _orbAnimation,
+                                active: _active && !_muted,
+                                busy: _busy,
+                                level: _active && !_muted
+                                    ? _microphoneLevel
+                                    : 0,
+                                speaking: _aiSpeaking,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 28),
-                      Text(
-                        _active
-                            ? 'bi_voice_session_title'.tr
-                            : 'bi_voice_welcome'.tr,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (status != 'bi_voice_live')
+                      if (!_textPromptOpen) ...[
+                        const SizedBox(height: 28),
                         Text(
-                          status.tr,
+                          _active
+                              ? 'bi_voice_session_title'.tr
+                              : 'bi_voice_welcome'.tr,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: Color(0xFFBDB9D0),
-                            fontSize: 14,
-                            height: 1.5,
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
                           ),
                         ),
-                      const SizedBox(height: 22),
-                      if (_busy || _summaryLoading)
-                        const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        Icon(
-                          _active && !_muted
-                              ? Icons.graphic_eq_rounded
-                              : Icons.mic_none_rounded,
-                          color: const Color(0xFFB9A4FF),
-                        ),
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 12),
+                        if (status != 'bi_voice_live')
+                          Text(
+                            status.tr,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFBDB9D0),
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        const SizedBox(height: 22),
+                        if (_busy || _summaryLoading)
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Icon(
+                            _active && !_muted
+                                ? Icons.graphic_eq_rounded
+                                : Icons.mic_none_rounded,
+                            color: const Color(0xFFB9A4FF),
+                          ),
+                        const SizedBox(height: 14),
+                      ],
                       if (!_active &&
                           !_paused &&
                           !_busy &&
@@ -1441,7 +1811,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                         ),
                         const SizedBox(height: 14),
                       ],
-                      if (kIsWeb)
+                      if (kIsWeb && !_textPromptOpen)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Text(
@@ -1454,7 +1824,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                             ),
                           ),
                         ),
-                      if (_active && !_muted && _microphoneLevel == null)
+                      if (!_textPromptOpen &&
+                          _active &&
+                          !_muted &&
+                          _microphoneLevel == null)
                         Text(
                           'bi_voice_level_unavailable'.tr,
                           textAlign: TextAlign.center,
@@ -1463,97 +1836,132 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                             fontSize: 12,
                           ),
                         ),
-                      Semantics(
-                        button: true,
-                        label:
-                            (_active
-                                    ? (_muted
-                                          ? 'bi_voice_unmute'
-                                          : 'bi_voice_mute')
-                                    : (_paused
-                                          ? 'bi_voice_resume'
-                                          : 'bi_voice_start'))
-                                .tr,
-                        child: Material(
-                          color: const Color(0xFF625C7A),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _busy
-                                ? null
-                                : (kIsWeb && !_engines.contains('openai'))
-                                ? null
-                                : (_active ? _toggleMute : _start),
-                            child: Container(
-                              width: 88,
-                              height: 88,
-                              margin: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFFB9A4FF),
-                                    Color(0xFF7048ED),
-                                  ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 360),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: _textPromptOpen
+                            ? _voiceTextPanel(context, constraints.maxHeight)
+                            : const SizedBox(width: double.infinity),
+                      ),
+                      if (!_textPromptOpen)
+                        Semantics(
+                          button: true,
+                          label:
+                              (_active
+                                      ? (_muted
+                                            ? 'bi_voice_unmute'
+                                            : 'bi_voice_mute')
+                                      : (_paused
+                                            ? 'bi_voice_resume'
+                                            : 'bi_voice_start'))
+                                  .tr,
+                          child: Material(
+                            color: const Color(0xFF625C7A),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              key: const ValueKey('voice_call_button'),
+                              customBorder: const CircleBorder(),
+                              onTap: _busy
+                                  ? null
+                                  : (kIsWeb && !_engines.contains('openai'))
+                                  ? null
+                                  : (_active ? _toggleMute : _start),
+                              child: Container(
+                                width: 88,
+                                height: 88,
+                                margin: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFFB9A4FF),
+                                      Color(0xFF7048ED),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              child: Icon(
-                                _muted
-                                    ? Icons.mic_off_rounded
-                                    : Icons.mic_rounded,
-                                color: Colors.white,
-                                size: 34,
+                                child: Icon(
+                                  _muted
+                                      ? Icons.mic_off_rounded
+                                      : Icons.mic_rounded,
+                                  color: Colors.white,
+                                  size: 34,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        (_active
-                                ? (_muted ? 'bi_voice_unmute' : 'bi_voice_mute')
-                                : (_paused
-                                      ? 'bi_voice_resume'
-                                      : 'bi_voice_start'))
-                            .tr,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
+                      if (!_textPromptOpen) const SizedBox(height: 8),
+                      if (!_textPromptOpen)
+                        Text(
+                          (_active
+                                  ? (_muted
+                                        ? 'bi_voice_unmute'
+                                        : 'bi_voice_mute')
+                                  : (_paused
+                                        ? 'bi_voice_resume'
+                                        : 'bi_voice_start'))
+                              .tr,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _VoiceControl(
-                            icon: _muted
-                                ? Icons.mic_off_rounded
-                                : Icons.mic_rounded,
-                            label:
-                                (_muted ? 'bi_voice_unmute' : 'bi_voice_mute')
-                                    .tr,
-                            onPressed: _active && !_busy ? _toggleMute : null,
+                      SizedBox(height: _textPromptOpen ? 8 : 24),
+                      if (!_textPromptOpen)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _VoiceControl(
+                              icon: _muted
+                                  ? Icons.mic_off_rounded
+                                  : Icons.mic_rounded,
+                              label:
+                                  (_muted ? 'bi_voice_unmute' : 'bi_voice_mute')
+                                      .tr,
+                              onPressed: _active && !_busy ? _toggleMute : null,
+                            ),
+                            const SizedBox(width: 24),
+                            _VoiceControl(
+                              icon: Icons.chat_bubble_outline_rounded,
+                              label: 'bi_tab_chat'.tr,
+                              onPressed: _busy ? null : widget.onOpenChat,
+                            ),
+                            const SizedBox(width: 24),
+                            _VoiceControl(
+                              icon: Icons.edit_note_rounded,
+                              label: 'bi_voice_text_test'.tr,
+                              onPressed: _active && !_busy && !_summaryLoading
+                                  ? _toggleTextPrompt
+                                  : null,
+                            ),
+                            const SizedBox(width: 24),
+                            _VoiceControl(
+                              icon: Icons.call_end_rounded,
+                              label:
+                                  (_session is GeminiVoiceSession
+                                          ? 'bi_voice_pause'
+                                          : 'bi_voice_end')
+                                      .tr,
+                              onPressed: _active && !_busy
+                                  ? _pauseOrStop
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      if (!_textPromptOpen)
+                        if (!_textPromptOpen)
+                          IconButton(
+                            key: const ValueKey('voice_guide_button'),
+                            tooltip: 'isher_guide_button'.tr,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _busy || _summaryLoading
+                                ? null
+                                : _openVoiceGuide,
+                            icon: const Icon(Icons.help_outline_rounded),
+                            color: const Color(0xFFBDEFF4),
                           ),
-                          const SizedBox(width: 24),
-                          _VoiceControl(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            label: 'bi_tab_chat'.tr,
-                            onPressed: _busy ? null : widget.onOpenChat,
-                          ),
-                          const SizedBox(width: 24),
-                          _VoiceControl(
-                            icon: Icons.call_end_rounded,
-                            label:
-                                (_session is GeminiVoiceSession
-                                        ? 'bi_voice_pause'
-                                        : 'bi_voice_end')
-                                    .tr,
-                            onPressed: _active && !_busy ? _pauseOrStop : null,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -1632,7 +2040,7 @@ class _VoiceControl extends StatelessWidget {
   );
 }
 
-class _IsherOrb extends StatelessWidget {
+class _IsherOrb extends StatefulWidget {
   const _IsherOrb({
     required this.animation,
     required this.active,
@@ -1647,25 +2055,78 @@ class _IsherOrb extends StatelessWidget {
   final bool speaking;
 
   @override
+  State<_IsherOrb> createState() => _IsherOrbState();
+}
+
+class _IsherOrbState extends State<_IsherOrb>
+    with SingleTickerProviderStateMixin {
+  static final _random = math.Random();
+  late final AnimationController _blink;
+  Timer? _blinkTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _blink = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 75),
+    );
+    _scheduleBlink(const Duration(milliseconds: 1800));
+  }
+
+  void _scheduleBlink([Duration? delay]) {
+    _blinkTimer?.cancel();
+    _blinkTimer = Timer(
+      delay ?? Duration(milliseconds: 2800 + _random.nextInt(3000)),
+      () {
+        if (!mounted) return;
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scheduleBlink();
+          return;
+        }
+        _blink.forward(from: 0).then((_) {
+          if (!mounted) return;
+          _blink.reverse().then((_) {
+            if (!mounted) return;
+            _scheduleBlink(
+              _random.nextInt(5) == 0
+                  ? const Duration(milliseconds: 170)
+                  : null,
+            );
+          });
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _blinkTimer?.cancel();
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: animation,
+    animation: Listenable.merge([widget.animation, _blink]),
     builder: (context, child) {
       final pulse = MediaQuery.disableAnimationsOf(context)
           ? 0.0
-          : animation.value;
+          : widget.animation.value;
       final loudness = MediaQuery.disableAnimationsOf(context)
           ? 0.0
-          : ((level ?? 0) * 4).clamp(0.0, 1.0);
+          : ((widget.level ?? 0) * 4).clamp(0.0, 1.0);
       final reducedMotion = MediaQuery.disableAnimationsOf(context);
       final voicePulse = reducedMotion
           ? 0.0
           : (math.sin(pulse * math.pi * 8) + 1) / 2;
       final gaze = reducedMotion ? 0.0 : math.sin(pulse * math.pi * 2);
+      final blinkScale = reducedMotion ? 1.0 : 1 - _blink.value * 0.94;
       return Transform.scale(
         key: const ValueKey('voice_orb_scale'),
-        scale: speaking
+        scale: widget.speaking
             ? 1.02 + voicePulse * 0.08
-            : active
+            : widget.active
             ? 1 + loudness * 0.14
             : 0.97 + pulse * 0.03,
         child: Container(
@@ -1678,12 +2139,16 @@ class _IsherOrb extends StatelessWidget {
               center: const Alignment(-0.4, -0.55),
               radius: 0.9,
               colors: [
-                speaking ? const Color(0xFFB2FFF5) : const Color(0xFFB9A4FF),
-                speaking ? const Color(0xFF168DAD) : const Color(0xFF5434A5),
+                widget.speaking
+                    ? const Color(0xFFB2FFF5)
+                    : const Color(0xFFB9A4FF),
+                widget.speaking
+                    ? const Color(0xFF168DAD)
+                    : const Color(0xFF5434A5),
                 const Color(0xFF17102D),
-                speaking
+                widget.speaking
                     ? const Color(0xFF80FFE4)
-                    : active
+                    : widget.active
                     ? const Color(0xFF00D9FF)
                     : const Color(0xFF2878FF),
                 const Color(0xFF080817),
@@ -1693,19 +2158,19 @@ class _IsherOrb extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color:
-                    (speaking
+                    (widget.speaking
                             ? const Color(0xFF4DFFE0)
-                            : active
+                            : widget.active
                             ? const Color(0xFF00D9FF)
                             : const Color(0xFF7048ED))
                         .withValues(
-                          alpha: speaking
+                          alpha: widget.speaking
                               ? 0.35 + voicePulse * 0.2
                               : 0.22 + pulse * 0.12,
                         ),
-                blurRadius: speaking
+                blurRadius: widget.speaking
                     ? 40 + voicePulse * 18
-                    : busy
+                    : widget.busy
                     ? 48
                     : 38,
                 spreadRadius: 2,
@@ -1733,40 +2198,46 @@ class _IsherOrb extends StatelessWidget {
                     gaze * 8,
                     reducedMotion ? 0 : math.sin(pulse * math.pi) * -3,
                   ),
-                  child: Container(
-                    width: 44,
-                    height: speaking ? 44 + voicePulse * 8 : 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: speaking
-                            ? const [
-                                Color(0xFFE7FFFC),
-                                Color(0xFF37DCCB),
-                                Color(0xFF12617D),
-                              ]
-                            : const [
-                                Color(0xFFF3EBFF),
-                                Color(0xFFAF99FF),
-                                Color(0xFF5743A5),
-                              ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              (speaking
-                                      ? const Color(0xFF69FFE8)
-                                      : const Color(0xFFB9A4FF))
-                                  .withValues(alpha: 0.5),
-                          blurRadius: speaking ? 18 + voicePulse * 8 : 12,
+                  child: Transform.scale(
+                    key: const ValueKey('voice_orb_blink'),
+                    scaleY: blinkScale,
+                    child: Container(
+                      width: 44,
+                      height: widget.speaking ? 44 + voicePulse * 8 : 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: widget.speaking
+                              ? const [
+                                  Color(0xFFE7FFFC),
+                                  Color(0xFF37DCCB),
+                                  Color(0xFF12617D),
+                                ]
+                              : const [
+                                  Color(0xFFF3EBFF),
+                                  Color(0xFFAF99FF),
+                                  Color(0xFF5743A5),
+                                ],
                         ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.auto_awesome_rounded,
-                        color: Colors.white,
-                        size: 20,
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                (widget.speaking
+                                        ? const Color(0xFF69FFE8)
+                                        : const Color(0xFFB9A4FF))
+                                    .withValues(alpha: 0.5),
+                            blurRadius: widget.speaking
+                                ? 18 + voicePulse * 8
+                                : 12,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),

@@ -90,6 +90,76 @@ test("inventory counts current active stock and period movement types", () => {
   });
 });
 
+test("product catalog keeps bounded business details and omits supplier identifiers and cost", () => {
+  const result = bi.summarizeProductCatalog([
+    {
+      name: "Mchele",
+      category: "Chakula",
+      description: "Mchele wa kilo tano",
+      sellPrice: 12000,
+      costPrice: 9000,
+      supplier: "Private Supplier",
+      sku: "SKU-1",
+      tracked: true,
+      quantity: 8,
+      reservedQuantity: 2,
+      lowStockThreshold: 3,
+      unit: "mfuko",
+    },
+    { name: "Huduma ya delivery", sellPrice: 3000, tracked: false },
+    { name: "Inactive", sellPrice: 500, active: false },
+    { name: "Invalid price", sellPrice: NaN },
+  ], 2);
+  assert.deepEqual(result, {
+    total: 2,
+    products: [
+      { name: "Huduma ya delivery", category: "", description: "", sellPrice: 3000, tracked: false },
+      {
+        name: "Mchele",
+        category: "Chakula",
+        description: "Mchele wa kilo tano",
+        sellPrice: 12000,
+        tracked: true,
+        quantity: 8,
+        available: 6,
+        unit: "mfuko",
+        lowStock: false,
+      },
+    ],
+    truncated: false,
+    invalid: 1,
+  });
+  assert.doesNotMatch(JSON.stringify(result), /costPrice|supplier|Private Supplier|SKU-1/);
+  assert.equal(bi.summarizeProductCatalog([
+    { name: "Huduma ya delivery", sellPrice: 3000, tracked: false },
+    { name: "Mchele", sellPrice: 12000, tracked: true, quantity: 1 },
+  ], 1).truncated, true);
+});
+
+test("product unit costs and gross margins are owner-only", () => {
+  const products = [{ name: "Mchele", sellPrice: 12000, costPrice: 9000 }];
+  const staffCatalog = bi.summarizeProductCatalog(products);
+  const ownerCatalog = bi.summarizeProductCatalog(products, 50, { includeCosts: true });
+  assert.equal("unitCost" in staffCatalog.products[0], false);
+  assert.equal(ownerCatalog.products[0].unitCost, 9000);
+  assert.equal(ownerCatalog.products[0].unitGrossMargin, 3000);
+});
+
+test("transaction categories are grouped by type and sorted", () => {
+  assert.deepEqual(bi.summarizeCategories([
+    { name: "Mauzo", type: "income" },
+    { name: "Kodi", type: "expense" },
+    { name: "Usafiri", type: "expense" },
+    { name: "Disabled", type: "income", active: false },
+    { name: "Bad", type: "other" },
+  ]), {
+    income: ["Mauzo"],
+    expense: ["Kodi", "Usafiri"],
+    truncated: false,
+    invalid: 1,
+  });
+});
+
 test("staff summary deduplicates memberships and excludes authentication fields", () => {
   const result = bi.summarizeStaff([
     { id: "a", data: { name: "Old", active: true, password: "secret" } },

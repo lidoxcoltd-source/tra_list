@@ -74,3 +74,14 @@ test("daily voice reservation does not refund a different day's usage", async ()
   assert.equal(await quota.rollbackVoiceReservation(db, "user", "daily", { source: "daily", day: usage.day }), true);
   assert.equal(db.state.voiceUsed, 1);
 });
+
+test("released voice session clears only its matching active lease", async () => {
+  const activeId = "00000000-0000-4000-8000-000000000001";
+  const db = fakeDb({ activeId, activeUntil: 12345 });
+  assert.equal(await quota.releaseVoiceReservation(db, "user", "00000000-0000-4000-8000-000000000002"), false);
+  assert.equal(db.state.activeUntil, 12345);
+  assert.equal(await quota.releaseVoiceReservation(db, "user", activeId), true);
+  assert.equal(db.state.activeId, "");
+  assert.equal(db.state.activeUntil, 0);
+  await assert.rejects(quota.releaseVoiceReservation(db, "user", "invalid"), /invalid-voice-reservation/);
+});

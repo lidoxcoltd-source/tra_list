@@ -348,8 +348,47 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_transaction_today': 'Tarehe: leo wakati wa kuhifadhi.',
   'bi_voice_transaction_chat': 'Endelea kwenye chat',
   'bi_voice_summary_title': 'Muhtasari wa biashara',
-  'bi_voice_summary_loading':
-      'Naendelea kuandaa ripoti ya biashara. Subiri kidogo.',
+  'bi_voice_summary_loading': 'Naandaa ripoti. Subiri kidogo.',
+  'bi_voice_text_test': 'Jaribu kwa maandishi',
+  'bi_voice_text_title': 'Andika swali lako',
+  'bi_voice_text_hint': 'Uliza kuhusu biashara yako...',
+  'bi_voice_text_reply_hint': 'Isher atajibu kwa sauti',
+  'bi_voice_text_send': 'Tuma swali',
+  'bi_voice_text_send_error': 'Swali halikutumwa. Jaribu tena.',
+  'isher_guide_button': 'Jinsi ya kutumia Isher',
+  'isher_guide_title': 'Jinsi ya kuzungumza na Isher',
+  'isher_guide_eyebrow': 'ISHER AI  /  MWONGOZO WA SAUTI',
+  'isher_guide_intro':
+      'Uliza kwa sauti kwa kawaida. Isher hutumia taarifa za biashara yako na ruhusa za akaunti yako.',
+  'isher_guide_capabilities_title': 'Isher anaweza kusaidia kwa',
+  'isher_guide_reports_title': 'Ripoti za biashara',
+  'isher_guide_reports_body':
+      'Mapato, matumizi, salio la fedha, stock na madeni kwa kipindi unachotaja.',
+  'isher_guide_products_title': 'Bidhaa na huduma',
+  'isher_guide_products_body':
+      'Aina, bei ya kuuza, stock, na gharama kwa owner pale zinapopatikana.',
+  'isher_guide_customers_title': 'Invoices na wateja',
+  'isher_guide_customers_body':
+      'Taarifa za invoices/receipts zilizopo; si directory kamili ya wateja.',
+  'isher_guide_research_title': 'Utafiti wa mtandaoni',
+  'isher_guide_research_body':
+      'Taarifa za sasa na biashara zinazofanana; omba wazi na utahitaji Gemini.',
+  'isher_guide_questions_title': 'Mifano ya maswali',
+  'isher_guide_question_report': 'Ripoti',
+  'isher_guide_question_stock': 'Stock na bei',
+  'isher_guide_question_customer': 'Invoices za wateja',
+  'isher_guide_question_research': 'Utafiti wa soko',
+  'isher_guide_important_title': 'Mambo muhimu',
+  'isher_guide_dates':
+      'Taja kipindi au tarehe kamili; “kipindi hiki” hutumia kipindi kilichochaguliwa.',
+  'isher_guide_categories':
+      'Kwa kurekodi muamala, taja aina, kiasi, kundi lililopo na maelezo.',
+  'isher_guide_review':
+      'Kagua na uthibitishe kabla ya kuhifadhi rasimu au kurekodi.',
+  'isher_guide_privacy':
+      'Usiseme nywila, namba za siri au taarifa binafsi zisizohitajika.',
+  'isher_guide_copy': 'Nakili mfano',
+  'isher_guide_copied': 'Mfano umenakiliwa',
   'bi_voice_consent': 'Kubali na uanze',
   'bi_voice_start': 'Anza sauti',
   'bi_voice_live': 'Kipaza sauti kiko wazi. Sauti yako inatumwa kwa @provider.',

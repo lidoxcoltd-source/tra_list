@@ -115,6 +115,78 @@ function summarizeInventory(products, movements) {
   return { tracked, untracked, costValue, invalid, movementCounts: Object.fromEntries(byType), invalidMovements };
 }
 
+function summarizeProductCatalog(records, limit = 50, { includeCosts = false } = {}) {
+  const products = [];
+  let invalid = 0;
+  for (const data of records) {
+    if (data.active === false) continue;
+    if (typeof data.name !== "string" || !data.name.trim() ||
+        typeof data.sellPrice !== "number" || !Number.isFinite(data.sellPrice) || data.sellPrice < 0) {
+      invalid++;
+      continue;
+    }
+    const tracked = data.tracked !== false;
+    const quantity = typeof data.quantity === "number" && Number.isFinite(data.quantity)
+      ? data.quantity
+      : null;
+    const reservedQuantity = typeof data.reservedQuantity === "number" && Number.isFinite(data.reservedQuantity)
+      ? Math.max(0, data.reservedQuantity)
+      : 0;
+    const threshold = typeof data.lowStockThreshold === "number" && Number.isFinite(data.lowStockThreshold)
+      ? data.lowStockThreshold
+      : null;
+    const costPrice = typeof data.costPrice === "number" && Number.isFinite(data.costPrice) && data.costPrice >= 0
+      ? data.costPrice
+      : null;
+    products.push({
+      name: data.name.trim().slice(0, 100),
+      category: typeof data.category === "string" ? data.category.trim().slice(0, 80) : "",
+      description: typeof data.description === "string" ? data.description.trim().slice(0, 200) : "",
+      sellPrice: data.sellPrice,
+      ...(includeCosts && costPrice !== null ? {
+        unitCost: costPrice,
+        unitGrossMargin: data.sellPrice - costPrice,
+      } : {}),
+      tracked,
+      ...(tracked && quantity !== null ? {
+        quantity,
+        available: Math.max(0, quantity - reservedQuantity),
+        unit: typeof data.unit === "string" ? data.unit.trim().slice(0, 30) : "",
+        lowStock: threshold === null ? null : quantity <= 0 || quantity <= threshold,
+      } : {}),
+    });
+  }
+  products.sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    total: products.length,
+    products: products.slice(0, limit),
+    truncated: products.length > limit,
+    invalid,
+  };
+}
+
+function summarizeCategories(records, limit = 50) {
+  const categories = { income: new Set(), expense: new Set() };
+  let invalid = 0;
+  for (const data of records) {
+    if (data.active === false) continue;
+    if ((data.type !== "income" && data.type !== "expense") ||
+        typeof data.name !== "string" || !data.name.trim()) {
+      invalid++;
+      continue;
+    }
+    categories[data.type].add(data.name.trim().slice(0, 100));
+  }
+  const income = [...categories.income].sort((a, b) => a.localeCompare(b));
+  const expenses = [...categories.expense].sort((a, b) => a.localeCompare(b));
+  return {
+    income: income.slice(0, limit),
+    expense: expenses.slice(0, limit),
+    truncated: income.length > limit || expenses.length > limit,
+    invalid,
+  };
+}
+
 function summarizeStaff(legacy, modern) {
   const members = new Map();
   for (const entry of [...legacy, ...modern]) {
@@ -226,4 +298,5 @@ module.exports = {
   MAX_RECORDS, MAX_SNAPSHOT_BYTES, scopeFor, signSnapshot,
   verifySnapshot, summarizeTransactions, summarizePurchases, summarizeTasks,
   summarizeDocuments, summarizeInventory, summarizeStaff, summarizeStaffTasks, validateMessages,
+  summarizeProductCatalog, summarizeCategories,
 };

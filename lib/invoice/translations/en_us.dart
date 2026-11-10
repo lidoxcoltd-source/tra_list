@@ -348,8 +348,47 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_transaction_today': 'Date: today when saved.',
   'bi_voice_transaction_chat': 'Continue in chat',
   'bi_voice_summary_title': 'Business summary',
-  'bi_voice_summary_loading':
-      'Preparing your business report. Please wait a moment.',
+  'bi_voice_summary_loading': 'Preparing report. Please wait.',
+  'bi_voice_text_test': 'Ask by text',
+  'bi_voice_text_title': 'Type your question',
+  'bi_voice_text_hint': 'Ask about your business...',
+  'bi_voice_text_reply_hint': 'Isher will reply by voice',
+  'bi_voice_text_send': 'Send question',
+  'bi_voice_text_send_error': 'Could not send the question. Try again.',
+  'isher_guide_button': 'How to use Isher',
+  'isher_guide_title': 'How to talk to Isher',
+  'isher_guide_eyebrow': 'ISHER AI  /  VOICE GUIDE',
+  'isher_guide_intro':
+      'Ask naturally by voice. Isher uses your business information and your account permissions.',
+  'isher_guide_capabilities_title': 'What Isher can help with',
+  'isher_guide_reports_title': 'Business reports',
+  'isher_guide_reports_body':
+      'Income, expenses, cash flow, stock, and debts for the period you request.',
+  'isher_guide_products_title': 'Products and services',
+  'isher_guide_products_body':
+      'Business type, selling prices, stock, and owner-only costs when available.',
+  'isher_guide_customers_title': 'Invoices and customers',
+  'isher_guide_customers_body':
+      'Available invoice/receipt records; not a complete customer directory.',
+  'isher_guide_research_title': 'Online research',
+  'isher_guide_research_body':
+      'Current information and similar businesses; ask explicitly and select Gemini.',
+  'isher_guide_questions_title': 'Example questions',
+  'isher_guide_question_report': 'Business report',
+  'isher_guide_question_stock': 'Stock and prices',
+  'isher_guide_question_customer': 'Customer invoices',
+  'isher_guide_question_research': 'Market research',
+  'isher_guide_important_title': 'Important',
+  'isher_guide_dates':
+      'Give a period or exact dates; “this period” uses the selected reporting period.',
+  'isher_guide_categories':
+      'To record a transaction, give the type, amount, existing category, and description.',
+  'isher_guide_review':
+      'Review and confirm before saving a draft or recording a transaction.',
+  'isher_guide_privacy':
+      'Do not say passwords, PINs, or unnecessary personal information aloud.',
+  'isher_guide_copy': 'Copy example',
+  'isher_guide_copied': 'Example copied',
   'bi_voice_consent': 'Agree and start',
   'bi_voice_start': 'Start voice',
   'bi_voice_live':

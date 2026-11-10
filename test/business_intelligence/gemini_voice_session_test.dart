@@ -69,6 +69,9 @@ class _Socket implements WebSocket {
   bool closed = false;
 
   @override
+  int get readyState => closed ? WebSocket.closed : WebSocket.open;
+
+  @override
   int? get closeCode => closed ? 1000 : null;
 
   @override
@@ -295,15 +298,19 @@ void main() {
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     final recorder = _StreamingRecorder();
     final socket = _Socket();
+    final releasedLeases = <String>[];
+    const leaseId = '00000000-0000-4000-8000-000000000001';
     var grants = 0;
     final session = GeminiVoiceSession(
       (_) {},
       (_) {},
       recorderFactory: () => recorder,
+      releaseLease: (id) async => releasedLeases.add(id),
       grantFactory: (_, __, ___) async {
         grants++;
         return {
           'token': 'grant',
+          'leaseId': leaseId,
           'model': 'model',
           'instruction': '',
           'minutes': 5,
@@ -318,6 +325,15 @@ void main() {
       language: 'sw',
     );
     expect(recorder.starts, 1);
+    await session.sendText('Nipe mapato ya mwezi huu');
+    expect(
+      socket.sent.any(
+        (item) =>
+            (item['realtimeInput'] as Map?)?['text'] ==
+            'Nipe mapato ya mwezi huu',
+      ),
+      isTrue,
+    );
     recorder.audio!.add(Uint8List.fromList([0, 0]));
     await Future<void>.delayed(Duration.zero);
     final audioBeforePause = socket.sent
@@ -346,9 +362,11 @@ void main() {
       2,
     );
     await session.close();
+    await session.close();
     expect(recorder.stops, 2);
     expect(recorder.disposed, isTrue);
     expect(socket.closed, isTrue);
+    expect(releasedLeases, [leaseId]);
   });
 
   test('cancelled resume stops microphone before transmitting', () async {

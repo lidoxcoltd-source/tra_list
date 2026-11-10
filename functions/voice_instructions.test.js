@@ -16,7 +16,9 @@ test("Swahili voice instructions preserve amounts and provide correct examples",
   assert.match(prompt, /call open_document_draft/);
   assert.match(prompt, /Whenever the user asks for a business report/);
   assert.match(prompt, /then call get_business_summary/);
-  assert.match(prompt, /Naendelea kuandaa ripoti ya biashara, subiri kidogo/);
+  assert.match(prompt, /use businessProfile and productCatalog/);
+  assert.match(prompt, /Listed items are not proof of sales/);
+  assert.match(prompt, /Naandaa ripoti\. Subiri kidogo\./);
   assert.match(prompt, /user must review and save manually/);
   assert.match(prompt, /Never claim a document was created or saved/);
   assert.match(prompt, /Reviewed context: \{"transactions":\{"income":30500\}\}$/);
