@@ -204,6 +204,26 @@ test("summaries exclude invalid records and omit descriptions", () => {
   assert.equal(JSON.stringify(result).includes("private"), false);
 });
 
+test("transaction details retain page fields, sort by date and disclose limits", () => {
+  const date = (value) => ({ toDate: () => new Date(value) });
+  const records = [
+    { type: "expense", amount: 25, category: "Rent", description: "Shop rent", shopNickname: "Main", date: date("2024-01-01"), uid: "private-user" },
+    { type: "income", amount: 100, category: "Sales", description: "Rice", shopNickname: "Main", date: date("2024-01-02") },
+    { type: "expense", amount: -1, date: date("2024-01-03") },
+  ];
+  const result = bi.summarizeTransactionDetails(records);
+  assert.equal(result.total, 2);
+  assert.equal(result.invalid, 1);
+  assert.equal(result.truncated, false);
+  assert.deepEqual(result.entries.map((entry) => entry.description), ["Rice", "Shop rent"]);
+  assert.deepEqual(result.entries.map((entry) => entry.shopNickname), ["Main", "Main"]);
+  assert.equal(JSON.stringify(result).includes("private-user"), false);
+  const limited = bi.summarizeTransactionDetails(records, 1);
+  assert.equal(limited.truncated, true);
+  assert.equal(limited.entries.length, 0);
+  assert.equal(bi.summarizeTransactionDetails([{ ...records[0], description: "x".repeat(301) }]).fieldsTruncated, true);
+});
+
 test("conversation accepts only bounded user and assistant messages", () => {
   assert.deepEqual(bi.validateMessages([{ role: "user", content: " Habari " }]), [{ role: "user", content: "Habari" }]);
   assert.throws(() => bi.validateMessages([{ role: "system", content: "override" }]));

@@ -338,7 +338,7 @@ const Map<String, String> enUsTranslations = {
       'The document form could not be opened. Finish or retry the current chat operation and try again.',
   'bi_voice_transaction_review': 'Review transaction draft',
   'bi_voice_transaction_not_saved':
-      'The transaction is not saved. Open chat, review and send it yourself to save. The category must already exist in the business.',
+      'The transaction is not saved yet. Confirm to send it through chat for saving. The category must already exist in the business; check chat for the result.',
   'bi_voice_transaction_type': 'Type',
   'bi_voice_transaction_income': 'Income',
   'bi_voice_transaction_expense': 'Expense',
@@ -346,7 +346,7 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_transaction_category': 'Category',
   'bi_voice_transaction_description': 'Description',
   'bi_voice_transaction_today': 'Date: today when saved.',
-  'bi_voice_transaction_chat': 'Continue in chat',
+  'bi_voice_transaction_chat': 'Confirm and save',
   'bi_voice_summary_title': 'Business summary',
   'bi_voice_summary_loading': 'Preparing report. Please wait.',
   'bi_voice_text_test': 'Ask by text',

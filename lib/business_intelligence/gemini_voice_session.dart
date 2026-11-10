@@ -13,6 +13,8 @@ import 'package:tra_list/business_intelligence/voice_business_tools.dart';
 
 const _liveSocket =
     'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
+final _greetingRandom = math.Random();
+final _lastGreetingVariants = <String, int>{};
 
 @visibleForTesting
 double pcmLevel(Uint8List bytes) {
@@ -28,9 +30,36 @@ double pcmLevel(Uint8List bytes) {
 }
 
 @visibleForTesting
-String geminiGreetingText(String language) => language == 'sw'
-    ? 'Salimia mtumiaji kwa Kiswahili kwa sentensi fupi, jitambulishe kama Isher AI na muulize unamsaidiaje kuhusu biashara yake.'
-    : 'Briefly greet the user in English, introduce yourself as Isher AI and ask how you can help with their business.';
+String geminiGreetingText(String language, {int? variant}) {
+  final sw = language == 'sw';
+  final greetings = sw
+      ? const [
+          'Habari, mimi ni Isher. Nipo tayari kukusaidia na biashara yako.',
+          'Karibu, mimi ni Isher. Tuangalie biashara yako pamoja.',
+          'Hujambo! Mimi ni Isher. Ungependa tuanze na nini kuhusu biashara yako?',
+          'Mimi ni Isher, nipo hapa kukusaidia. Tuangalie nini leo?',
+        ]
+      : const [
+          'Hello, I am Isher. I am ready to help with your business.',
+          'Welcome, I am Isher. Let us look at your business together.',
+          'Hi! I am Isher. What would you like to start with today?',
+          'I am Isher, and I am here to help. What shall we look at today?',
+        ];
+  final key = sw ? 'sw' : 'en';
+  final previous = _lastGreetingVariants[key];
+  var selected =
+      variant ??
+      _greetingRandom.nextInt(
+        previous == null ? greetings.length : greetings.length - 1,
+      );
+  if (variant == null) {
+    if (previous != null && selected >= previous) selected++;
+    _lastGreetingVariants[key] = selected;
+  }
+  return sw
+      ? 'Sema salamu hii kwa sauti bila kuongeza maneno: "${greetings[selected]}"'
+      : 'Say this greeting aloud without adding words: "${greetings[selected]}"';
+}
 
 @visibleForTesting
 Future<List<Map<String, dynamic>>> geminiToolResponses(
@@ -450,7 +479,26 @@ class GeminiVoiceSession implements VoiceSession {
   }
 
   @override
-  void setMuted(bool muted) => _muted = muted;
+  void setMuted(bool muted) {
+    _muted = muted;
+    if (muted) onMicrophoneLevel(0);
+    unawaited(
+      _withAudio(() async {
+        if (_closed || _paused || !_audioReady) return;
+        if (_muted) {
+          await _stopMicrophone();
+        } else if (!_microphoneRunning) {
+          await _startMicrophone();
+        }
+      }).catchError((Object error, StackTrace stack) {
+        debugPrint(
+          'Gemini voice microphone update failed: ${error.runtimeType}',
+        );
+        debugPrintStack(stackTrace: stack);
+        _ended('bi_voice_connection_error');
+      }),
+    );
+  }
 
   Future<void> pause() {
     if (_closed) return Future.value();

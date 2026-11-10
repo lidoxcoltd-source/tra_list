@@ -55,7 +55,8 @@ class VoiceBusinessTools {
         final draft = VoiceTransactionDraft.fromArguments(args);
         await onTransaction!(draft);
         return {
-          'status': 'Review closed. The transaction was not saved by voice.',
+          'status':
+              'Review closed. The transaction is not saved by voice. If confirmed, the request proceeds in chat; check chat for the result.',
         };
       }
       if (name == 'open_app_page') {

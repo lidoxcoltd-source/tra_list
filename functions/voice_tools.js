@@ -1,6 +1,6 @@
 const summary = {
   name: "get_business_summary",
-  description: "Retrieve an authorized business summary for the requested period. Use when a question refers to a different or current period. The last day of a custom range is inclusive. Never guess unavailable figures.",
+  description: "Retrieve the selected business's authorized report. Call for business reports, summaries, income, expenses, or business performance, including conversational questions such as 'biashara yangu inaendaje?' and requests such as 'nipe report ya biashara yangu'. For 'duka langu limefanya biashara gani leo' use period 'today' and answer from recorded transactions and sales, disclosing any missing details. For 'report za biashara za jana' use period 'yesterday'; for leo use 'today', mwezi huu use 'month', and mwezi uliopita use 'previous'. If a user follows a yesterday report with 'za wiki nzima', call this tool again with period 'seven' for the last seven days; do not assume the previous one-day report covers the week. For an explicit calendar date use 'custom' with the same YYYY-MM-DD start_date and end_date. Use period 'selected' when no period is specified, or the requested period when specified. For follow-up questions retain the most recently requested period unless the user changes it. The last day of a custom range is inclusive. Never guess unavailable figures or ambiguous dates.",
   parameters: {
     type: "object",
     properties: {
@@ -25,7 +25,7 @@ const details = {
 };
 const transaction = {
   name: "review_transaction_draft",
-  description: "After the user explicitly asks to record income or expense, collect the type, exact whole-TZS amount, existing category and description one at a time. Repeat each answer and ask for confirmation. Open a review of the draft only; it is not saved. The user must finish saving in text chat.",
+  description: "After the user explicitly asks to record income or expense, collect the type, exact whole-TZS amount, existing category and description one at a time. Repeat each answer and ask for confirmation. Open the draft for on-screen confirmation. If confirmed, it is sent to chat for saving; check chat for the result. Never claim it was saved by voice.",
   parameters: {
     type: "object",
     properties: {

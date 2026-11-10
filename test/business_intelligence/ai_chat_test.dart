@@ -112,7 +112,7 @@ void main() {
     await Firebase.initializeApp();
   });
 
-  testWidgets('voice transaction only fills chat and does not record', (
+  testWidgets('confirmed voice transaction is sent through chat', (
     tester,
   ) async {
     BusinessAccessService.businessUid.value = 'business';
@@ -158,7 +158,9 @@ void main() {
       ),
     );
     await tester.pump();
-    await key.currentState!.stageVoiceTransaction(
+    final input = find.byType(TextField).last;
+    await tester.enterText(input, 'Maandishi yangu ambayo hayajatumwa');
+    await key.currentState!.submitVoiceTransaction(
       const VoiceTransactionDraft(
         type: 'expense',
         amount: 10000,
@@ -173,8 +175,29 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(provider.sends, 0);
-    expect(history.messages, isEmpty);
+    expect(provider.sends, 1);
+    expect(
+      provider.messages.last['content'],
+      'record expense 10000; category: Kodi; description: Kodi ya duka',
+    );
+    expect(
+      history.messages.first.content,
+      'record expense 10000; category: Kodi; description: Kodi ya duka',
+    );
+    expect(
+      tester.widget<TextField>(input).controller!.text,
+      'Maandishi yangu ambayo hayajatumwa',
+    );
+    BusinessAccessService.isOwner.value = false;
+    await key.currentState!.submitVoiceTransaction(
+      const VoiceTransactionDraft(
+        type: 'expense',
+        amount: 10000,
+        category: 'Kodi',
+        description: 'Kodi ya duka',
+      ),
+    );
+    expect(provider.sends, 1);
   });
 
   testWidgets('voice draft requires review and cancellation does not save', (
@@ -1079,7 +1102,6 @@ void main() {
       const Offset(250, 0),
       600,
     );
-    await tester.pumpAndSettle();
     expect(find.text('Jibu: Mauzo ni 100'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Eleza zaidi');
     await tester.tap(find.byIcon(Icons.send));

@@ -284,6 +284,44 @@ function summarizeTransactions(records) {
   };
 }
 
+function summarizeTransactionDetails(records, maxBytes = 20000) {
+  const valid = records.filter((record) =>
+    ["income", "expense"].includes(record.type) &&
+    typeof record.amount === "number" && Number.isFinite(record.amount) &&
+    record.amount >= 0 && typeof record.date?.toDate === "function",
+  ).sort((left, right) => right.date.toDate().getTime() - left.date.toDate().getTime());
+  const entries = [];
+  let bytes = 2;
+  let descriptionsTruncated = false;
+  for (const record of valid) {
+    const description = typeof record.description === "string" ? record.description : "";
+    const category = typeof record.category === "string" ? record.category : "";
+    const shopNickname = typeof record.shopNickname === "string" ? record.shopNickname : "";
+    const entry = {
+      type: record.type,
+      amount: record.amount,
+      date: record.date.toDate().toISOString(),
+      category: category.slice(0, 100),
+      description: description.slice(0, 300),
+      shopNickname: shopNickname.slice(0, 100),
+    };
+    const entryBytes = Buffer.byteLength(JSON.stringify(entry)) + (entries.length ? 1 : 0);
+    if (bytes + entryBytes > maxBytes) break;
+    bytes += entryBytes;
+    entries.push(entry);
+    if (description.length > 300 || category.length > 100 || shopNickname.length > 100) {
+      descriptionsTruncated = true;
+    }
+  }
+  return {
+    entries,
+    total: valid.length,
+    truncated: entries.length < valid.length,
+    fieldsTruncated: descriptionsTruncated,
+    invalid: records.length - valid.length,
+  };
+}
+
 function validateMessages(messages) {
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > 12) throw new Error("invalid-messages");
   return messages.map((message) => {
@@ -296,7 +334,7 @@ function validateMessages(messages) {
 
 module.exports = {
   MAX_RECORDS, MAX_SNAPSHOT_BYTES, scopeFor, signSnapshot,
-  verifySnapshot, summarizeTransactions, summarizePurchases, summarizeTasks,
+  verifySnapshot, summarizeTransactions, summarizeTransactionDetails, summarizePurchases, summarizeTasks,
   summarizeDocuments, summarizeInventory, summarizeStaff, summarizeStaffTasks, validateMessages,
   summarizeProductCatalog, summarizeCategories,
 };

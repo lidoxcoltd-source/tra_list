@@ -23,6 +23,7 @@ const isherPackages = require("./isher_packages");
 const isherTestPayment = require("./isher_test_payment");
 const aiModels = require("./business_ai_models");
 const geminiVoice = require("./gemini_voice");
+const { businessDataPriority, transactionDataGuidance } = require("./voice_instructions");
 const { randomUUID } = require("node:crypto");
 const voiceExamples = require("./voice_language_examples");
 const aiDocuments = require("./business_ai_documents");
@@ -244,7 +245,11 @@ exports.prepareBusinessAiContext = onCall({ secrets: [openAiApiKey] }, async (re
   let debtQuery = business.collection("debts");
   if (!scope.owner) debtQuery = debtQuery.where("shopNickname", "==", scope.shop);
   const [records, products, debts, sales, purchases, tasks, documents, receipts, movements, legacyStaff, modernStaff, categories] = await Promise.all([
-    aiReadLimited(transactions.select("type", "amount", "category", "date")),
+    aiReadLimited(transactions.select(
+      ...(scope.owner
+        ? ["type", "amount", "category", "date", "description", "shopNickname"]
+        : ["type", "amount", "category", "date"]),
+    )),
     scope.stock ? aiReadLimited(business.collection("products")
       .select("name", "quantity", "lowStockThreshold", "unit", "active", "tracked", "costPrice")) : null,
     scope.debts ? aiReadLimited(debtQuery.select("principal", "amountPaid", "direction")) : null,
@@ -364,6 +369,7 @@ exports.prepareBusinessAiContext = onCall({ secrets: [openAiApiKey] }, async (re
     limitations: [
       "Recorded transaction income may overlap POS sales; do not add them together.",
       "Income minus expenses is cash flow, not gross or net profit.",
+      "Transactions that have not yet synced to the server are excluded.",
       "Transactions without valid dates are excluded. Stock and debt balances are current.",
       "POS sales exclude bar orders, refunds and deleted invoices; product amounts exclude invoice-level adjustments.",
       "Daily income is grouped by UTC date. Customer history and job records are unavailable.",
@@ -385,6 +391,20 @@ exports.prepareBusinessAiContext = onCall({ secrets: [openAiApiKey] }, async (re
       ...(lowStock.length > 50 ? ["Only the first 50 low-stock products are shown."] : []),
     ],
   };
+  if (scope.owner) {
+    const remaining = bi.MAX_SNAPSHOT_BYTES - Buffer.byteLength(JSON.stringify(context)) - 1024;
+    context.transactionDetails = bi.summarizeTransactionDetails(
+      records, Math.max(0, remaining),
+    );
+    if (context.transactionDetails.truncated) {
+      context.limitations.unshift("Transaction details include only the most recent records that fit; totals cover all valid records. Choose a shorter period for more details.");
+    }
+    if (context.transactionDetails.fieldsTruncated) {
+      context.limitations.unshift("Some transaction description, category or shop fields were shortened.");
+    }
+  } else {
+    context.limitations.push("Individual transaction details are available to business owners only; transaction totals are limited to the assigned shop.");
+  }
   if (Buffer.byteLength(JSON.stringify(context)) > bi.MAX_SNAPSHOT_BYTES) {
     throw new HttpsError("resource-exhausted", "The business report is too large to share safely.");
   }
@@ -631,6 +651,8 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
       : {
           systemInstruction: { parts: [
             { text: "Respond only in Swahili or English. Use Swahili by default. Never respond in another language." },
+            { text: businessDataPriority },
+            { text: transactionDataGuidance },
             { text: "When asked for a business report or summary, answer directly using the supplied business context. Include its period, recorded income, expenses, cash flow (not profit), relevant sales or operational data, and any limitations. Never invent missing figures." },
             { text: "When asked what the business sells or offers, consult businessProfile and productCatalog. Treat catalog entries as listed offerings, not proof they were sold. For best-selling items, use recorded POS topProducts only. Use categories for existing income and expense categories. Disclose when a catalog is truncated or unavailable." },
             { text: "For product cost or margin questions, use unitCost and unitGrossMargin only when they are present. These cost fields are available to business owners only; never guess cost from sellPrice. Customer history is limited to reviewed invoices and receipts, not a complete customer directory; never disclose phone numbers, addresses or identity details." },
@@ -690,6 +712,8 @@ function createBusinessAiHandler(model, reasoningEffort, selectable = false) {
         max_completion_tokens: 800,
         messages: [
           { role: "system", content: "Respond only in Swahili or English. Use Swahili by default. Never respond in another language." },
+          { role: "system", content: businessDataPriority },
+          { role: "system", content: transactionDataGuidance },
           { role: "system", content: "When asked for a business report or summary, answer directly using the supplied business context. Include its period, recorded income, expenses, cash flow (not profit), relevant sales or operational data, and any limitations. Never invent missing figures." },
           { role: "system", content: "When asked what the business sells or offers, consult businessProfile and productCatalog. Treat catalog entries as listed offerings, not proof they were sold. For best-selling items, use recorded POS topProducts only. Use categories for existing income and expense categories. Disclose when a catalog is truncated or unavailable." },
           { role: "system", content: "For product cost or margin questions, use unitCost and unitGrossMargin only when they are present. These cost fields are available to business owners only; never guess cost from sellPrice. Customer history is limited to reviewed invoices and receipts, not a complete customer directory; never disclose phone numbers, addresses or identity details." },
@@ -800,8 +824,10 @@ exports.startGeminiVoice = onCall({ secrets: [openAiApiKey, geminiApiKey], timeo
       : "Before a report, say: Preparing report. Please wait.";
     const voiceInstruction = [
       geminiVoice.instruction(language, context),
+      businessDataPriority,
+      transactionDataGuidance,
       reportWait,
-      "Whenever the user asks for a business report, business summary, income or expense totals, or current business performance, call get_business_summary first using the selected period. Also call it for a different reporting period or when fresh information is needed.",
+      "Whenever the user asks for a business report, business summary, income or expense totals, or current business performance, call get_business_summary first using the requested period, or the selected period when none was requested. Also call it when fresh information is needed.",
       "When asked what the business sells or offers, use businessProfile and productCatalog. Listed items are not proof of sales. For best sellers, use recorded POS topProducts. Use categories for existing transaction categories, and disclose when a catalog is truncated or unavailable.",
       "For product cost or margin questions, use unitCost and unitGrossMargin only when they are present. These cost fields are available to business owners only; never guess cost from sellPrice. Customer history is limited to reviewed invoices and receipts, not a complete customer directory; never disclose phone numbers, addresses or identity details.",
       language === "Swahili"

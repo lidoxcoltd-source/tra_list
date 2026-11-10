@@ -13,6 +13,8 @@ test("instruction answers business identity questions from supplied context", ()
   assert.match(prompt, /Never say you do not know the business/);
   assert.match(prompt, /120000/);
   assert.match(prompt, /Customer history is unavailable/);
+  assert.match(prompt, /confirmed request is sent to chat for saving/);
+  assert.match(prompt, /never claim the transaction was saved by voice/);
 });
 
 test("instruction does not invent a business name missing from context", () => {

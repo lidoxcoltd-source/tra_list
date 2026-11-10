@@ -338,7 +338,7 @@ const Map<String, String> swTzTranslations = {
       'Fomu ya hati haikuweza kufunguliwa. Maliza au jaribu tena shughuli ya chat inayoendelea kisha ujaribu tena.',
   'bi_voice_transaction_review': 'Kagua rasimu ya muamala',
   'bi_voice_transaction_not_saved':
-      'Muamala bado haujahifadhiwa. Fungua chat, kagua na tuma mwenyewe ili kuhifadhi. Kundi lazima liwe tayari kwenye biashara.',
+      'Muamala bado haujahifadhiwa. Ukithibitisha, utatumwa kwenye chat ili kuhifadhiwa. Kundi lazima liwe tayari kwenye biashara; angalia chat kwa matokeo.',
   'bi_voice_transaction_type': 'Aina',
   'bi_voice_transaction_income': 'Mapato',
   'bi_voice_transaction_expense': 'Matumizi',
@@ -346,7 +346,7 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_transaction_category': 'Kundi',
   'bi_voice_transaction_description': 'Maelezo',
   'bi_voice_transaction_today': 'Tarehe: leo wakati wa kuhifadhi.',
-  'bi_voice_transaction_chat': 'Endelea kwenye chat',
+  'bi_voice_transaction_chat': 'Thibitisha na hifadhi',
   'bi_voice_summary_title': 'Muhtasari wa biashara',
   'bi_voice_summary_loading': 'Naandaa ripoti. Subiri kidogo.',
   'bi_voice_text_test': 'Jaribu kwa maandishi',

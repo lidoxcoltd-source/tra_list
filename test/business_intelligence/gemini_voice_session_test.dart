@@ -126,6 +126,22 @@ BusinessContext _business({String id = 'business', int month = 1}) =>
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('Gemini greetings vary without repeating consecutively', () {
+    for (final language in ['sw', 'en']) {
+      final variants = List.generate(
+        4,
+        (index) => geminiGreetingText(language, variant: index),
+      );
+      expect(variants.toSet(), hasLength(4));
+      expect(variants.every((greeting) => greeting.contains('Isher')), isTrue);
+      var previous = geminiGreetingText(language);
+      for (var index = 0; index < 12; index++) {
+        final current = geminiGreetingText(language);
+        expect(current, isNot(previous));
+        previous = current;
+      }
+    }
+  });
   testWidgets('Gemini speech indicator follows queued audio and interruption', (
     tester,
   ) async {
@@ -190,6 +206,103 @@ void main() {
         ], null),
         throwsFormatException,
       );
+    },
+  );
+  test(
+    'Gemini sends spoken audio and the selected business summary to the model',
+    () async {
+      const channel = MethodChannel('flutter_pcm_sound/methods');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (_) async => null);
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final recorder = _StreamingRecorder();
+      final socket = _Socket();
+      final tools = [
+        {
+          'functionDeclarations': [
+            {'name': 'get_business_summary'},
+          ],
+        },
+      ];
+      final session = GeminiVoiceSession(
+        (_) {},
+        (_) {},
+        recorderFactory: () => recorder,
+        releaseLease: (_) async {},
+        grantFactory: (_, __, ___) async => {
+          'token': 'grant',
+          'leaseId': 'lease',
+          'model': 'model',
+          'instruction': 'Use the business report.',
+          'minutes': 5,
+          'tools': tools,
+        },
+        socketFactory: (_) async => socket,
+        toolHandler: (name, args) async {
+          expect(name, 'get_business_summary');
+          expect(args['period'], 'selected');
+          return {
+            'summary': {
+              'businessName': 'Duka',
+              'transactions': {'income': 120000},
+            },
+          };
+        },
+      );
+      await session.connect(
+        endpoint: Uri(),
+        snapshot: const AiSnapshot({}, 'snapshot'),
+        businessId: 'business',
+        language: 'sw',
+      );
+      expect((socket.sent.first['setup'] as Map)['tools'], tools);
+      expect((socket.sent.first['setup'] as Map)['systemInstruction'], {
+        'parts': [
+          {'text': 'Use the business report.'},
+        ],
+      });
+      recorder.audio!.add(Uint8List.fromList([0, 0]));
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        socket.sent.any(
+          (message) =>
+              (message['realtimeInput'] as Map?)?.containsKey('audio') == true,
+        ),
+        isTrue,
+      );
+      socket.incoming.add(
+        jsonEncode({
+          'toolCall': {
+            'functionCalls': [
+              {
+                'id': 'report-1',
+                'name': 'get_business_summary',
+                'args': {'period': 'selected'},
+              },
+            ],
+          },
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final response = socket.sent.singleWhere(
+        (message) => message.containsKey('toolResponse'),
+      );
+      expect(response['toolResponse'], {
+        'functionResponses': [
+          {
+            'id': 'report-1',
+            'name': 'get_business_summary',
+            'response': {
+              'summary': {
+                'businessName': 'Duka',
+                'transactions': {'income': 120000},
+              },
+            },
+          },
+        ],
+      });
+      await session.close();
     },
   );
   test(
@@ -343,13 +456,30 @@ void main() {
         )
         .length;
     expect(audioBeforePause, 1);
-    await session.pause();
+    session.setMuted(true);
+    recorder.audio!.add(Uint8List.fromList([0, 0]));
+    await Future<void>.delayed(Duration.zero);
     expect(recorder.stops, 1);
+    expect(
+      socket.sent
+          .where(
+            (item) =>
+                (item['realtimeInput'] as Map?)?.containsKey('audio') == true,
+          )
+          .length,
+      audioBeforePause,
+    );
+    session.setMuted(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.starts, 2);
+    expect(grants, 1);
+    await session.pause();
+    expect(recorder.stops, 2);
     expect(socket.closed, isFalse);
     expect(calls, contains('release'));
     expect(await session.resume(() => true), isTrue);
     expect(grants, 1);
-    expect(recorder.starts, 2);
+    expect(recorder.starts, 3);
     recorder.audio!.add(Uint8List.fromList([0, 0]));
     await Future<void>.delayed(Duration.zero);
     expect(
@@ -363,7 +493,7 @@ void main() {
     );
     await session.close();
     await session.close();
-    expect(recorder.stops, 2);
+    expect(recorder.stops, 3);
     expect(recorder.disposed, isTrue);
     expect(socket.closed, isTrue);
     expect(releasedLeases, [leaseId]);

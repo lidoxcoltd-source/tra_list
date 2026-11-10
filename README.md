@@ -84,10 +84,21 @@ Failed upstream requests also count toward the limit. Preparing reports is
 limited to 120 per user per UTC day and one every
 two seconds. Provider usage may incur charges.
 
+Business owners' AI snapshots include transaction dates, amounts, types,
+categories, descriptions and shops from the selected period, starting with
+the most recent records. The signed snapshot has a 50 KB limit: when details
+do not fit, the snapshot marks them as incomplete and suggests choosing a
+shorter period. Totals still cover all valid records read for that period.
+Long descriptions or category/shop names may be shortened. Staff receive
+shop-scoped transaction totals but not individual transaction details. Pending
+transactions that have not synced to the server are not included. Transaction
+descriptions are user-entered and may contain sensitive information; they are
+sent to the selected AI provider as part of an owner's snapshot.
+
 The app and report follow the selected English or Swahili language; chat
 requests instruct the AI to answer in that language, unless the user asks
 otherwise. User-entered product names, expense categories and chat messages
-are shared with OpenAI and may themselves contain personal information.
+are shared with the selected provider and may themselves contain personal information.
 Customers' names, contact details and payment credentials are not intentionally
 included in the generated snapshot.
 

@@ -77,7 +77,7 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
         );
         return;
       }
-      chat.stageVoiceTransaction(draft);
+      chat.submitVoiceTransaction(draft);
     });
   }
 

@@ -24,16 +24,23 @@ class _FirebaseCoreMock extends MockFirebaseApp {
 }
 
 class _Provider implements AIProvider {
+  _Provider({
+    this.snapshot = const AiSnapshot({'businessName': 'Duka'}, 'snapshot'),
+  });
+
+  final AiSnapshot snapshot;
   int preparations = 0;
+  ReportingPeriod? lastPreparedPeriod;
   Completer<AiSnapshot>? nextPreparation;
 
   @override
   Future<AiSnapshot> prepare(BusinessContext context) async {
     preparations++;
+    lastPreparedPeriod = context.period;
     final pending = nextPreparation;
     nextPreparation = null;
     if (pending != null) return pending.future;
-    return const AiSnapshot({'businessName': 'Duka'}, 'snapshot');
+    return snapshot;
   }
 
   @override
@@ -184,12 +191,30 @@ void main() {
       'periodEndExclusive': '2024-02-01T00:00:00.000Z',
       'currency': 'TZS',
       'transactions': {'income': 120000, 'expenses': 30000, 'count': 8},
+      'transactionDetails': {
+        'total': 8,
+        'truncated': true,
+        'entries': [
+          {
+            'type': 'income',
+            'amount': 120000,
+            'description': 'Mauzo ya mchele',
+          },
+          {'type': 'expense', 'amount': 30000, 'description': 'Kodi'},
+        ],
+      },
     }, language: 'sw');
     expect(summary, contains('Duka la Asha'));
     expect(summary, contains('Kipindi: 2024-01-01 hadi 2024-01-31'));
     expect(summary, contains('Mapato yaliyorekodiwa: TZS 120,000'));
     expect(summary, contains('Matumizi yaliyorekodiwa: TZS 30,000'));
     expect(summary, contains('Salio la fedha (si faida): TZS 90,000'));
+    expect(summary, contains('Mapato: Mauzo ya mchele - TZS 120,000'));
+    expect(summary, contains('Inaonyesha miamala 2 kati ya 8'));
+    final missingDetails = voiceSummaryText({
+      'transactionDetails': {'total': 4, 'truncated': true, 'entries': []},
+    }, language: 'sw');
+    expect(missingDetails, contains('Maelezo ya miamala hayapatikani'));
   });
 
   test(
@@ -206,6 +231,146 @@ void main() {
       );
     },
   );
+
+  test('only plain business report requests use the selected period', () {
+    for (final prompt in [
+      'Nipe ripoti ya biashara yangu',
+      'naomba riport',
+      'Show me my business report',
+    ]) {
+      expect(isDefaultVoiceReportRequest(prompt), isTrue, reason: prompt);
+    }
+    for (final prompt in [
+      'Nipe ripoti ya jana',
+      'Nipe ripoti ya mauzo',
+      'Nifundishe jinsi ya kutengeneza ripoti',
+    ]) {
+      expect(isDefaultVoiceReportRequest(prompt), isFalse, reason: prompt);
+    }
+    expect(
+      voiceReportPeriod('Nipe muhtasari wa biashara yangu wa mwezi huu.'),
+      'month',
+    );
+    expect(voiceReportPeriod('Nipe ripoti ya jana'), 'yesterday');
+    expect(voiceReportPeriod('Nipe report za biashara za jana'), 'yesterday');
+    expect(
+      voiceReportArguments(
+        'duka langu limefanya biashara gani leo?',
+        DateTime(2026, 11, 10),
+      ),
+      {'period': 'today'},
+    );
+    expect(
+      voiceReportArguments(
+        'biashara yangu imefanya biashara gani jana?',
+        DateTime(2026, 11, 10),
+      ),
+      {'period': 'yesterday'},
+    );
+    expect(
+      voiceReportArguments(
+        'duka langu linafanya biashara gani?',
+        DateTime(2026, 11, 10),
+      ),
+      isNull,
+    );
+    expect(
+      voiceReportArguments('za wiki nzima', DateTime(2026, 11, 10)),
+      isNull,
+    );
+    expect(
+      voiceReportArguments(
+        'za wiki nzima',
+        DateTime(2026, 11, 10),
+        hasReportContext: true,
+      ),
+      {'period': 'seven'},
+    );
+    expect(
+      voiceReportArguments(
+        'na mwezi huu?',
+        DateTime(2026, 11, 10),
+        hasReportContext: true,
+      ),
+      {'period': 'month'},
+    );
+    expect(
+      voiceReportArguments(
+        'na jana?',
+        DateTime(2026, 11, 10),
+        hasReportContext: true,
+      ),
+      {'period': 'yesterday'},
+    );
+    expect(
+      voiceReportArguments(
+        'na tarehe 15/08/2024?',
+        DateTime(2026, 11, 10),
+        hasReportContext: true,
+      ),
+      {
+        'period': 'custom',
+        'start_date': '2024-08-15',
+        'end_date': '2024-08-15',
+      },
+    );
+    expect(
+      voiceReportArguments('Nipe report ya wiki hii', DateTime(2026, 11, 10)),
+      {
+        'period': 'custom',
+        'start_date': '2026-11-09',
+        'end_date': '2026-11-10',
+      },
+    );
+    expect(
+      voiceReportArguments(
+        'Nipe ripoti ya biashara ya tarehe 15/08/2024',
+        DateTime(2026, 11, 10),
+      ),
+      {
+        'period': 'custom',
+        'start_date': '2024-08-15',
+        'end_date': '2024-08-15',
+      },
+    );
+    expect(
+      voiceReportArguments(
+        'Nipe ripoti ya biashara ya juzi',
+        DateTime(2026, 11, 10),
+      ),
+      {
+        'period': 'custom',
+        'start_date': '2026-11-08',
+        'end_date': '2026-11-08',
+      },
+    );
+    expect(
+      voiceReportArguments(
+        'Nipe ripoti ya tarehe 2024-02-30',
+        DateTime(2026, 11, 10),
+      ),
+      isNull,
+    );
+    expect(
+      voiceReportArguments(
+        'Nipe ripoti ya tarehe 2026-11-11',
+        DateTime(2026, 11, 10),
+      ),
+      isNull,
+    );
+    expect(
+      voiceReportArguments(
+        'Nipe ripoti ya tarehe 15 agosti 2024',
+        DateTime(2026, 11, 10),
+      ),
+      {
+        'period': 'custom',
+        'start_date': '2024-08-15',
+        'end_date': '2024-08-15',
+      },
+    );
+    expect(voiceReportPeriod('Nipe muhtasari wa mauzo ya mwezi huu'), isNull);
+  });
 
   testWidgets('orb follows microphone levels and resets on mute', (
     tester,
@@ -390,6 +555,8 @@ void main() {
     report.complete(const AiSnapshot({'businessName': 'Duka'}, 'report-token'));
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('Muhtasari wa biashara'), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice_summary_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice_summary_metrics')), findsNothing);
     final typewriter = tester.widget<SelectableText>(
       find.descendant(
         of: find.byKey(const ValueKey('voice_summary_typewriter')),
@@ -407,61 +574,139 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets(
-    'voice transaction review cancellation does not navigate or save',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      BusinessAccessService.businessUid.value = 'business';
-      BusinessAccessService.isReady.value = true;
-      BusinessAccessService.isActive.value = true;
-      BusinessAccessService.isOwner.value = true;
-      addTearDown(() {
-        debugDefaultTargetPlatformOverride = null;
-        BusinessAccessService.businessUid.value = '';
-        BusinessAccessService.isReady.value = false;
-        BusinessAccessService.isActive.value = false;
-        BusinessAccessService.isOwner.value = false;
-      });
-      late VoiceToolHandler tools;
-      var navigated = false;
-      final current = true.obs;
-      await tester.pumpWidget(
-        GetMaterialApp(
-          translations: AppTranslations(),
-          locale: const Locale('sw', 'TZ'),
-          home: Scaffold(
+  testWidgets('summary dialog fits a compact screen with reduced motion', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      debugDefaultTargetPlatformOverride = null;
+    });
+    late VoiceToolHandler tools;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(320, 480),
+            disableAnimations: true,
+          ),
+          child: Scaffold(
             body: BusinessRealtimeVoice(
               businessContext: _business(),
-              isCurrent: () => current.value,
-              provider: _Provider(),
+              isCurrent: () => true,
+              provider: _Provider(
+                snapshot: const AiSnapshot({
+                  'businessName': 'Duka',
+                  'transactions': {'income': 120000, 'expenses': 30000},
+                }, 'snapshot'),
+              ),
               sessionFactory: (_, level, speaking) =>
                   _FakeVoiceSession(level, speaking),
               onToolsReady: (value) => tools = value,
-              onOpenTransaction: (_) => navigated = true,
             ),
           ),
         ),
-      );
-      await tester.tap(find.bySemanticsLabel('Anza sauti').first);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      final pending = tools('review_transaction_draft', {
-        'type': 'expense',
-        'amount': 10000,
-        'category': 'Kodi',
-        'description': 'Kodi ya duka',
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Kagua rasimu ya muamala'), findsOneWidget);
-      expect(find.textContaining('TZS 10000'), findsOneWidget);
-      await tester.tap(find.text('cancel'.tr));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect((await pending)['status'], contains('not saved'));
-      expect(navigated, isFalse);
+      ),
+    );
+    await tester.ensureVisible(find.bySemanticsLabel('Anza sauti').first);
+    await tester.tap(find.bySemanticsLabel('Anza sauti').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final pending = tools('get_business_summary', {'period': 'selected'});
+    await tester.pump();
+    await tester.pump();
+    final dialog = find.byKey(const ValueKey('voice_summary_dialog'));
+    expect(dialog, findsOneWidget);
+    expect(find.byKey(const ValueKey('voice_summary_metrics')), findsOneWidget);
+    final text = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice_summary_typewriter')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    expect(text.data, contains('Duka'));
+    expect(
+      tester.getRect(dialog).contains(tester.getCenter(find.text('Funga'))),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Funga'));
+    await tester.pump();
+    expect((await pending)['summary'], isNotNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('voice transaction review only proceeds after confirmation', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    BusinessAccessService.businessUid.value = 'business';
+    BusinessAccessService.isReady.value = true;
+    BusinessAccessService.isActive.value = true;
+    BusinessAccessService.isOwner.value = true;
+    addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-    },
-  );
+      BusinessAccessService.businessUid.value = '';
+      BusinessAccessService.isReady.value = false;
+      BusinessAccessService.isActive.value = false;
+      BusinessAccessService.isOwner.value = false;
+    });
+    late VoiceToolHandler tools;
+    var navigated = false;
+    final current = true.obs;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => current.value,
+            provider: _Provider(),
+            sessionFactory: (_, level, speaking) =>
+                _FakeVoiceSession(level, speaking),
+            onToolsReady: (value) => tools = value,
+            onOpenTransaction: (_) => navigated = true,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Anza sauti').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final pending = tools('review_transaction_draft', {
+      'type': 'expense',
+      'amount': 10000,
+      'category': 'Kodi',
+      'description': 'Kodi ya duka',
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Kagua rasimu ya muamala'), findsOneWidget);
+    expect(find.textContaining('TZS 10000'), findsOneWidget);
+    await tester.tap(find.text('cancel'.tr));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect((await pending)['status'], contains('not saved'));
+    expect(navigated, isFalse);
+    final confirmed = tools('review_transaction_draft', {
+      'type': 'expense',
+      'amount': 10000,
+      'category': 'Kodi',
+      'description': 'Kodi ya duka',
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Thibitisha na hifadhi'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect((await confirmed)['status'], contains('not saved'));
+    expect(navigated, isTrue);
+    debugDefaultTargetPlatformOverride = null;
+  });
 
   testWidgets('voice page request asks for confirmation and respects cancel', (
     tester,
@@ -531,6 +776,176 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('a typed business report opens the selected summary', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    late _FakeVoiceSession session;
+    final provider = _Provider(
+      snapshot: const AiSnapshot({
+        'businessName': 'Duka',
+        'periodStart': '2024-01-01T00:00:00.000Z',
+        'periodEndExclusive': '2024-02-01T00:00:00.000Z',
+        'transactions': {'income': 120000, 'expenses': 30000},
+      }, 'snapshot'),
+    );
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('sw', 'TZ'),
+        home: Scaffold(
+          body: BusinessRealtimeVoice(
+            businessContext: _business(),
+            isCurrent: () => true,
+            provider: provider,
+            sessionFactory: (_, level, speaking) =>
+                session = _FakeVoiceSession(level, speaking),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Anza sauti').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.byTooltip('Jaribu kwa maandishi'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.enterText(
+      find.byKey(const ValueKey('voice_text_prompt_input')),
+      'Nipe ripoti ya biashara yangu',
+    );
+    final send = tester.widget<IconButton>(
+      find.byKey(const ValueKey('voice_text_prompt_send')),
+    );
+    send.onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(provider.preparations, 2);
+    expect(session.sentText.single, contains('Biashara: Duka'));
+    expect(
+      session.sentText.single,
+      contains('Mapato yaliyorekodiwa: TZS 120,000'),
+    );
+    expect(
+      session.sentText.single,
+      contains('Matumizi yaliyorekodiwa: TZS 30,000'),
+    );
+    expect(session.sentText.single, contains('Answer directly'));
+    expect(find.byKey(const ValueKey('voice_summary_metrics')), findsOneWidget);
+    expect(find.text('TZS 120,000'), findsOneWidget);
+    expect(find.text('TZS 30,000'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice_summary_typewriter')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('close'.tr));
+    await tester.pump(const Duration(milliseconds: 400));
+    session.sentText.clear();
+    final month = ReportingPeriod.fromKey('month', DateTime.now());
+    provider.nextPreparation = Completer<AiSnapshot>()
+      ..complete(
+        AiSnapshot({
+          'businessName': 'Duka',
+          'periodStart': month.start.toIso8601String(),
+          'periodEndExclusive': month.end.toIso8601String(),
+          'transactions': {'income': 250000, 'expenses': 40000},
+        }, 'snapshot'),
+      );
+    await tester.enterText(
+      find.byKey(const ValueKey('voice_text_prompt_input')),
+      'Nipe muhtasari wa biashara yangu wa mwezi huu.',
+    );
+    tester
+        .widget<IconButton>(
+          find.byKey(const ValueKey('voice_text_prompt_send')),
+        )
+        .onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(provider.lastPreparedPeriod!.start, month.start);
+    expect(provider.lastPreparedPeriod!.end, month.end);
+    expect(session.sentText.single, contains('TZS 250,000'));
+    expect(
+      find.byKey(const ValueKey('voice_summary_typewriter')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('close'.tr));
+    await tester.pump(const Duration(milliseconds: 400));
+    session.sentText.clear();
+    for (final (question, period) in [
+      (
+        'Nipe report za biashara za jana',
+        ReportingPeriod.fromKey('yesterday', DateTime.now()),
+      ),
+      ('za wiki nzima', ReportingPeriod.fromKey('seven', DateTime.now())),
+      (
+        'duka langu limefanya biashara gani leo?',
+        ReportingPeriod.fromKey('today', DateTime.now()),
+      ),
+      (
+        'Nipe ripoti ya biashara ya tarehe 15/08/2024',
+        ReportingPeriod(DateTime(2024, 8, 15), DateTime(2024, 8, 16)),
+      ),
+    ]) {
+      provider.nextPreparation = Completer<AiSnapshot>()
+        ..complete(
+          AiSnapshot({
+            'businessName': 'Duka',
+            'periodStart': period.start.toIso8601String(),
+            'periodEndExclusive': period.end.toIso8601String(),
+            'transactions': {'income': 75000, 'expenses': 10000},
+            'transactionDetails': {
+              'total': 1,
+              'entries': [
+                {
+                  'type': 'income',
+                  'amount': 75000,
+                  'description': 'Mauzo ya mchele',
+                },
+              ],
+            },
+          }, 'snapshot'),
+        );
+      await tester.enterText(
+        find.byKey(const ValueKey('voice_text_prompt_input')),
+        question,
+      );
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('voice_text_prompt_send')),
+          )
+          .onPressed!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(provider.lastPreparedPeriod!.start, period.start);
+      expect(provider.lastPreparedPeriod!.end, period.end);
+      expect(session.sentText.single, contains('TZS 75,000'));
+      expect(session.sentText.single, contains(question));
+      expect(session.sentText.single, contains('Mauzo ya mchele'));
+      await tester.tap(find.text('close'.tr));
+      await tester.pump(const Duration(milliseconds: 400));
+      session.sentText.clear();
+    }
+    final unavailable = Completer<AiSnapshot>();
+    provider.nextPreparation = unavailable;
+    await tester.enterText(
+      find.byKey(const ValueKey('voice_text_prompt_input')),
+      'Nipe ripoti ya biashara yangu',
+    );
+    tester
+        .widget<IconButton>(
+          find.byKey(const ValueKey('voice_text_prompt_send')),
+        )
+        .onPressed!();
+    await tester.pump();
+    unavailable.completeError(StateError('Report unavailable'));
+    await tester.pump();
+    expect(session.sentText, isEmpty);
+    expect(find.text('bi_voice_text_send_error'.tr), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('voice text test sends the question into the active call', (
     tester,
   ) async {
@@ -564,6 +979,7 @@ void main() {
       find.byKey(const ValueKey('voice_text_prompt_panel')),
       findsOneWidget,
     );
+    expect(session.muted, isTrue);
     expect(
       tester
           .widget<SingleChildScrollView>(
@@ -582,6 +998,13 @@ void main() {
       lessThan(1),
     );
     final input = find.byKey(const ValueKey('voice_text_prompt_input'));
+    expect(
+      find.descendant(
+        of: input,
+        matching: find.byKey(const ValueKey('voice_text_prompt_send')),
+      ),
+      findsOneWidget,
+    );
     await tester.enterText(input, 'Nipe mapato ya mwezi huu');
     expect(
       tester.widget<TextField>(input).controller!.text,
@@ -603,6 +1026,31 @@ void main() {
       greaterThan(tester.getTopLeft(input).dy),
     );
     expect(find.byKey(const ValueKey('voice_transcript_fade')), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice_text_prompt_panel')),
+        matching: find.byTooltip('close'.tr),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(session.muted, isFalse);
+
+    await tester.tap(find.bySemanticsLabel('Zima kipaza sauti').first);
+    await tester.pump();
+    expect(session.muted, isTrue);
+    await tester.tap(find.byTooltip('Jaribu kwa maandishi'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(session.muted, isTrue);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice_text_prompt_panel')),
+        matching: find.byTooltip('close'.tr),
+      ),
+    );
+    await tester.pump();
+    expect(session.muted, isTrue);
     debugDefaultTargetPlatformOverride = null;
   });
 

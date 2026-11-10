@@ -510,7 +510,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
     _inputFocus.requestFocus();
   }
 
-  Future<void> stageVoiceTransaction(VoiceTransactionDraft draft) async {
+  Future<void> submitVoiceTransaction(VoiceTransactionDraft draft) async {
     bool allowed() =>
         _canEditMessage &&
         BusinessAccessService.hasBusinessAccess &&
@@ -524,31 +524,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
       }
       return;
     }
-    if (_input.text.isNotEmpty && _input.text != draft.chatCommand) {
-      final replace = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('bi_chat_edit_replace_title'.tr),
-          content: Text('bi_chat_edit_replace_notice'.tr),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('cancel'.tr),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('bi_chat_edit_replace'.tr),
-            ),
-          ],
-        ),
-      );
-      if (!mounted || replace != true || !allowed()) return;
-    }
-    _input.value = TextEditingValue(
-      text: draft.chatCommand,
-      selection: TextSelection.collapsed(offset: draft.chatCommand.length),
-    );
-    _inputFocus.requestFocus();
+    await _send(draft.chatCommand);
   }
 
   Future<void> _send([String? suggestion]) async {

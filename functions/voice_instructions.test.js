@@ -16,12 +16,32 @@ test("Swahili voice instructions preserve amounts and provide correct examples",
   assert.match(prompt, /call open_document_draft/);
   assert.match(prompt, /Whenever the user asks for a business report/);
   assert.match(prompt, /then call get_business_summary/);
+  assert.match(prompt, /using the requested period, or the selected period when none was requested/);
   assert.match(prompt, /use businessProfile and productCatalog/);
   assert.match(prompt, /Listed items are not proof of sales/);
   assert.match(prompt, /Naandaa ripoti\. Subiri kidogo\./);
   assert.match(prompt, /user must review and save manually/);
   assert.match(prompt, /Never claim a document was created or saved/);
+  assert.match(prompt, /confirmed request is sent to chat for saving/);
+  assert.match(prompt, /never claim the transaction was saved by voice/);
   assert.match(prompt, /Reviewed context: \{"transactions":\{"income":30500\}\}$/);
+});
+
+test("business data takes priority without inventing unavailable information", () => {
+  const prompt = buildVoiceInstructions("sw", { businessName: "Duka" });
+  assert.match(prompt, /Prioritize answering business questions directly/);
+  assert.match(prompt, /transactionDetails\.entries/);
+  assert.match(prompt, /never calculate complete totals from a truncated list/);
+  assert.match(prompt, /biashara yangu inaendaje/);
+  assert.match(prompt, /conversation and the most recently discussed period/);
+  assert.match(prompt, /never infer growth, decline or profitability from a single period/);
+  assert.match(prompt, /use the selected period and give the available report directly/);
+  assert.match(prompt, /do not ask what kind of report the user wants/);
+  assert.match(prompt, /confirm an action that changes records/);
+  assert.match(prompt, /do not ask the user to provide facts that are already supplied/);
+  assert.match(prompt, /identify the specific missing detail/);
+  assert.match(prompt, /do not invent figures, claim access to unavailable data, or bypass permissions/);
+  assert.match(prompt, /"businessName":"Duka"/);
 });
 
 test("Swahili is the default and English is the only alternate voice language", () => {
