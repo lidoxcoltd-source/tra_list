@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +24,7 @@ class _DownloadCenterManagementPageState
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _subtitle = TextEditingController();
+  final _eyebrow = TextEditingController();
   final _urls = {
     for (final d in downloadItemDefs) d.key: TextEditingController(),
   };
@@ -30,6 +33,7 @@ class _DownloadCenterManagementPageState
   };
   final _enabled = {for (final d in downloadItemDefs) d.key: false};
   bool _loading = true;
+  bool _authorized = false;
   bool _saving = false;
   String? _error;
 
@@ -134,6 +138,7 @@ class _DownloadCenterManagementPageState
   void dispose() {
     _title.dispose();
     _subtitle.dispose();
+    _eyebrow.dispose();
     for (final c in [..._urls.values, ..._versions.values]) {
       c.dispose();
     }
@@ -146,9 +151,25 @@ class _DownloadCenterManagementPageState
       _error = null;
     });
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw StateError('Sign in as a super admin.');
+      final profile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('profile')
+          .doc('company')
+          .get();
+      final role = (profile.data()?['role'] ?? '')
+          .toString()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z]'), '');
+      if (role != 'superadmin') {
+        throw StateError('Only a super admin can edit this page.');
+      }
       final center = await DownloadCenterService.load();
       _title.text = center.title;
       _subtitle.text = center.subtitle;
+      _eyebrow.text = center.eyebrow;
       for (final d in downloadItemDefs) {
         final item = center.item(d.key);
         _urls[d.key]!.text = item.url;
@@ -156,7 +177,10 @@ class _DownloadCenterManagementPageState
         _enabled[d.key] = item.enabled;
       }
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _authorized = true;
+        _loading = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -177,6 +201,7 @@ class _DownloadCenterManagementPageState
         DownloadCenter(
           title: _title.text.trim(),
           subtitle: _subtitle.text.trim(),
+          eyebrow: _eyebrow.text.trim(),
           items: {
             for (final d in downloadItemDefs)
               d.key: DownloadItem(
@@ -251,6 +276,13 @@ class _DownloadCenterManagementPageState
       appBar: AppBar(title: const Text('Downloads page')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : !_authorized
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error ?? 'Only a super admin can edit this page.'),
+              ),
+            )
           : Form(
               key: _formKey,
               child: ListView(
@@ -298,6 +330,15 @@ class _DownloadCenterManagementPageState
                     maxLines: 3,
                     decoration: const InputDecoration(
                       labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _eyebrow,
+                    maxLength: 80,
+                    decoration: const InputDecoration(
+                      labelText: 'Hero label',
                       border: OutlineInputBorder(),
                     ),
                   ),

@@ -5,12 +5,17 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:get/get.dart' hide navigator;
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:tra_list/business_intelligence/ai_models.dart';
 import 'package:tra_list/business_intelligence/ai_models_ui.dart';
 import 'package:tra_list/business_intelligence/gemini_voice_session.dart';
@@ -27,6 +32,8 @@ import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/business_intelligence/isher_voice_guide_page.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/creative_studio_service.dart';
+import 'package:tra_list/services/pages/creative_design_editor_page.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 String voiceServiceUrl(String configuredUrl, String firebaseProjectId) {
@@ -1275,6 +1282,47 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     );
   }
 
+  Future<void> _showVoicePosterDesigner() async {
+    if (_busy || _summaryLoading || _summaryDialogOpen) return;
+    final wasMuted = _muted;
+    if (_active && !wasMuted) {
+      _session?.setMuted(true);
+      setState(() {
+        _muted = true;
+        _microphoneLevel = 0;
+      });
+    }
+    try {
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierLabel: 'close'.tr,
+        barrierColor: const Color(0xB9080C18),
+        transitionDuration: const Duration(milliseconds: 260),
+        transitionBuilder: (context, animation, _, child) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .96, end: 1).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+            child: child,
+          ),
+        ),
+        pageBuilder: (context, _, _) => _VoicePosterDesignDialog(
+          language: supportedAiLanguage(Get.locale?.languageCode),
+        ),
+      );
+    } finally {
+      if (mounted && _active && !wasMuted) {
+        _session?.setMuted(false);
+        setState(() {
+          _muted = false;
+          _microphoneLevel = 0;
+        });
+      }
+    }
+  }
+
   void _toggleTextPrompt() {
     if (!_active || _busy || _summaryLoading || _summaryDialogOpen) return;
     if (_textPromptOpen) {
@@ -1965,287 +2013,864 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
       ),
       child: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            physics: _textPromptOpen
-                ? const NeverScrollableScrollPhysics()
-                : null,
-            padding: EdgeInsets.fromLTRB(
-              24,
-              _textPromptOpen ? 4 : 16,
-              24,
-              _textPromptOpen ? 4 : 24,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight > 40
-                    ? constraints.maxHeight - 40
-                    : 0,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      SizedBox(height: _textPromptOpen ? 4 : 16),
-                      SizedBox(
-                        key: const ValueKey('voice_orb_slot'),
-                        height: _textPromptOpen ? 112 : 216,
-                        child: OverflowBox(
-                          alignment: Alignment.topCenter,
-                          minHeight: 0,
-                          maxHeight: 200,
-                          child: AnimatedSlide(
-                            offset: _textPromptOpen
-                                ? const Offset(0, -0.65)
-                                : _summaryRaised
-                                ? const Offset(0, -0.75)
-                                : Offset.zero,
-                            duration: const Duration(milliseconds: 420),
-                            curve: Curves.easeOutCubic,
-                            child: AnimatedScale(
-                              key: const ValueKey('voice_orb_mode_scale'),
-                              scale: _textPromptOpen
-                                  ? 0.42
-                                  : _summaryRaised
-                                  ? 0.58
-                                  : 1,
-                              duration: const Duration(milliseconds: 420),
-                              curve: Curves.easeOutCubic,
-                              child: _IsherOrb(
-                                animation: _orbAnimation,
-                                active: _active && !_muted,
-                                busy: _busy,
-                                level: _active && !_muted
-                                    ? _microphoneLevel
-                                    : 0,
-                                speaking: _aiSpeaking,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (!_textPromptOpen) ...[
-                        const SizedBox(height: 28),
-                        Text(
-                          _active
-                              ? 'bi_voice_session_title'.tr
-                              : 'bi_voice_welcome'.tr,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (status != 'bi_voice_live')
-                          Text(
-                            status.tr,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Color(0xFFBDB9D0),
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                          ),
-                        const SizedBox(height: 22),
-                        if (_busy || _summaryLoading)
-                          const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          Icon(
-                            _active && !_muted
-                                ? Icons.graphic_eq_rounded
-                                : Icons.mic_none_rounded,
-                            color: const Color(0xFFB9A4FF),
-                          ),
-                        const SizedBox(height: 14),
-                      ],
-                      if (!_active &&
-                          !_paused &&
-                          !_busy &&
-                          _engines.length > 1) ...[
-                        SegmentedButton<String>(
-                          showSelectedIcon: false,
-                          segments: [
-                            for (final e in _engines)
-                              ButtonSegment(
-                                value: e,
-                                label: Text(
-                                  isherProviderNickname(e, _providerNicknames),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          selected: {_engine},
-                          onSelectionChanged: (v) => _selectEngine(v.first),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      if (kIsWeb && !_textPromptOpen)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Text(
-                            'bi_voice_web_requirements'.tr,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      if (!_textPromptOpen &&
-                          _active &&
-                          !_muted &&
-                          _microphoneLevel == null)
-                        Text(
-                          'bi_voice_level_unavailable'.tr,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 360),
+          builder: (context, constraints) {
+            final width = math.min(constraints.maxWidth, 480.0);
+            final design = SizedBox(
+              width: width,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  SizedBox(height: _textPromptOpen ? 4 : 16),
+                  SizedBox(
+                    key: const ValueKey('voice_orb_slot'),
+                    height: _textPromptOpen ? 112 : 216,
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: 0,
+                      maxHeight: 200,
+                      child: AnimatedSlide(
+                        offset: _textPromptOpen
+                            ? const Offset(0, -0.65)
+                            : _summaryRaised
+                            ? const Offset(0, -0.75)
+                            : Offset.zero,
+                        duration: const Duration(milliseconds: 420),
                         curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: _textPromptOpen
-                            ? _voiceTextPanel(context, constraints.maxHeight)
-                            : const SizedBox(width: double.infinity),
+                        child: AnimatedScale(
+                          key: const ValueKey('voice_orb_mode_scale'),
+                          scale: _textPromptOpen
+                              ? 0.42
+                              : _summaryRaised
+                              ? 0.58
+                              : 1,
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeOutCubic,
+                          child: _IsherOrb(
+                            animation: _orbAnimation,
+                            active: _active && !_muted,
+                            busy: _busy,
+                            level: _active && !_muted
+                                ? _microphoneLevel
+                                : 0,
+                            speaking: _aiSpeaking,
+                          ),
+                        ),
                       ),
-                      if (!_textPromptOpen)
-                        Semantics(
-                          button: true,
-                          label:
-                              (_active
-                                      ? (_muted
-                                            ? 'bi_voice_unmute'
-                                            : 'bi_voice_mute')
-                                      : (_paused
-                                            ? 'bi_voice_resume'
-                                            : 'bi_voice_start'))
-                                  .tr,
-                          child: Material(
-                            color: const Color(0xFF625C7A),
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              key: const ValueKey('voice_call_button'),
-                              customBorder: const CircleBorder(),
-                              onTap: _busy
-                                  ? null
-                                  : (kIsWeb && !_engines.contains('openai'))
-                                  ? null
-                                  : (_active ? _toggleMute : _start),
-                              child: Container(
-                                width: 88,
-                                height: 88,
-                                margin: const EdgeInsets.all(8),
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFFB9A4FF),
-                                      Color(0xFF7048ED),
-                                    ],
-                                  ),
-                                ),
-                                child: Icon(
-                                  _muted
-                                      ? Icons.mic_off_rounded
-                                      : Icons.mic_rounded,
-                                  color: Colors.white,
-                                  size: 34,
-                                ),
-                              ),
+                    ),
+                  ),
+                  if (!_textPromptOpen) ...[
+                    const SizedBox(height: 28),
+                    Text(
+                      _active
+                          ? 'bi_voice_session_title'.tr
+                          : 'bi_voice_welcome'.tr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (status != 'bi_voice_live')
+                      Text(
+                        status.tr,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFBDB9D0),
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                    const SizedBox(height: 22),
+                    if (_busy || _summaryLoading)
+                      const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(
+                        _active && !_muted
+                            ? Icons.graphic_eq_rounded
+                            : Icons.mic_none_rounded,
+                        color: const Color(0xFFB9A4FF),
+                      ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (!_active && !_paused && !_busy && _engines.length > 1) ...[
+                    SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final engine in _engines)
+                          ButtonSegment(
+                            value: engine,
+                            label: Text(
+                              isherProviderNickname(engine, _providerNicknames),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                      ],
+                      selected: {_engine},
+                      onSelectionChanged: (value) => _selectEngine(value.first),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (kIsWeb && !_textPromptOpen)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'bi_voice_web_requirements'.tr,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          height: 1.4,
                         ),
-                      if (!_textPromptOpen) const SizedBox(height: 8),
-                      if (!_textPromptOpen)
-                        Text(
-                          (_active
-                                  ? (_muted
-                                        ? 'bi_voice_unmute'
-                                        : 'bi_voice_mute')
-                                  : (_paused
-                                        ? 'bi_voice_resume'
-                                        : 'bi_voice_start'))
-                              .tr,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      SizedBox(height: _textPromptOpen ? 8 : 24),
-                      if (!_textPromptOpen)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _VoiceControl(
-                              icon: _muted
+                      ),
+                    ),
+                  if (!_textPromptOpen &&
+                      _active &&
+                      !_muted &&
+                      _microphoneLevel == null)
+                    Text(
+                      'bi_voice_level_unavailable'.tr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 360),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _textPromptOpen
+                        ? _voiceTextPanel(context, constraints.maxHeight)
+                        : const SizedBox(width: double.infinity),
+                  ),
+                  if (!_textPromptOpen)
+                    Semantics(
+                      button: true,
+                      label: (_active
+                              ? (_muted
+                                    ? 'bi_voice_unmute'
+                                    : 'bi_voice_mute')
+                              : (_paused
+                                    ? 'bi_voice_resume'
+                                    : 'bi_voice_start'))
+                          .tr,
+                      child: Material(
+                        color: const Color(0xFF625C7A),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          key: const ValueKey('voice_call_button'),
+                          customBorder: const CircleBorder(),
+                          onTap: _busy
+                              ? null
+                              : (kIsWeb && !_engines.contains('openai'))
+                              ? null
+                              : (_active ? _toggleMute : _start),
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            margin: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFB9A4FF), Color(0xFF7048ED)],
+                              ),
+                            ),
+                            child: Icon(
+                              _muted
                                   ? Icons.mic_off_rounded
                                   : Icons.mic_rounded,
-                              label:
-                                  (_muted ? 'bi_voice_unmute' : 'bi_voice_mute')
-                                      .tr,
-                              onPressed: _active && !_busy ? _toggleMute : null,
+                              color: Colors.white,
+                              size: 34,
                             ),
-                            const SizedBox(width: 24),
-                            _VoiceControl(
-                              icon: Icons.chat_bubble_outline_rounded,
-                              label: 'bi_tab_chat'.tr,
-                              onPressed: _busy ? null : widget.onOpenChat,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (!_textPromptOpen) const SizedBox(height: 8),
+                  if (!_textPromptOpen)
+                    Text(
+                      (_active
+                              ? (_muted
+                                    ? 'bi_voice_unmute'
+                                    : 'bi_voice_mute')
+                              : (_paused
+                                    ? 'bi_voice_resume'
+                                    : 'bi_voice_start'))
+                          .tr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  SizedBox(height: _textPromptOpen ? 8 : 24),
+                  if (!_textPromptOpen)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _VoiceControl(
+                          icon: _muted
+                              ? Icons.mic_off_rounded
+                              : Icons.mic_rounded,
+                          label: (_muted ? 'bi_voice_unmute' : 'bi_voice_mute').tr,
+                          onPressed: _active && !_busy ? _toggleMute : null,
+                        ),
+                        const SizedBox(width: 24),
+                        _VoiceControl(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          label: 'bi_tab_chat'.tr,
+                          onPressed: _busy ? null : widget.onOpenChat,
+                        ),
+                        const SizedBox(width: 24),
+                        _VoiceControl(
+                          icon: Icons.palette_outlined,
+                          label: Get.locale?.languageCode == 'sw'
+                              ? 'Tengeneza poster'
+                              : 'Create poster',
+                          onPressed: _busy || _summaryLoading
+                              ? null
+                              : _showVoicePosterDesigner,
+                        ),
+                        const SizedBox(width: 24),
+                        _VoiceControl(
+                          icon: Icons.edit_note_rounded,
+                          label: 'bi_voice_text_test'.tr,
+                          onPressed: _active && !_busy && !_summaryLoading
+                              ? _toggleTextPrompt
+                              : null,
+                        ),
+                        const SizedBox(width: 24),
+                        _VoiceControl(
+                          icon: Icons.call_end_rounded,
+                          label: (_session is GeminiVoiceSession
+                                  ? 'bi_voice_pause'
+                                  : 'bi_voice_end')
+                              .tr,
+                          onPressed:
+                              _active && !_busy ? _pauseOrStop : null,
+                        ),
+                      ],
+                    ),
+                  if (!_textPromptOpen) const SizedBox(height: 14),
+                  if (!_textPromptOpen)
+                    OutlinedButton.icon(
+                      onPressed: _busy || _summaryLoading
+                          ? null
+                          : _showVoicePosterDesigner,
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                      label: Text(
+                        Get.locale?.languageCode == 'sw'
+                            ? 'Unaweza kutengeneza poster hapa'
+                            : 'You can make a poster from here',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFBDEFF4),
+                        side: const BorderSide(color: Color(0x6675DDE0)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  if (!_textPromptOpen)
+                    IconButton(
+                      key: const ValueKey('voice_guide_button'),
+                      tooltip: 'isher_guide_button'.tr,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _busy || _summaryLoading
+                          ? null
+                          : _openVoiceGuide,
+                      icon: const Icon(Icons.help_outline_rounded),
+                      color: const Color(0xFFBDEFF4),
+                    ),
+                ],
+              ),
+            );
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: design,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _VoicePosterDesignDialog extends StatefulWidget {
+  const _VoicePosterDesignDialog({required this.language});
+
+  final String language;
+
+  @override
+  State<_VoicePosterDesignDialog> createState() =>
+      _VoicePosterDesignDialogState();
+}
+
+class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
+  final _brief = TextEditingController();
+  final _speech = SpeechToText();
+  final _tts = FlutterTts();
+  Uint8List? _photoBytes;
+  String _photoName = '';
+  String? _referencePath;
+  GeneratedDesignConcept? _concept;
+  bool _listening = false;
+  bool _generating = false;
+  int _step = -1;
+  String? _error;
+  String _category = 'Poster';
+
+  bool get _swahili => widget.language == 'sw';
+
+  @override
+  void dispose() {
+    _brief.dispose();
+    unawaited(_speech.stop());
+    unawaited(_tts.stop());
+    final path = _referencePath;
+    if (path != null) unawaited(deleteCreativeReference(path));
+    super.dispose();
+  }
+
+  Future<void> _listenForBrief() async {
+    if (_generating) return;
+    try {
+      final ready = await _speech.initialize(
+        onStatus: (status) {
+          if (mounted && (status == 'done' || status == 'notListening')) {
+            setState(() => _listening = false);
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              _listening = false;
+              _error = _swahili
+                  ? 'Sauti haikusikika vizuri. Jaribu tena au andika maelezo.'
+                  : 'Voice was not captured. Try again or type your brief.';
+            });
+          }
+        },
+      );
+      if (!ready) {
+        setState(() {
+          _error = _swahili
+              ? 'Utambuzi wa sauti haupatikani kwenye kifaa hiki.'
+              : 'Speech recognition is unavailable on this device.';
+        });
+        return;
+      }
+      if (_listening) {
+        await _speech.stop();
+        if (mounted) setState(() => _listening = false);
+        return;
+      }
+      try {
+        await _tts.setLanguage(_swahili ? 'sw-TZ' : 'en-US');
+        await _tts.speak(
+          _swahili
+              ? 'Niambie jina la biashara, bidhaa au huduma, ofa, rangi unazopenda na mteja unayemlenga.'
+              : 'Tell me your business name, product or service, offer, preferred colors, and target customer.',
+        );
+      } catch (error) {
+        debugPrint('Voice design guide audio unavailable: ${error.runtimeType}');
+      }
+      setState(() {
+        _error = null;
+        _listening = true;
+      });
+      await _speech.listen(
+        localeId: _swahili ? 'sw_TZ' : 'en_US',
+        listenFor: const Duration(seconds: 45),
+        pauseFor: const Duration(seconds: 5),
+        onResult: (SpeechRecognitionResult result) {
+          if (!mounted) return;
+          setState(() {
+            _brief.value = TextEditingValue(
+              text: result.recognizedWords,
+              selection: TextSelection.collapsed(
+                offset: result.recognizedWords.length,
+              ),
+            );
+          });
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _listening = false;
+        _error = _swahili
+            ? 'Imeshindikana kuanza maikrofoni. Unaweza kuandika maelezo.'
+            : 'Could not start the microphone. You can type your brief instead.';
+      });
+    }
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final photo = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 90,
+        maxWidth: 2400,
+        maxHeight: 2400,
+      );
+      if (photo == null) return;
+      final bytes = await photo.readAsBytes();
+      final extension = photo.name.split('.').last.toLowerCase();
+      if (!{'jpg', 'jpeg', 'png', 'webp'}.contains(extension) ||
+          bytes.isEmpty ||
+          bytes.length > 8 * 1024 * 1024) {
+        throw ArgumentError('Choose a JPG, PNG or WebP image under 8 MB.');
+      }
+      if (!mounted) return;
+      final previousPath = _referencePath;
+      setState(() {
+        _photoBytes = bytes;
+        _photoName = photo.name;
+        _referencePath = null;
+        _concept = null;
+      });
+      if (previousPath != null) unawaited(deleteCreativeReference(previousPath));
+    } catch (error) {
+      if (source == ImageSource.camera &&
+          error is PlatformException &&
+          error.code == 'no_available_camera') {
+        await _pickPhoto(ImageSource.gallery);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _error = _swahili
+              ? 'Picha haikuweza kuongezwa. Chagua picha ya JPG, PNG au WebP chini ya MB 8.'
+              : 'Could not add that photo. Choose a JPG, PNG or WebP under 8 MB.';
+        });
+      }
+    }
+  }
+
+  Future<void> _generate() async {
+    final brief = _brief.text.trim();
+    if (brief.length < 8 || _generating) {
+      setState(() {
+        _error = _swahili
+            ? 'Ongeza maelezo kidogo zaidi ili ISHER itengeneze poster unayotaka.'
+            : 'Add a little more detail so ISHER can create the poster you want.';
+      });
+      return;
+    }
+    setState(() {
+      _generating = true;
+      _step = 0;
+      _error = null;
+      _concept = null;
+    });
+    try {
+      var referencePath = _referencePath;
+      final photo = _photoBytes;
+      if (photo != null && referencePath == null) {
+        referencePath = await uploadCreativeReference(
+          bytes: photo,
+          extension: _photoName.split('.').last.toLowerCase(),
+        );
+        _referencePath = referencePath;
+        await analyzeCreativeReference(
+          filePath: referencePath,
+          instructions:
+              'Use this exact product in the poster. Describe only visible shape, packaging, labels, logo, colors, and details. Do not invent facts. Brief: $brief',
+          language: widget.language,
+        );
+      }
+      final plan = await CreativeDesignPlan.create(
+        brief: brief,
+        category: _category,
+        size: 'Instagram post',
+        language: widget.language,
+      );
+      if (!mounted) return;
+      setState(() => _step = 1);
+      final copy = await generateCreativePosterCopy(
+        brief: brief,
+        language: widget.language,
+        category: _category,
+      );
+      final copyText = [
+        if ((copy['headline'] ?? '').trim().isNotEmpty)
+          'Headline: ${copy['headline']}',
+        if ((copy['supportingText'] ?? '').trim().isNotEmpty)
+          'Supporting text: ${copy['supportingText']}',
+        if ((copy['callToAction'] ?? '').trim().isNotEmpty)
+          'Call to action: ${copy['callToAction']}',
+      ].join('\n');
+      if (!mounted) return;
+      setState(() => _step = 2);
+      final concept = await generateDesignConcept(
+        prompt:
+            '$brief\nPoster text to typeset clearly:\n$copyText\nArt direction: ${plan.values}',
+        category: _category,
+        size: 'Instagram post',
+        aspect: 'square',
+        language: widget.language,
+        model: 'gpt-image-2.5-sunburst',
+        referencePath: referencePath,
+      );
+      if (mounted) setState(() => _concept = concept);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.code == 'resource-exhausted'
+            ? (_swahili
+                  ? 'Umetumia kikomo cha picha za leo. Jaribu tena kesho.'
+                  : 'Today’s image generation limit has been reached. Try again tomorrow.')
+            : (_swahili
+                  ? 'ISHER imeshindwa kutengeneza poster sasa. Angalia mtandao ujaribu tena.'
+                  : 'ISHER could not generate the poster right now. Check your connection and try again.');
+      });
+    } catch (error, stack) {
+      debugPrint('Voice poster design failed: ${error.runtimeType}');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        setState(() {
+          _error = _swahili
+              ? 'Imeshindikana kutengeneza poster. Jaribu tena baada ya muda mfupi.'
+              : 'Poster creation failed. Please try again in a moment.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  Future<void> _openEditor() async {
+    final concept = _concept;
+    if (concept == null) return;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: _swahili ? 'Hariri design' : 'Edit design',
+      barrierColor: const Color(0xE6080C18),
+      pageBuilder: (context, _, _) => SafeArea(
+        child: Material(
+          color: const Color(0xFF080D1B),
+          child: CreativeDesignEditorPage(concept: concept),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: screen.height * .92,
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFF10182A),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF3A4D70)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x5500D9FF), blurRadius: 32),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const IsherAvatar(size: 38),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ISHER CREATIVE',
+                              style: TextStyle(
+                                color: Color(0xFF75DDE0),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              ),
                             ),
-                            const SizedBox(width: 24),
-                            _VoiceControl(
-                              icon: Icons.edit_note_rounded,
-                              label: 'bi_voice_text_test'.tr,
-                              onPressed: _active && !_busy && !_summaryLoading
-                                  ? _toggleTextPrompt
-                                  : null,
-                            ),
-                            const SizedBox(width: 24),
-                            _VoiceControl(
-                              icon: Icons.call_end_rounded,
-                              label:
-                                  (_session is GeminiVoiceSession
-                                          ? 'bi_voice_pause'
-                                          : 'bi_voice_end')
-                                      .tr,
-                              onPressed: _active && !_busy
-                                  ? _pauseOrStop
-                                  : null,
+                            const SizedBox(height: 3),
+                            Text(
+                              _swahili
+                                  ? 'Tengeneza poster kwa sauti'
+                                  : 'Create a poster by voice',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ],
                         ),
-                      if (!_textPromptOpen)
-                        if (!_textPromptOpen)
-                          IconButton(
-                            key: const ValueKey('voice_guide_button'),
-                            tooltip: 'isher_guide_button'.tr,
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _busy || _summaryLoading
-                                ? null
-                                : _openVoiceGuide,
-                            icon: const Icon(Icons.help_outline_rounded),
-                            color: const Color(0xFFBDEFF4),
-                          ),
+                      ),
+                      IconButton(
+                        tooltip: 'close'.tr,
+                        onPressed: _generating
+                            ? null
+                            : () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                        color: Colors.white70,
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _swahili
+                        ? 'Eleza biashara, bidhaa au ofa yako. ISHER itapanga design, kuandika maneno na kutengeneza preview hapa hapa.'
+                        : 'Describe your business, product or offer. ISHER will plan the design, write the poster copy and create a preview right here.',
+                    style: const TextStyle(
+                      color: Color(0xFFB7C5DC),
+                      fontSize: 13,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: _category,
+                    dropdownColor: const Color(0xFF202C43),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: _swahili ? 'Aina ya design' : 'Design type',
+                      labelStyle: const TextStyle(color: Color(0xFFB7C5DC)),
+                      filled: true,
+                      fillColor: const Color(0xFF0B1220),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: [
+                      for (final item in ['Poster', 'Flyer', 'Social'])
+                        DropdownMenuItem(value: item, child: Text(item)),
+                    ],
+                    onChanged: _generating
+                        ? null
+                        : (value) {
+                            if (value != null) setState(() => _category = value);
+                          },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _brief,
+                    minLines: 3,
+                    maxLines: 5,
+                    maxLength: 1100,
+                    style: const TextStyle(color: Colors.white, height: 1.4),
+                    decoration: InputDecoration(
+                      hintText: _swahili
+                          ? 'Jina la biashara, unachouza, ofa, rangi, mteja unayemlenga…'
+                          : 'Business name, what you sell, offer, colors, target customer…',
+                      hintStyle: const TextStyle(color: Color(0xFF8493AA)),
+                      filled: true,
+                      fillColor: const Color(0xFF0B1220),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _generating
+                              ? null
+                              : () => _pickPhoto(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: Text(_swahili ? 'Piga picha' : 'Take photo'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _generating
+                              ? null
+                              : () => _pickPhoto(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: Text(_swahili ? 'Gallery' : 'Gallery'),
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: _listening
+                            ? (_swahili ? 'Simamisha' : 'Stop listening')
+                            : (_swahili ? 'Eleza kwa sauti' : 'Speak your brief'),
+                        onPressed: _generating ? null : _listenForBrief,
+                        icon: Icon(
+                          _listening ? Icons.stop_rounded : Icons.mic_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_photoBytes != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF62DAB5),
+                            size: 17,
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              _photoName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Color(0xFFCED9E9)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Color(0xFFFFA3A3)),
+                    ),
+                  ],
+                  if (_generating || _concept != null) ...[
+                    const SizedBox(height: 14),
+                    _progressStep(
+                      0,
+                      _swahili ? 'Kuchambua picha na kupanga design' : 'Reading the brief and planning the design',
+                    ),
+                    _progressStep(
+                      1,
+                      _swahili ? 'Kuandika maneno ya poster' : 'Writing poster copy',
+                    ),
+                    _progressStep(
+                      2,
+                      _swahili ? 'Kutengeneza picha ya preview' : 'Generating the poster image',
+                    ),
+                  ],
+                  if (_concept case final concept?) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: AspectRatio(
+                        aspectRatio: concept.width / concept.height,
+                        child: Image.network(
+                          concept.previewUrl,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, progress) =>
+                              progress == null
+                                  ? child
+                                  : const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                          errorBuilder: (_, _, _) => Center(
+                            child: Text(
+                              _swahili
+                                  ? 'Preview haikupakia. Jaribu kufungua editor.'
+                                  : 'Preview did not load. Try opening the editor.',
+                              style: const TextStyle(color: Colors.white70),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _openEditor,
+                      icon: const Icon(Icons.edit_rounded),
+                      label: Text(_swahili ? 'Hariri na hifadhi' : 'Edit and save'),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _generating ? null : _generate,
+                    icon: _generating
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _concept == null
+                                ? Icons.auto_awesome_rounded
+                                : Icons.refresh_rounded,
+                          ),
+                    label: Text(
+                      _generating
+                          ? (_swahili ? 'Tengeneza poster…' : 'Creating poster…')
+                          : _concept == null
+                          ? (_swahili ? 'Tengeneza preview' : 'Generate preview')
+                          : (_swahili ? 'Tengeneza toleo jingine' : 'Generate another version'),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF536EFF),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _progressStep(int index, String label) {
+    final complete = _concept != null || _step > index;
+    final current = _generating && _step == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: 20,
+            child: complete
+                ? const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF62DAB5),
+                    size: 18,
+                  )
+                : current
+                ? const CircularProgressIndicator(strokeWidth: 2)
+                : const Icon(
+                    Icons.radio_button_unchecked_rounded,
+                    color: Color(0xFF71819B),
+                    size: 18,
+                  ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: current || complete
+                    ? Colors.white
+                    : const Color(0xFF8493AA),
+                fontSize: 12,
+                fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

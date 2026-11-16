@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
@@ -27,6 +30,7 @@ import 'package:tra_list/invoice/quotation_page.dart';
 import 'package:tra_list/invoice/advance_invoice_page.dart';
 import 'package:tra_list/AddReceiptPage.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/services/pages/creative_studio_page.dart';
 import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/stock/stock_models.dart';
 import 'package:tra_list/stock/stock_service.dart';
@@ -366,6 +370,190 @@ class BusinessAiChatState extends State<BusinessAiChat> {
       if (mounted) setState(() => _loadingOlder = false);
     }
   }
+
+  Future<void> _openCreativeStudio({ImageSource? source}) async {
+    if (!widget.isCurrent() || _busy || _guidingInvoice || _openingDraft) return;
+    Uint8List? imageBytes;
+    var imageName = '';
+    if (source != null) {
+      try {
+        final picker = ImagePicker();
+        XFile? photo;
+        try {
+          photo = await picker.pickImage(
+            source: source,
+            imageQuality: 90,
+            maxWidth: 2400,
+            maxHeight: 2400,
+          );
+        } on PlatformException catch (error) {
+          if (source != ImageSource.camera ||
+              error.code != 'no_available_camera') {
+            rethrow;
+          }
+          photo = await picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 90,
+            maxWidth: 2400,
+            maxHeight: 2400,
+          );
+        }
+        if (photo == null) return;
+        imageBytes = await photo.readAsBytes();
+        imageName = photo.name;
+        final extension = imageName.split('.').last.toLowerCase();
+        if (!{'jpg', 'jpeg', 'png', 'webp'}.contains(extension) ||
+            imageBytes.length > 8 * 1024 * 1024) {
+          throw ArgumentError('Choose a JPG, PNG or WebP image under 8 MB.');
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not add this photo: $error')),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted || !widget.isCurrent()) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CreativeStudioPage(
+          initialBrief: _input.text.trim(),
+          initialReferenceBytes: imageBytes,
+          initialReferenceName: imageName,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCreativeActions() async {
+    var startDesign = false;
+    final source = await showModalBottomSheet<ImageSource?>(
+      context: context,
+      backgroundColor: const Color(0xFF10182A),
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0xFF34445F)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'bi_chat_design_poster'.tr,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'bi_chat_design_poster_hint'.tr,
+                      style: const TextStyle(
+                        color: Color(0xFFAAB8D0),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _creativeActionTile(
+                icon: Icons.auto_awesome_rounded,
+                title: 'bi_chat_design_poster'.tr,
+                subtitle: 'bi_chat_design_poster_hint'.tr,
+                onTap: () {
+                  startDesign = true;
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              const SizedBox(height: 8),
+              _creativeActionTile(
+                icon: Icons.photo_library_outlined,
+                title: 'bi_chat_choose_design_photo'.tr,
+                onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+              ),
+              const SizedBox(height: 8),
+              _creativeActionTile(
+                icon: Icons.camera_alt_outlined,
+                title: 'bi_chat_take_design_photo'.tr,
+                onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (source != null) await _openCreativeStudio(source: source);
+    if (startDesign) await _openCreativeStudio();
+  }
+
+  Widget _creativeActionTile({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) =>
+      Material(
+        color: const Color(0xFF202C43),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF3A4C69)),
+            ),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF384A70),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: const Color(0xFFB9D8FF), size: 21),
+              ),
+              title: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: subtitle == null
+                  ? null
+                  : Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFFB3C0D5),
+                        fontSize: 12,
+                      ),
+                    ),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF9CB0D1),
+              ),
+            ),
+          ),
+        ),
+      );
 
   @override
   void dispose() {
@@ -1731,6 +1919,15 @@ class BusinessAiChatState extends State<BusinessAiChat> {
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Row(
                 children: [
+                  IconButton(
+                    tooltip: 'bi_chat_design_poster'.tr,
+                    onPressed:
+                        _busy || _guidingInvoice || _openingDraft || _loading
+                        ? null
+                        : _showCreativeActions,
+                    icon: const Icon(Icons.auto_awesome_rounded),
+                    color: const Color(0xFFB9A4FF),
+                  ),
                   IconButton(
                     tooltip: 'bi_chat_emoji'.tr,
                     onPressed:

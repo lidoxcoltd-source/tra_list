@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tra_list/payment/payment_controller.dart'; // You must implement or adapt this controller for your payment logic
 import 'business_access_service.dart';
@@ -242,10 +241,6 @@ class SubscriptionController extends GetxController {
           'Payment succeeded but subscription expiry is missing.',
         );
       }
-      Get.snackbar(
-        'Success',
-        'Subscription activated until ${DateFormat.yMMMd().format(expiry)}',
-      );
     } catch (e) {
       rethrow;
     } finally {

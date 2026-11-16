@@ -82,7 +82,7 @@ class _AppVersionGateState extends State<AppVersionGate>
       PushService.register();
     }
     if (user == null) {
-      if (!mounted) return;
+      if (!mounted || !_blocked) return;
       setState(() {
         _blocked = false;
       });
@@ -156,6 +156,11 @@ class _AppVersionGateState extends State<AppVersionGate>
       installedBuild: int.tryParse(packageInfo.buildNumber) ?? 0,
       policy: platformPolicy,
     );
+    final policyChanged = _policy?.toMap().toString() !=
+        policy.toMap().toString();
+    final platformPolicyChanged = _platformPolicy?.toMap().toString() !=
+        platformPolicy.toMap().toString();
+    if (blocked == _blocked && !policyChanged && !platformPolicyChanged) return;
     if (blocked && !_blocked) {
       FocusManager.instance.primaryFocus?.unfocus();
     }
@@ -167,7 +172,7 @@ class _AppVersionGateState extends State<AppVersionGate>
   }
 
   void _setAllowed(int generation) {
-    if (!mounted || generation != _checkGeneration) return;
+    if (!mounted || generation != _checkGeneration || !_blocked) return;
     setState(() {
       _blocked = false;
     });

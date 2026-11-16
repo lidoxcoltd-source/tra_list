@@ -43,7 +43,7 @@ const navigation = {
   parameters: {
     type: "object",
     properties: {
-      destination: { type: "string", enum: ["transactions", "invoices", "receipts", "quotation", "analytics", "jobs", "tasks", "staff", "pos"] },
+      destination: { type: "string", enum: ["transactions", "invoices", "receipts", "quotation", "analytics", "jobs", "tasks", "staff", "pos", "creativeStudio"] },
     },
     required: ["destination"],
   },

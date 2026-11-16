@@ -29,6 +29,7 @@ import 'package:tra_list/services/personal_device_lock_service.dart';
 import 'package:tra_list/services/personal_finance_page.dart';
 import 'package:tra_list/services/support_center_fab.dart';
 import 'package:tra_list/services/staff_service.dart';
+import 'package:tra_list/services/super_admin_subscription_service.dart';
 import 'package:tra_list/stock/products_pages.dart';
 import 'package:tra_list/stock/bar_orders_page.dart';
 import 'package:tra_list/stock/stock_service.dart';
@@ -94,6 +95,16 @@ class _Radius {
   static const md = MjasiRadius.md;
   static const lg = MjasiRadius.lg;
   static const pill = MjasiRadius.pill;
+}
+
+class _SubscriptionDialogColors {
+  static const background = Color(0xFF0A3039);
+  static const header = Color(0xFF082A32);
+  static const teal = Color(0xFF0D5964);
+  static const tealLight = Color(0xFF126875);
+  static const gold = Color(0xFFFFB92E);
+  static const aqua = Color(0xFFB8D5D9);
+  static const mint = Color(0xFF6DE0B4);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1694,7 +1705,7 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
         children: [
           _buildMobileHomeHeader(user),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Text(
             'mobile_greeting'.trParams({'name': greetingName}),
             maxLines: 1,
@@ -2222,6 +2233,12 @@ class _HomePageState extends State<HomePage> {
           label: 'bi_title'.tr,
           icon: Icons.hub_outlined,
           onTap: () => _openRestrictedRoute(AppRoutes.businessIntelligence),
+        ),
+      if (BusinessAccessService.hasBusinessAccess)
+        (
+          label: 'ISHER Creative Studio',
+          icon: Icons.auto_awesome_rounded,
+          onTap: () => Get.toNamed(AppRoutes.creativeStudio),
         ),
     ];
     if (shortcuts.isEmpty) return const SizedBox.shrink();
@@ -3209,6 +3226,12 @@ class _HomePageState extends State<HomePage> {
                 tooltip: 'chat_title'.tr,
                 onPressed: () => Get.toNamed(AppRoutes.chat),
               ),
+            if (!_isPersonalMode)
+              _headerIconButton(
+                icon: Icons.auto_awesome_rounded,
+                tooltip: 'ISHER Creative Studio',
+                onPressed: () => Get.toNamed(AppRoutes.creativeStudio),
+              ),
             if (!compact) _buildLanguageButton(),
             if (!_isPersonalMode) const NotificationBell(),
             if (_isPersonalMode ||
@@ -3398,6 +3421,12 @@ class _HomePageState extends State<HomePage> {
                   'subscription',
                   'home_subscription'.tr,
                   Icons.workspace_premium_outlined,
+                ),
+              if (BusinessAccessService.hasBusinessAccess)
+                _menuItem(
+                  'creative_studio',
+                  'ISHER Creative Studio',
+                  Icons.auto_awesome_outlined,
                 ),
               if (BusinessAccessService.can('profile', 'view'))
                 _menuItem(
@@ -3630,6 +3659,8 @@ class _HomePageState extends State<HomePage> {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const DocumentDesignPage()));
+      case 'creative_studio':
+        await Get.toNamed(AppRoutes.creativeStudio);
       case 'about':
         _showAboutDialog();
       case 'delete_account':
@@ -4718,7 +4749,7 @@ class _HomePageState extends State<HomePage> {
           Icons.add_business_outlined,
           () => _openRestrictedRoute(AppRoutes.addReceipt),
         ),
-      if (BusinessAccessService.can('profile', 'view'))
+      if (BusinessAccessService.hasBusinessAccess)
         _quickAction(
           'Document design',
           Icons.palette_outlined,
@@ -4982,124 +5013,348 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showSubscriptionRequiredDialog() {
+    var trialBusy = false;
     Get.dialog(
-      Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_Radius.lg),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [_AppColors.brand, _AppColors.brandDeep],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 68,
-                      height: 68,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.32),
+      StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          backgroundColor: _SubscriptionDialogColors.background,
+          elevation: 18,
+          shadowColor: Colors.black.withValues(alpha: .42),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_Radius.lg + 4),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Positioned(
+                        right: -34,
+                        top: -72,
+                        child: Container(
+                          width: 180,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .08),
+                              width: 22,
+                            ),
+                          ),
                         ),
                       ),
-                      child: Icon(
-                        _isOnline
-                            ? Icons.lock_clock_rounded
-                            : Icons.cloud_off_rounded,
-                        color: Colors.white,
-                        size: 32,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              _SubscriptionDialogColors.teal,
+                              _SubscriptionDialogColors.header,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .12),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .2),
+                                ),
+                              ),
+                              child: Icon(
+                                _isOnline
+                                    ? Icons.workspace_premium_rounded
+                                    : Icons.cloud_off_rounded,
+                                color: _SubscriptionDialogColors.gold,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'home_subscription'.tr.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: _SubscriptionDialogColors.aqua,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    'subscription_required_title'.tr,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 9),
+                                  _SubscriptionConnectionBadge(
+                                    online: _isOnline,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'subscription_required_title'.tr,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _isOnline
-                          ? 'subscription_required_message'.tr
-                          : 'offline_subscription_grace_expired'.tr,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _AppColors.inkSoft,
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: Get.back,
+                        Text(
+                          _isOnline
+                              ? 'subscription_required_message'.tr
+                              : 'offline_subscription_grace_expired'.tr,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _SubscriptionDialogColors.aqua,
+                            fontSize: 14,
+                            height: 1.55,
+                          ),
+                        ),
+                        if (_isOnline &&
+                            BusinessAccessService.isOwner.value) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  _SubscriptionDialogColors.tealLight,
+                                  _SubscriptionDialogColors.teal,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(_Radius.lg),
+                              border: Border.all(
+                                color: _SubscriptionDialogColors.gold,
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: _SubscriptionDialogColors
+                                            .background,
+                                        borderRadius: BorderRadius.circular(13),
+                                      ),
+                                      child: const Icon(
+                                        Icons.card_giftcard_rounded,
+                                        color: _SubscriptionDialogColors.gold,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'subscription_trial_offer_title'.tr,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'subx_trial_sub'.tr,
+                                            style: const TextStyle(
+                                              color: _SubscriptionDialogColors
+                                                  .aqua,
+                                              fontSize: 12,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 15),
+                                FilledButton.icon(
+                                  onPressed: trialBusy
+                                      ? null
+                                      : () async {
+                                          setDialogState(
+                                            () => trialBusy = true,
+                                          );
+                                          try {
+                                            await SuperAdminSubscriptionService.startOwnTrial(
+                                              BusinessAccessService.businessId,
+                                            );
+                                            if (!mounted) return;
+                                            if (dialogContext.mounted) {
+                                              Navigator.of(dialogContext).pop();
+                                            }
+                                            await _loadSubscriptionStatus();
+                                            await _loadFinanceSummary();
+                                            Get.snackbar(
+                                              'success'.tr,
+                                              'subx_trial_started'.tr,
+                                              snackPosition:
+                                                  SnackPosition.BOTTOM,
+                                              backgroundColor:
+                                                  _AppColors.positive,
+                                              colorText: Colors.white,
+                                            );
+                                          } catch (error) {
+                                            if (!mounted) return;
+                                            final message =
+                                                error.toString().contains(
+                                                  'trial_used',
+                                                )
+                                                ? 'subx_trial_used'.tr
+                                                : error.toString().contains(
+                                                    'trial_disabled',
+                                                  )
+                                                ? 'subx_trial_off'.tr
+                                                : 'subscription_trial_failed'
+                                                      .tr;
+                                            Get.snackbar(
+                                              'error'.tr,
+                                              message,
+                                              snackPosition:
+                                                  SnackPosition.BOTTOM,
+                                              backgroundColor:
+                                                  _AppColors.negative,
+                                              colorText: Colors.white,
+                                            );
+                                          } finally {
+                                            if (dialogContext.mounted) {
+                                              setDialogState(
+                                                () => trialBusy = false,
+                                              );
+                                            }
+                                          }
+                                        },
+                                  icon: trialBusy
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(Icons.bolt_rounded),
+                                  label: Text('subx_trial_start'.tr),
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(50),
+                                    backgroundColor:
+                                        _SubscriptionDialogColors.gold,
+                                    foregroundColor:
+                                        _SubscriptionDialogColors.header,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        _Radius.md,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: trialBusy
+                                ? null
+                                : () {
+                                    Navigator.of(dialogContext).pop();
+                                    _openSubscription();
+                                  },
+                            icon: const Icon(Icons.workspace_premium_rounded),
+                            label: Text('sub_subscribe_now'.tr),
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size.fromHeight(48),
-                              foregroundColor: _AppColors.ink,
-                              side: const BorderSide(color: _AppColors.border),
+                              foregroundColor: _SubscriptionDialogColors.gold,
+                              side: const BorderSide(
+                                color: _SubscriptionDialogColors.gold,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(_Radius.md),
                               ),
                             ),
-                            child: Text('cancel'.tr),
                           ),
-                        ),
-                        if (BusinessAccessService.isOwner.value) ...[
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                Get.back();
-                                _openSubscription();
-                              },
-                              icon: const Icon(Icons.workspace_premium_rounded),
-                              label: Text('sub_subscribe_now'.tr),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
-                                backgroundColor: _AppColors.brand,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    _Radius.md,
-                                  ),
-                                ),
+                        ],
+                        if (!BusinessAccessService.isOwner.value)
+                          const SizedBox(height: 18),
+                        if (BusinessAccessService.isOwner.value &&
+                            !_isOnline) ...[
+                          const SizedBox(height: 18),
+                          OutlinedButton.icon(
+                            onPressed: trialBusy
+                                ? null
+                                : () {
+                                    Navigator.of(dialogContext).pop();
+                                    _openSubscription();
+                                  },
+                            icon: const Icon(Icons.workspace_premium_rounded),
+                            label: Text('sub_subscribe_now'.tr),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              foregroundColor: _SubscriptionDialogColors.gold,
+                              side: const BorderSide(
+                                color: _SubscriptionDialogColors.gold,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(_Radius.md),
                               ),
                             ),
                           ),
                         ],
+                        TextButton(
+                          onPressed: trialBusy
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _SubscriptionDialogColors.aqua,
+                          ),
+                          child: Text('cancel'.tr),
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -5112,4 +5367,47 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showAboutDialog() => showMjasiAboutDialog(context);
+}
+
+class _SubscriptionConnectionBadge extends StatelessWidget {
+  const _SubscriptionConnectionBadge({required this.online});
+
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = online
+        ? _SubscriptionDialogColors.mint
+        : _SubscriptionDialogColors.gold;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(_Radius.pill),
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            online ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+            color: tint,
+            size: 13,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            online
+                ? 'subscription_connection_online'.tr
+                : 'subscription_connection_offline'.tr,
+            style: TextStyle(
+              color: tint,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .25,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

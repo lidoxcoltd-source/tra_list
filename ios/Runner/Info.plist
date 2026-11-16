@@ -50,7 +50,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Recognize the Isher or Aisha wake word and your Chat or Call choice while the Home screen voice assistant is enabled.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take photos to share with your business team in chat.</string>
+	<string>Take product photos to create promotional posters in ISHER Creative Studio.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select photos to share with your business team in chat.</string>
 	<key>NSContactsUsageDescription</key>

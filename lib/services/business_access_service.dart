@@ -420,6 +420,7 @@ class BusinessAccessService {
 
   static bool canAccessRoute(String route) {
     if (isOwner.value) return true;
+    if (route == '/creative-studio') return canReadBusinessProfile();
     if (route == '/staff') return canManageStaff;
     if (isBarBartender) {
       if (route == '/tasks') return isActive.value;

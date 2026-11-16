@@ -308,6 +308,12 @@ const Map<String, String> enUsTranslations = {
   'isher_test_retry': 'Check or retry previous test payment',
   'bi_chat_empty': 'Ask Isher about your business, or choose a question below.',
   'bi_chat_emoji': 'Add emoji',
+  'bi_chat_design_poster': 'Create a design',
+  'bi_chat_design_poster_hint': 'Start a poster, flyer or social post with AI',
+  'bi_chat_choose_design_photo': 'Choose a product photo',
+  'bi_chat_take_design_photo': 'Take a product photo',
+  'creative_daily_image_limit':
+      'You have used today’s 5 poster image generations. You can create more tomorrow, or edit a saved design.',
   'bi_chat_thinking': 'Isher is preparing a response...',
   'bi_history_error':
       'Chat history could not be loaded. Check your connection and permissions, then try again.',
@@ -1727,6 +1733,11 @@ const Map<String, String> enUsTranslations = {
   'subscription_required_title': 'Subscription required',
   'subscription_required_message':
       'Subscribe or start a free trial to use this feature.',
+  'subscription_trial_offer_title': 'Try Mjasi for free',
+  'subscription_connection_online': 'Connected',
+  'subscription_connection_offline': 'Offline',
+  'subscription_trial_failed':
+      'Could not start the trial. Check your internet connection and try again.',
   'offline_subscription_grace_expired':
       'Offline access lasts up to 24 hours after subscription verification. Connect to the internet to verify or renew your subscription.',
 
@@ -1754,6 +1765,16 @@ const Map<String, String> enUsTranslations = {
       'This is a staff account. Choose Staff member sign-in.',
   'login_sign_in': 'Sign In',
   'login_create_account': 'Create Account',
+  'login_email_not_registered_eyebrow': 'MJASI POS · GET STARTED',
+  'login_email_not_registered_title': 'No account found yet',
+  'login_email_not_registered_message':
+      'This email is not registered with MJASI POS yet. Create an account to get started.',
+  'login_signin_help_title': 'Check your sign-in details',
+  'login_signin_help_message':
+      'We could not sign in with this email and password. Try again, reset your password, or create an account if you are new to MJASI POS.',
+  'login_signin_help_reset': 'Reset password',
+  'login_create_account_with_email': 'Create account with this email',
+  'login_create_account_not_now': 'Not now',
   'login_swipe_hint':
       'Swipe left for Personal login or right for Business login.',
   'login_swipe_left': 'Swipe left',
@@ -2356,6 +2377,9 @@ const Map<String, String> enUsTranslations = {
       'Enter your phone number to continue with subscription.',
   'sub_activated_msg': 'Subscription activated successfully!',
   'sub_failed_title': 'Subscription Failed',
+  'sub_payment_unconfirmed_title': 'Subscription not confirmed',
+  'sub_payment_unconfirmed':
+      'Payment could not be confirmed. Check your payment and subscription status before trying again.',
   'sub_processing': 'Processing...',
   'sub_subscribe_now': 'Subscribe Now',
   'sub_secure_checkout': 'Secure checkout. Cancel anytime.',

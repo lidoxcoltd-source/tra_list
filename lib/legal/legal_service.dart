@@ -171,6 +171,7 @@ MJASI POS is a business management and social-commerce app for small businesses 
 - **Staff details you add:** name, contact details and permissions.
 - **MJASI MARKET content:** posts, reels, statuses, comments, messages, images, videos and sounds you choose to publish.
 - **Subscription status** and trial information.
+- **Optional Nzuri AI beta registration:** your email and phone number, if you choose to join and agree to beta contact, so we can send an invitation and beta-related updates.
 
 # How we use it
 - To sign you in and keep your account secure.
@@ -211,6 +212,7 @@ MJASI POS ni app ya kusimamia biashara na kuuza mtandaoni kwa biashara ndogo na 
 - **Taarifa za wafanyakazi unaowaongeza:** jina, mawasiliano na ruhusa.
 - **Maudhui ya MJASI MARKET:** machapisho, reels, status, maoni, ujumbe, picha, video na sauti unazochagua kuchapisha.
 - **Hali ya usajili** na taarifa za trial.
+- **Usajili wa hiari wa beta ya Nzuri AI:** barua pepe na namba yako ya simu ukichagua kujiunga na kukubali mawasiliano ya beta, ili tukutumie mwaliko na taarifa zinazohusu beta.
 
 # Tunavyotumia
 - Kukuingiza na kulinda akaunti yako.

@@ -357,5 +357,33 @@ service firebase.storage {
       allow read: if canViewProfile(businessUid);
       allow write: if hasPermission(businessUid, 'profile', 'edit');
     }
+
+    match /creativeStudio/{businessUid}/references/{userUid}/{fileName} {
+      allow create: if request.auth != null
+        && request.auth.uid == userUid
+        && canViewProfile(businessUid)
+        && request.resource.size > 0
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if request.auth != null
+        && request.auth.uid == userUid
+        && canViewProfile(businessUid);
+      allow read, update: if false;
+    }
+
+    match /creativeStudio/{businessUid}/assets/{userUid}/{fileName} {
+      allow read: if canViewProfile(businessUid);
+      allow create: if request.auth != null
+        && request.auth.uid == userUid
+        && hasPermission(businessUid, 'profile', 'edit')
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if request.auth != null
+        && request.auth.uid == userUid
+        && hasPermission(businessUid, 'profile', 'edit');
+      allow update: if false;
+    }
+
   }
 }

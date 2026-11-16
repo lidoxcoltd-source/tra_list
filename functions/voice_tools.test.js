@@ -28,7 +28,7 @@ test("both providers receive matching bounded voice tools", () => {
   assert.match(openAiTools[3].description, /check chat for the result/);
   assert.equal(gemini[2].parameters.properties.items.items.type, "OBJECT");
   assert.deepEqual(gemini[4].parameters.properties.destination.enum,
-    ["transactions", "invoices", "receipts", "quotation", "analytics", "jobs", "tasks", "staff", "pos"]);
+    ["transactions", "invoices", "receipts", "quotation", "analytics", "jobs", "tasks", "staff", "pos", "creativeStudio"]);
   assert.match(instruction("Swahili", {}), /get_business_summary/);
   assert.match(instruction("Swahili", {}), /user must review and save manually/);
 });

@@ -309,6 +309,12 @@ const Map<String, String> swTzTranslations = {
   'bi_chat_empty':
       'Uliza Isher kuhusu biashara yako, au chagua swali hapa chini.',
   'bi_chat_emoji': 'Ongeza emoji',
+  'bi_chat_design_poster': 'Tengeneza muundo',
+  'bi_chat_design_poster_hint': 'Anza poster, kipeperushi au chapisho kwa AI',
+  'bi_chat_choose_design_photo': 'Chagua picha ya bidhaa',
+  'bi_chat_take_design_photo': 'Piga picha ya bidhaa',
+  'creative_daily_image_limit':
+      'Umetumia nafasi zote 5 za kutengeneza picha za poster za leo. Unaweza kuendelea kesho au kuhariri design uliyohifadhi.',
   'bi_chat_thinking': 'Isher anaandaa jibu...',
   'bi_history_error':
       'Historia ya chat haikupatikana. Hakiki intaneti na ruhusa zako, kisha jaribu tena.',
@@ -1739,6 +1745,11 @@ const Map<String, String> swTzTranslations = {
   'subscription_required_title': 'Usajili unahitajika',
   'subscription_required_message':
       'Jisajili au anza kutumia huduma hii bila malipo kwa muda wa majaribio.',
+  'subscription_trial_offer_title': 'Anza kutumia Mjasi bure',
+  'subscription_connection_online': 'Intaneti ipo',
+  'subscription_connection_offline': 'Nje ya mtandao',
+  'subscription_trial_failed':
+      'Trial haikuweza kuanzishwa. Tafadhali angalia intaneti ujaribu tena.',
   'offline_subscription_grace_expired':
       'Matumizi bila mtandao hudumu hadi saa 24 baada ya uthibitishaji wa usajili. Unganisha intaneti ili kuthibitisha au kufanya upya usajili.',
 
@@ -1766,6 +1777,16 @@ const Map<String, String> swTzTranslations = {
       'Hii ni akaunti ya mfanyakazi. Chagua kuingia kama mfanyakazi.',
   'login_sign_in': 'Ingia',
   'login_create_account': 'Fungua akaunti',
+  'login_email_not_registered_eyebrow': 'MJASI POS · ANZA SASA',
+  'login_email_not_registered_title': 'Bado huna akaunti',
+  'login_email_not_registered_message':
+      'Barua pepe hii bado haijasajiliwa kwenye MJASI POS. Fungua akaunti ili uanze.',
+  'login_signin_help_title': 'Kagua taarifa zako za kuingia',
+  'login_signin_help_message':
+      'Tumeshindwa kuingia kwa barua pepe na nenosiri hili. Jaribu tena, weka upya nenosiri, au fungua akaunti ikiwa bado hujajiunga na MJASI POS.',
+  'login_signin_help_reset': 'Weka upya nenosiri',
+  'login_create_account_with_email': 'Fungua akaunti kwa barua pepe hii',
+  'login_create_account_not_now': 'Sio sasa',
   'login_swipe_hint':
       'Telezesha kushoto kuingia Binafsi au kulia kuingia Biashara.',
   'login_swipe_left': 'Telezesha kushoto',
@@ -2371,6 +2392,9 @@ const Map<String, String> swTzTranslations = {
   'sub_missing_phone_msg': 'Weka namba yako ya simu ili kuendelea na usajili.',
   'sub_activated_msg': 'Usajili umeanza!',
   'sub_failed_title': 'Usajili haukufanikiwa',
+  'sub_payment_unconfirmed_title': 'Usajili haujathibitishwa',
+  'sub_payment_unconfirmed':
+      'Malipo hayajathibitishwa. Hakiki hali ya malipo na usajili wako kabla ya kujaribu tena.',
   'sub_processing': 'Usajili unaendelea...',
   'sub_subscribe_now': 'Jisajili sasa',
   'sub_secure_checkout':

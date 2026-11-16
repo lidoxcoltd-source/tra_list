@@ -77,6 +77,214 @@ class LoginController extends GetxController {
     );
   }
 
+  Future<void> _showCreateAccountPrompt(
+    String email, {
+    bool accountNotFound = true,
+  }) async {
+    final action = await Get.dialog<String>(
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF101A22),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: const Color(0xFFB8D987).withValues(alpha: .35),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF7CBA83).withValues(alpha: .16),
+                  blurRadius: 42,
+                  offset: const Offset(0, 20),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: -48,
+                  right: -36,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFB8D987).withValues(alpha: .07),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFD9F29B), Color(0xFF8FBF82)],
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.person_add_alt_1_rounded,
+                          color: Color(0xFF15221A),
+                          size: 27,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        'login_email_not_registered_eyebrow'.tr,
+                        style: const TextStyle(
+                          color: Color(0xFFB8D987),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        (accountNotFound
+                                ? 'login_email_not_registered_title'
+                                : 'login_signin_help_title')
+                            .tr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 23,
+                          height: 1.15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -.35,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        (accountNotFound
+                                ? 'login_email_not_registered_message'
+                                : 'login_signin_help_message')
+                            .tr,
+                        style: const TextStyle(
+                          color: Color(0xFFB7C3BC),
+                          fontSize: 13,
+                          height: 1.65,
+                        ),
+                      ),
+                      const SizedBox(height: 17),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .045),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .09),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.alternate_email_rounded,
+                              color: Color(0xFFB8D987),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Get.back(result: 'create');
+                          },
+                          icon: const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 18,
+                          ),
+                          label: Text('login_create_account_with_email'.tr),
+                          style: FilledButton.styleFrom(
+                            foregroundColor: const Color(0xFF17221A),
+                            backgroundColor: const Color(0xFFD8F09A),
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (!accountNotFound)
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: () => Get.back(result: 'reset'),
+                            icon: const Icon(
+                              Icons.lock_reset_rounded,
+                              size: 18,
+                            ),
+                            label: Text('login_signin_help_reset'.tr),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFFD8F09A),
+                              minimumSize: const Size.fromHeight(44),
+                            ),
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () => Get.back(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFB7C3BC),
+                            minimumSize: const Size.fromHeight(44),
+                          ),
+                          child: Text('login_create_account_not_now'.tr),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      barrierDismissible: true,
+    );
+    if (action == 'create') {
+      await Get.toNamed(AppRoutes.register, arguments: {'email': email});
+    } else if (action == 'reset') {
+      await resetPassword();
+    }
+  }
+
   Future<bool> _personalProfileExists(String uid) async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -350,6 +558,15 @@ class LoginController extends GetxController {
         );
       }
     } on FirebaseAuthException catch (e) {
+      if (!staffLogin &&
+          !google &&
+          (e.code == 'user-not-found' || e.code == 'invalid-credential')) {
+        await _showCreateAccountPrompt(
+          emailController.text.trim(),
+          accountNotFound: e.code == 'user-not-found',
+        );
+        return;
+      }
       String errorMessage = 'Login failed';
 
       if (staffLogin &&

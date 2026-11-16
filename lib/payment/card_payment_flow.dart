@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'card_payment_service.dart';
@@ -23,42 +24,66 @@ class CardPaymentFlow {
     required String buyerName,
     required String buyerEmail,
     required String buyerPhone,
+    @visibleForTesting Future<CardPaymentSession> Function()? createSession,
   }) async {
-    final CardPaymentSession session;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final loadingRoute = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Expanded(child: Text('sub_processing'.tr)),
+            ],
+          ),
+        ),
+      ),
+    );
+    navigator.push(loadingRoute);
+    CardPaymentSession? session;
     try {
-      session = await CardPaymentService.createCardPayment(
-        orderId: businessId,
-        amount: amount,
-        buyerName: buyerName,
-        buyerEmail: buyerEmail,
-        buyerPhone: buyerPhone,
-      );
-    } on CardPaymentException catch (e) {
-      if (!context.mounted) return CardFlowOutcome.dismissed;
-      return _failureDialog(context, e.message);
+      session =
+          await (createSession?.call() ??
+              CardPaymentService.createCardPayment(
+                orderId: businessId,
+                amount: amount,
+                buyerName: buyerName,
+                buyerEmail: buyerEmail,
+                buyerPhone: buyerPhone,
+              ));
+    } catch (_) {
+      session = null;
+    } finally {
+      if (navigator.mounted && loadingRoute.isActive) {
+        navigator.removeRoute(loadingRoute);
+      }
     }
     if (!context.mounted) return CardFlowOutcome.dismissed;
+    final confirmedSession = session;
+    if (confirmedSession == null) return _failureDialog(context);
 
     var singleCheck = false;
     if (_hasWebView) {
       final result = await Navigator.of(context).push<CardWebViewResult>(
         MaterialPageRoute(
           fullscreenDialog: true,
-          builder: (_) => CardPaymentWebViewPage(url: session.gatewayUrl),
+          builder: (_) =>
+              CardPaymentWebViewPage(url: confirmedSession.gatewayUrl),
         ),
       );
       singleCheck = result != CardWebViewResult.success;
     } else {
       final opened = await launchUrl(
-        Uri.parse(session.gatewayUrl),
+        Uri.parse(confirmedSession.gatewayUrl),
         mode: LaunchMode.externalApplication,
       );
       if (!opened) {
         if (!context.mounted) return CardFlowOutcome.dismissed;
-        return _failureDialog(
-          context,
-          'Tumeshindwa kufungua ukurasa wa malipo. Tafadhali jaribu tena.',
-        );
+        return _failureDialog(context);
       }
     }
     if (!context.mounted) return CardFlowOutcome.dismissed;
@@ -66,7 +91,7 @@ class CardPaymentFlow {
     // The redirect alone is never trusted: the status endpoint decides.
     final action = await CardPaymentStatusDialog.show(
       context,
-      reference: session.reference,
+      reference: confirmedSession.reference,
       businessId: businessId,
       amount: amount,
       singleCheck: singleCheck,
@@ -83,10 +108,7 @@ class CardPaymentFlow {
     }
   }
 
-  static Future<CardFlowOutcome> _failureDialog(
-    BuildContext context,
-    String message,
-  ) async {
+  static Future<CardFlowOutcome> _failureDialog(BuildContext context) async {
     final choice = await showDialog<CardFlowOutcome>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -96,20 +118,23 @@ class CardPaymentFlow {
           color: Color(0xFFDC2626),
           size: 44,
         ),
-        title: const Text('Malipo hayajakamilika'),
-        content: Text(message, textAlign: TextAlign.center),
+        title: Text('sub_payment_unconfirmed_title'.tr),
+        content: Text(
+          'sub_payment_unconfirmed'.tr,
+          textAlign: TextAlign.center,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, CardFlowOutcome.dismissed),
-            child: const Text('Funga'),
+            child: Text('close'.tr),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, CardFlowOutcome.mobileMoney),
-            child: const Text('Tumia pesa ya simu'),
+            child: Text('subx_mobile'.tr),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, CardFlowOutcome.retry),
-            child: const Text('Jaribu tena'),
+            child: Text('subx_retry'.tr),
           ),
         ],
       ),

@@ -75,6 +75,7 @@ class DownloadCenter {
     required this.title,
     required this.subtitle,
     required this.items,
+    this.eyebrow = 'SMART TOOLS FOR YOUR BUSINESS',
   });
 
   factory DownloadCenter.defaults() => DownloadCenter(
@@ -82,11 +83,13 @@ class DownloadCenter {
     subtitle:
         'Invoices, quotations and receipts on every device. Pick your platform and start in seconds.',
     items: {for (final d in downloadItemDefs) d.key: const DownloadItem()},
+    eyebrow: 'SMART TOOLS FOR YOUR BUSINESS',
   );
 
   final String title;
   final String subtitle;
   final Map<String, DownloadItem> items;
+  final String eyebrow;
 
   DownloadItem item(String key) => items[key] ?? const DownloadItem();
 }
@@ -105,6 +108,7 @@ class DownloadCenterService {
     return DownloadCenter(
       title: data['title']?.toString() ?? defaults.title,
       subtitle: data['subtitle']?.toString() ?? defaults.subtitle,
+      eyebrow: data['eyebrow']?.toString() ?? defaults.eyebrow,
       items: {
         for (final d in downloadItemDefs)
           d.key: DownloadItem.fromMap(rawItems is Map ? rawItems[d.key] : null),
@@ -125,6 +129,7 @@ class DownloadCenterService {
     await _doc.set({
       'title': center.title,
       'subtitle': center.subtitle,
+      'eyebrow': center.eyebrow,
       'items': {for (final e in center.items.entries) e.key: e.value.toMap()},
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': user.uid,

@@ -125,12 +125,18 @@ service cloud.firestore {
     }
 
     function validDownloadCenter(data) {
-      return data.keys().hasOnly(['title', 'subtitle', 'items', 'updatedAt', 'updatedBy'])
-        && data.keys().hasAll(['title', 'subtitle', 'items', 'updatedAt', 'updatedBy'])
+      return data.keys().hasOnly([
+          'title', 'subtitle', 'eyebrow', 'items', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'title', 'subtitle', 'eyebrow', 'items', 'updatedAt', 'updatedBy'
+        ])
         && data.title is string
         && data.title.size() <= 80
         && data.subtitle is string
         && data.subtitle.size() <= 300
+        && data.eyebrow is string
+        && data.eyebrow.size() <= 80
         && data.items is map
         && data.items.keys().hasOnly(['playstore', 'appstore', 'apk', 'windows', 'web'])
         && data.items.keys().hasAll(['playstore', 'appstore', 'apk', 'windows', 'web'])
@@ -957,14 +963,100 @@ service cloud.firestore {
       allow delete: if isBusinessOwner(businessUid);
     }
 
-    match /users/{businessUid}/{document=**} {
-      allow read: if isBusinessOwner(businessUid);
+    match /users/{businessUid}/creativeStudioBrands/{brandId} {
+      allow get, list: if isBusinessOwner(businessUid);
       allow create: if isBusinessOwner(businessUid)
+        && request.resource.data.keys().hasOnly([
+          'name', 'colors', 'typography', 'slogan', 'guidelines', 'logoUrl',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll(['name', 'colors', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.colors is list
+        && request.resource.data.colors.size() <= 6
+        && request.resource.data.get('typography', '') is string
+        && request.resource.data.get('typography', '').size() <= 160
+        && request.resource.data.get('slogan', '') is string
+        && request.resource.data.get('slogan', '').size() <= 200
+        && request.resource.data.get('guidelines', '') is string
+        && request.resource.data.get('guidelines', '').size() <= 1000
+        && request.resource.data.get('logoUrl', '') is string
+        && request.resource.data.get('logoUrl', '').size() <= 2048
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isBusinessOwner(businessUid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'colors', 'typography', 'slogan', 'guidelines', 'logoUrl', 'updatedAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.colors is list
+        && request.resource.data.colors.size() <= 6
+        && request.resource.data.get('typography', '') is string
+        && request.resource.data.get('typography', '').size() <= 160
+        && request.resource.data.get('slogan', '') is string
+        && request.resource.data.get('slogan', '').size() <= 200
+        && request.resource.data.get('guidelines', '') is string
+        && request.resource.data.get('guidelines', '').size() <= 1000
+        && request.resource.data.get('logoUrl', '') is string
+        && request.resource.data.get('logoUrl', '').size() <= 2048
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isBusinessOwner(businessUid);
+    }
+
+    match /users/{businessUid}/creativeStudioProjects/{projectId} {
+      allow get, list: if canViewProfile(businessUid);
+      allow create: if (isBusinessOwner(businessUid)
+        || hasPermission(businessUid, 'profile', 'edit'))
+        && request.resource.data.keys().hasOnly([
+          'title', 'backgroundPath', 'width', 'height', 'layers', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'title', 'backgroundPath', 'width', 'height', 'layers', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.backgroundPath is string
+        && request.resource.data.backgroundPath.matches('^creativeStudio/' + businessUid + '/' + request.auth.uid + '/[A-Za-z0-9-]+[.]png$')
+        && request.resource.data.width is int
+        && request.resource.data.height is int
+        && request.resource.data.layers is list
+        && request.resource.data.layers.size() <= 40
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if (isBusinessOwner(businessUid)
+        || hasPermission(businessUid, 'profile', 'edit'))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'backgroundPath', 'width', 'height', 'layers', 'updatedAt'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.backgroundPath == resource.data.backgroundPath
+        && request.resource.data.width is int
+        && request.resource.data.height is int
+        && request.resource.data.layers is list
+        && request.resource.data.layers.size() <= 40
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isBusinessOwner(businessUid)
+        || hasPermission(businessUid, 'profile', 'edit');
+    }
+
+    match /users/{businessUid}/{document=**} {
+      allow read: if isBusinessOwner(businessUid)
+        && !document.matches('^creativeStudio(Brands|Projects)/[^/]+$');
+      allow create: if isBusinessOwner(businessUid)
+        && !document.matches('^creativeStudio(Brands|Projects)/[^/]+$')
         && !hasPrivilegedRole(request.resource.data.get('role', ''));
       allow update: if isBusinessOwner(businessUid)
+        && !document.matches('^creativeStudio(Brands|Projects)/[^/]+$')
         && request.resource.data.get('role', '')
           == resource.data.get('role', '');
-      allow delete: if isBusinessOwner(businessUid);
+      allow delete: if isBusinessOwner(businessUid)
+        && !document.matches('^creativeStudio(Brands|Projects)/[^/]+$');
     }
 
     match /users/{businessUid}/barSettings/config {
@@ -1776,6 +1868,7 @@ service cloud.firestore {
     match /app_config/{configId} {
       allow get: if configId == 'version_policy'
         || configId == 'download_center'
+        || configId == 'ai_early_access'
         || configId == 'subscription_plan'
         || configId == 'trial_settings'
         || configId == 'legal_privacy'
@@ -1784,6 +1877,17 @@ service cloud.firestore {
         || configId == 'app_urls'
         || configId == 'support_center';
       allow list: if false;
+      allow create, update: if isSuperAdmin()
+        && configId == 'ai_early_access'
+        && request.resource.data.keys().hasOnly([
+          'launchAt', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'launchAt', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.launchAt is timestamp
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
       allow create, update: if isSuperAdmin()
         && configId == 'legal_contact'
         && request.resource.data.keys().hasOnly([
@@ -1873,6 +1977,14 @@ service cloud.firestore {
             && validSupportCenter(request.resource.data))
         );
       allow delete: if false;
+    }
+
+    match /aiEarlyAccessLeads/{leadId} {
+      allow read, write: if false;
+    }
+
+    match /aiEarlyAccessRateLimits/{rateId} {
+      allow read, write: if false;
     }
 
     function validAnalyticsAdviceCondition(condition) {
@@ -2003,7 +2115,8 @@ service cloud.firestore {
     }
 
     match /downloadStats/{metric} {
-      allow read: if isSuperAdmin();
+      allow get: if metric == 'visits' || isSuperAdmin();
+      allow list: if isSuperAdmin();
       allow create: if metric in ['visits', 'click_playstore', 'click_appstore',
           'click_apk', 'click_windows', 'click_web']
         && request.resource.data.keys().hasOnly(['count'])

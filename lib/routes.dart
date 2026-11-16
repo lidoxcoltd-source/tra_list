@@ -21,6 +21,7 @@ import 'package:tra_list/tasks/tasks_page.dart';
 import 'package:tra_list/services/super_admin_subscriptions_page.dart';
 import 'package:tra_list/services/app_version_management_page.dart';
 import 'package:tra_list/services/downloads_page.dart';
+import 'package:tra_list/services/ai_early_access_page.dart';
 import 'package:tra_list/services/admin_analytics_page.dart';
 import 'package:tra_list/services/admin_announcements_page.dart';
 import 'package:tra_list/services/super_admin_hub_page.dart';
@@ -29,6 +30,7 @@ import 'package:tra_list/services/download_center_management_page.dart';
 import 'package:tra_list/services/support_center_admin_page.dart';
 import 'package:tra_list/services/legal_admin_page.dart';
 import 'package:tra_list/services/chat_page.dart';
+import 'package:tra_list/services/pages/creative_studio_page.dart';
 import 'package:tra_list/legal/legal_page.dart';
 import 'package:tra_list/legal/legal_service.dart';
 import 'package:tra_list/services/support_faq_page.dart';
@@ -166,6 +168,7 @@ class AppRoutes {
   static const String pos = '/pos';
   static const String analytics = '/analytics';
   static const String businessIntelligence = '/business-intelligence';
+  static const String creativeStudio = '/creative-studio';
   static const String jobs = '/jobs';
   static const String jobsArchive = '/jobs-archive';
   static const String quotation = '/quotation';
@@ -177,6 +180,7 @@ class AppRoutes {
   static const String adminAiQuota = '/admin-ai-quota';
   static const String adminAppVersions = '/admin-app-versions';
   static const String downloads = '/downloads';
+  static const String aiEarlyAccess = '/early-access';
   static const String adminDownloads = '/admin-downloads';
   static const String adminAnalytics = '/admin-analytics';
   static const String notifications = '/notifications';
@@ -278,7 +282,17 @@ class AppRoutes {
       transition: Transition.fadeIn,
     ),
     GetPage(name: login, page: () => LoginPage()),
-    GetPage(name: register, page: () => const CreateAccountPage()),
+    GetPage(
+      name: register,
+      page: () {
+        final arguments = Get.arguments;
+        return CreateAccountPage(
+          initialEmail: arguments is Map
+              ? arguments['email']?.toString()
+              : null,
+        );
+      },
+    ),
     GetPage(
       name: home,
       page: () => const HomePage(),
@@ -442,6 +456,12 @@ class AppRoutes {
       transition: Transition.rightToLeft,
     ),
     GetPage(
+      name: creativeStudio,
+      page: () => const CreativeStudioPage(),
+      middlewares: [AuthMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
       name: jobs,
       page: () => const JobsPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
@@ -497,6 +517,11 @@ class AppRoutes {
     GetPage(
       name: downloads,
       page: () => const DownloadsPage(),
+      transition: Transition.fadeIn,
+    ),
+    GetPage(
+      name: aiEarlyAccess,
+      page: () => const AiEarlyAccessPage(),
       transition: Transition.fadeIn,
     ),
     GetPage(

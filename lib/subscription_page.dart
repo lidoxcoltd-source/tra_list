@@ -156,24 +156,13 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       return;
     }
 
-    try {
-      await _controller.subscribeUser(phone: phone);
-      Get.snackbar(
-        'success'.tr,
-        'sub_activated_msg'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
-    } catch (error) {
-      Get.snackbar(
-        'sub_failed_title'.tr,
-        error.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => SubscriptionPaymentDialog(
+        onSubmit: () => _controller.subscribeUser(phone: phone),
+      ),
+    );
   }
 
   String get _priceText => _planLoading
@@ -1521,6 +1510,140 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+enum _SubscriptionPaymentPhase { processing, success, failure }
+
+class SubscriptionPaymentDialog extends StatefulWidget {
+  const SubscriptionPaymentDialog({super.key, required this.onSubmit});
+
+  final Future<void> Function() onSubmit;
+
+  @override
+  State<SubscriptionPaymentDialog> createState() =>
+      _SubscriptionPaymentDialogState();
+}
+
+class _SubscriptionPaymentDialogState extends State<SubscriptionPaymentDialog> {
+  var _phase = _SubscriptionPaymentPhase.processing;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _submit();
+    });
+  }
+
+  Future<void> _submit() async {
+    try {
+      await widget.onSubmit();
+      if (mounted) setState(() => _phase = _SubscriptionPaymentPhase.success);
+    } catch (_) {
+      if (mounted) setState(() => _phase = _SubscriptionPaymentPhase.failure);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final processing = _phase == _SubscriptionPaymentPhase.processing;
+    final success = _phase == _SubscriptionPaymentPhase.success;
+    final color = processing
+        ? _tealCard
+        : success
+        ? _mobileGreen
+        : const Color(0xFFD64045);
+    return PopScope(
+      canPop: !processing,
+      child: Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 300),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: processing
+                        ? SizedBox(
+                            key: const ValueKey('subscription_payment_loading'),
+                            width: 64,
+                            height: 64,
+                            child: CircularProgressIndicator(
+                              color: color,
+                              strokeWidth: 4,
+                            ),
+                          )
+                        : Container(
+                            key: ValueKey(
+                              success
+                                  ? 'subscription_payment_success'
+                                  : 'subscription_payment_failure',
+                            ),
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              success
+                                  ? Icons.check_rounded
+                                  : Icons.error_outline_rounded,
+                              color: color,
+                              size: 36,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    processing
+                        ? 'sub_processing'.tr
+                        : success
+                        ? 'success'.tr
+                        : 'sub_payment_unconfirmed_title'.tr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _ink,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (!processing) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      success
+                          ? 'sub_activated_msg'.tr
+                          : 'sub_payment_unconfirmed'.tr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: _muted, height: 1.4),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: FilledButton.styleFrom(backgroundColor: _tealCard),
+                      child: Text('close'.tr),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

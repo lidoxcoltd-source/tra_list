@@ -7,15 +7,16 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'download_center_service.dart';
+import 'profile_service.dart';
 import 'super_admin_subscription_service.dart';
 
-const _navy = Color(0xFF0B1F3A);
-const _navyDeep = Color(0xFF071426);
-const _surface = Color(0xFF132840);
-const _teal = Color(0xFF0E5962);
-const _mint = Color(0xFF29D3C2);
-const _violet = Color(0xFF8B5CF6);
-const _muted = Color(0xFFB8C7D9);
+const _navy = Color(0xFF151D1C);
+const _navyDeep = Color(0xFF0C1110);
+const _surface = Color(0xFF1A2522);
+const _teal = Color(0xFF28695B);
+const _mint = Color(0xFFD8F36A);
+const _coral = Color(0xFFFF956B);
+const _muted = Color(0xFFB6C2BA);
 
 bool _sw = false;
 
@@ -29,6 +30,7 @@ const _swahili = <String, String>{
   'Screenshots': 'Picha',
   'Downloads': 'Pakua',
   'Open app': 'Fungua app',
+  'Be the first to test Nzuri': 'Kuwa wa kwanza kumjaribu Nzuri',
   'SMART TOOLS FOR YOUR BUSINESS': 'ZANA SMART ZA BIASHARA YAKO',
   'DOWNLOAD MJASI POS': 'PAKUA MJASI POS',
   'Explore features': 'Angalia vipengele',
@@ -147,13 +149,28 @@ class _DownloadsPageState extends State<DownloadsPage>
   DownloadCenter? _center;
   SubscriptionPlanSettings? _plan;
   bool _failed = false;
+  bool _isSuperAdmin = false;
 
   @override
   void initState() {
     super.initState();
     _sw = _initialSwahili();
+    _loadAdminRole();
     _load();
     DownloadCenterService.trackVisit();
+  }
+
+  Future<void> _loadAdminRole() async {
+    try {
+      final profile = await ProfileService.loadOrCreate();
+      final role = (profile['role'] ?? '')
+          .toString()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z]'), '');
+      if (mounted) setState(() => _isSuperAdmin = role == 'superadmin');
+    } catch (error) {
+      debugPrint('Could not check downloads page editor access: $error');
+    }
   }
 
   /// Saved choice wins; otherwise Swahili for Tanzania/Swahili browsers.
@@ -334,44 +351,14 @@ class _DownloadsPageState extends State<DownloadsPage>
     return AnimatedBuilder(
       animation: _background,
       builder: (context, _) {
-        final t = _background.value * 2 * math.pi;
-
         return Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_navyDeep, _navy, Color(0xFF102B3D)],
-            ),
-          ),
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned(
-                top: -150 + math.sin(t) * 24,
-                right: -110,
-                child: _glow(400, _mint.withValues(alpha: 0.12)),
-              ),
-              Positioned(
-                bottom: -200,
-                left: -100 + math.cos(t) * 25,
-                child: _glow(460, _violet.withValues(alpha: 0.09)),
-              ),
-            ],
+          color: _navyDeep,
+          child: CustomPaint(
+            painter: _TechnicalGridPainter(progress: _background.value),
+            child: const SizedBox.expand(),
           ),
         );
       },
-    );
-  }
-
-  Widget _glow(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, Colors.transparent]),
-      ),
     );
   }
 
@@ -491,11 +478,11 @@ class _DownloadsPageState extends State<DownloadsPage>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 18),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(8),
             child: Image.asset(
               'assets/mjas.png',
               width: 42,
@@ -511,19 +498,16 @@ class _DownloadsPageState extends State<DownloadsPage>
                 'MJASI POS',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 17,
+                  fontFamily: 'Hypermarket',
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0,
                 ),
               ),
               SizedBox(height: 2),
               Text(
                 'BUSINESS MANAGEMENT',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 9,
-                  letterSpacing: 1.2,
-                ),
+                style: TextStyle(color: _muted, fontSize: 9, letterSpacing: 0),
               ),
             ],
           ),
@@ -537,6 +521,17 @@ class _DownloadsPageState extends State<DownloadsPage>
           ],
           langToggle(),
           const SizedBox(width: 10),
+          if (_isSuperAdmin) ...[
+            IconButton(
+              tooltip: 'Edit page content',
+              onPressed: () async {
+                await Get.toNamed('/admin-downloads');
+                _load();
+              },
+              icon: const Icon(Icons.edit_outlined, color: _mint),
+            ),
+            const SizedBox(width: 4),
+          ],
           OutlinedButton(
             onPressed: () => Get.toNamed('/login'),
             style: OutlinedButton.styleFrom(
@@ -572,9 +567,9 @@ class _DownloadsPageState extends State<DownloadsPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
             decoration: BoxDecoration(
-              color: _mint.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: _mint.withValues(alpha: 0.3)),
+              color: _surface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _mint.withValues(alpha: 0.42)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -582,12 +577,12 @@ class _DownloadsPageState extends State<DownloadsPage>
                 const Icon(Icons.auto_awesome, color: _mint, size: 15),
                 const SizedBox(width: 8),
                 Text(
-                  _t('SMART TOOLS FOR YOUR BUSINESS'),
+                  _t(center.eyebrow),
                   style: const TextStyle(
                     color: _mint,
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
+                    letterSpacing: 0,
                   ),
                 ),
               ],
@@ -603,10 +598,11 @@ class _DownloadsPageState extends State<DownloadsPage>
             textAlign: textAlignment,
             style: TextStyle(
               color: Colors.white,
-              fontSize: wide ? 58 : 38,
-              height: 1.08,
+              fontFamily: 'Hypermarket',
+              fontSize: wide ? 64 : 43,
+              height: 1.04,
               fontWeight: FontWeight.w800,
-              letterSpacing: -1.7,
+              letterSpacing: 0,
             ),
           ),
         ),
@@ -644,7 +640,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                     vertical: 19,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                 ),
               ),
@@ -660,7 +656,23 @@ class _DownloadsPageState extends State<DownloadsPage>
                     vertical: 19,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Get.toNamed('/early-access'),
+                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                label: Text(_t('Be the first to test Nzuri')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _mint,
+                  side: BorderSide(color: _mint.withValues(alpha: 0.42)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 18,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
                   ),
                 ),
               ),
@@ -769,10 +781,11 @@ class _DownloadsPageState extends State<DownloadsPage>
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 32,
+            fontFamily: 'Hypermarket',
+            fontSize: 34,
             height: 1.2,
             fontWeight: FontWeight.w800,
-            letterSpacing: -0.8,
+            letterSpacing: 0,
           ),
         ),
         const SizedBox(height: 12),
@@ -875,7 +888,7 @@ class _DownloadsPageState extends State<DownloadsPage>
               spacing: gap,
               runSpacing: gap,
               children: [
-                for (final item in items)
+                for (final (index, item) in items.indexed)
                   SizedBox(
                     width: itemWidth,
                     child: _GlassCard(
@@ -888,10 +901,24 @@ class _DownloadsPageState extends State<DownloadsPage>
                               width: 46,
                               height: 46,
                               decoration: BoxDecoration(
-                                color: _mint.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(13),
+                                color:
+                                    (index % 3 == 1
+                                            ? _coral
+                                            : index % 3 == 2
+                                            ? const Color(0xFF7DC8D6)
+                                            : _mint)
+                                        .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Icon(item.$1, color: _mint, size: 23),
+                              child: Icon(
+                                item.$1,
+                                color: index % 3 == 1
+                                    ? _coral
+                                    : index % 3 == 2
+                                    ? const Color(0xFF7DC8D6)
+                                    : _mint,
+                                size: 23,
+                              ),
                             ),
                             const SizedBox(height: 18),
                             Text(
@@ -1070,7 +1097,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       'appstore': Color(0xFF111827),
       'apk': Color(0xFF218C54),
       'windows': Color(0xFF0078D4),
-      'web': Color(0xFF5B3FD0),
+      'web': Color(0xFFFF956B),
     };
 
     final columns = width >= 1000
@@ -1101,7 +1128,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                     child: _DownloadButton(
                       def: def,
                       item: center.item(def.key),
-                      color: brand[def.key] ?? _violet,
+                      color: brand[def.key] ?? _coral,
                       onTap: () => _download(def, center),
                     ),
                   ),
@@ -1149,7 +1176,7 @@ class _DownloadsPageState extends State<DownloadsPage>
             padding: EdgeInsets.all(wide ? 36 : 26),
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: _mint.withValues(alpha: 0.45)),
               boxShadow: [
                 BoxShadow(
@@ -1167,7 +1194,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                     color: _mint,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.6,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -1193,7 +1220,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                           fontSize: wide ? 76 : 60,
                           height: 1,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: -2,
+                          letterSpacing: 0,
                         ),
                       ),
                     ],
@@ -1245,7 +1272,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       foregroundColor: _navyDeep,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                   ),
@@ -1323,6 +1350,40 @@ class _DownloadsPageState extends State<DownloadsPage>
   }
 }
 
+class _TechnicalGridPainter extends CustomPainter {
+  const _TechnicalGridPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = _mint.withValues(alpha: 0.045)
+      ..strokeWidth = 1;
+    const spacing = 44.0;
+    for (var x = 0.0; x <= size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (var y = 0.0; y <= size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    final scanPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          Colors.transparent,
+          _mint.withValues(alpha: 0.10),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 80));
+    final scanY = (progress * (size.height + 80)) - 80;
+    canvas.drawRect(Rect.fromLTWH(0, scanY, size.width, 80), scanPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TechnicalGridPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
 class _GlassCard extends StatelessWidget {
   const _GlassCard({required this.child});
 
@@ -1333,7 +1394,7 @@ class _GlassCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: _surface.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
         boxShadow: [
           BoxShadow(
@@ -1390,8 +1451,8 @@ class _DownloadButtonState extends State<_DownloadButton> {
           0,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF132840),
-          borderRadius: BorderRadius.circular(18),
+          color: _surface,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: available && _hover
                 ? widget.color.withValues(alpha: 0.8)
@@ -1400,12 +1461,12 @@ class _DownloadButtonState extends State<_DownloadButton> {
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(8),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
             child: Padding(
-              padding: const EdgeInsets.all(21),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
                   Container(
@@ -1415,7 +1476,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
                       color: available
                           ? widget.color.withValues(alpha: 0.17)
                           : Colors.white.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       widget.def.icon,
@@ -1432,7 +1493,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
                           widget.def.title,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -1445,6 +1506,17 @@ class _DownloadButtonState extends State<_DownloadButton> {
                             height: 1.5,
                           ),
                         ),
+                        if (widget.item.version.isNotEmpty && available) ...[
+                          const SizedBox(height: 7),
+                          Text(
+                            'BUILD ${widget.item.version}',
+                            style: TextStyle(
+                              color: widget.color,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1480,7 +1552,7 @@ class _PhoneFrame extends StatelessWidget {
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: const Color(0xFF080D16),
-        borderRadius: BorderRadius.circular(31),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Colors.white24, width: 1),
         boxShadow: [
           BoxShadow(
@@ -1491,7 +1563,7 @@ class _PhoneFrame extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(17),
         child: Container(
           color: const Color(0xFFF5F7FA),
           child: FittedBox(
@@ -1580,7 +1652,7 @@ class _InvoiceScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _line(55, height: 10),
-                  _line(72, color: _violet, height: 12),
+                  _line(72, color: _coral, height: 12),
                 ],
               ),
               const SizedBox(height: 18),
@@ -1698,7 +1770,7 @@ class _DashboardScreen extends StatelessWidget {
               Row(
                 children: [
                   stat(_teal, Icons.receipt_long_rounded),
-                  stat(_violet, Icons.request_quote_rounded),
+                  stat(_coral, Icons.request_quote_rounded),
                 ],
               ),
               Row(

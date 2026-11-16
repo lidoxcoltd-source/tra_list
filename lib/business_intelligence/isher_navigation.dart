@@ -18,6 +18,7 @@ enum IsherDestination {
   tasks,
   staff,
   pos,
+  creativeStudio,
 }
 
 extension IsherDestinationInfo on IsherDestination {
@@ -31,9 +32,14 @@ extension IsherDestinationInfo on IsherDestination {
     IsherDestination.tasks => AppRoutes.tasks,
     IsherDestination.staff => AppRoutes.staff,
     IsherDestination.pos => AppRoutes.pos,
+    IsherDestination.creativeStudio => AppRoutes.creativeStudio,
   };
 
-  String get label => 'bi_navigation_$name'.tr;
+  String get label => this == IsherDestination.creativeStudio
+      ? (Get.locale?.languageCode == 'sw'
+            ? 'Studio ya Ubunifu'
+            : 'Creative Studio')
+      : 'bi_navigation_$name'.tr;
 }
 
 final _navigationPrefix = RegExp(
@@ -53,29 +59,52 @@ IsherDestination? parseIsherNavigationCommand(String text) {
     '',
   );
   target = target.replaceFirst(
-    RegExp(r'^(?:(?:ukurasa|page|screen)\s+(?:wa|ya|la|za|of)\s+|(?:page|screen|ukurasa)\s+(?:ya\s+)?|(?:orodha|list)\s+(?:ya|of)\s+)'),
+    RegExp(
+      r'^(?:(?:ukurasa|page|screen)\s+(?:wa|ya|la|za|of)\s+|(?:page|screen|ukurasa)\s+(?:ya\s+)?|(?:orodha|list)\s+(?:ya|of)\s+)',
+    ),
     '',
   );
-  target = target.replaceFirst(
-    RegExp(r'\s+(?:tafadhali|please|kwenye app|in the app)$'),
-    '',
-  ).trim();
+  target = target
+      .replaceFirst(
+        RegExp(r'\s+(?:tafadhali|please|kwenye app|in the app)$'),
+        '',
+      )
+      .trim();
   return switch (target) {
-    'miamala' || 'muamala' || 'transactions' || 'transaction' ||
-    'miamala ya biashara' =>
-      IsherDestination.transactions,
-    'invoice' || 'invoices' || 'ankara' || 'invoice list' ||
-    'invoices list' || 'ankara za biashara' => IsherDestination.invoices,
-    'risiti' || 'receipt' || 'receipts' || 'receipts list' =>
-      IsherDestination.receipts,
-    'quotation' || 'quotations' || 'quote' || 'nukuu' =>
-      IsherDestination.quotation,
-    'ripoti' || 'report' || 'reports' || 'analytics' =>
-      IsherDestination.analytics,
+    'miamala' ||
+    'muamala' ||
+    'transactions' ||
+    'transaction' ||
+    'miamala ya biashara' => IsherDestination.transactions,
+    'invoice' ||
+    'invoices' ||
+    'ankara' ||
+    'invoice list' ||
+    'invoices list' ||
+    'ankara za biashara' => IsherDestination.invoices,
+    'risiti' ||
+    'receipt' ||
+    'receipts' ||
+    'receipts list' => IsherDestination.receipts,
+    'quotation' ||
+    'quotations' ||
+    'quote' ||
+    'nukuu' => IsherDestination.quotation,
+    'ripoti' ||
+    'report' ||
+    'reports' ||
+    'analytics' => IsherDestination.analytics,
     'jobs' || 'job' || 'kazi za wateja' => IsherDestination.jobs,
     'tasks' || 'task' || 'kazi' => IsherDestination.tasks,
     'wafanyakazi' || 'staff' || 'employees' => IsherDestination.staff,
     'pos' => IsherDestination.pos,
+    'creative studio' ||
+    'poster studio' ||
+    'creative design' ||
+    'studio ya ubunifu' ||
+    'studio ya poster' ||
+    'kutengeneza poster' ||
+    'kutengeneza mabango' => IsherDestination.creativeStudio,
     _ => null,
   };
 }
@@ -134,7 +163,9 @@ Future<bool> _openAuthorizedIsherRoute({
       BusinessAccessService.canAccessRoute(route);
   void notice(String key) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(key.tr)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(key.tr)));
     }
   }
 
@@ -184,13 +215,17 @@ Future<bool> _openAuthorizedIsherRoute({
     }
     final navigation = Get.toNamed(route, arguments: arguments);
     if (navigation == null) throw StateError('Navigation unavailable');
-    unawaited(navigation.then<void>((_) async {
-      if (afterReturn != null && allowed()) await afterReturn();
-    }).catchError((Object error, StackTrace stack) {
-      debugPrint('Isher navigation return failed: ${error.runtimeType}');
-      debugPrintStack(stackTrace: stack);
-      notice('bi_navigation_error');
-    }));
+    unawaited(
+      navigation
+          .then<void>((_) async {
+            if (afterReturn != null && allowed()) await afterReturn();
+          })
+          .catchError((Object error, StackTrace stack) {
+            debugPrint('Isher navigation return failed: ${error.runtimeType}');
+            debugPrintStack(stackTrace: stack);
+            notice('bi_navigation_error');
+          }),
+    );
     return true;
   } catch (error, stack) {
     debugPrint('Isher navigation failed: ${error.runtimeType}');
