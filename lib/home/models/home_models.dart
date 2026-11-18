@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tra_list/jobs/controllers/debt_controller.dart';
 
-enum FinancePeriod { today, yesterday, thisWeek, thisMonth }
+enum FinancePeriod { today, yesterday, thisWeek, thisMonth, customDay }
 
 enum HomeDestination { dashboard, explore, reports, chat }
 

@@ -58,6 +58,11 @@ class _PosPageState extends State<PosPage> {
   bool _barOrderMode = false;
   StreamSubscription<List<Product>>? _productsSubscription;
   String _payment = 'cash';
+  String _catalogQuery = '';
+  String _catalogCategory = '';
+  int _mobileDestination = 0;
+  bool _showAllMobileProducts = false;
+  bool _showCheckoutDetails = false;
   String _lastCode = '';
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
   MobileScannerController? _scanner;
@@ -204,6 +209,13 @@ class _PosPageState extends State<PosPage> {
     _lastCode = code;
     _lastScanAt = now;
     var p = findProductByCode(_products.where((p) => p.active), code);
+    p ??= _products
+        .where(
+          (product) =>
+              product.active &&
+              product.name.trim().toLowerCase() == code.toLowerCase(),
+        )
+        .firstOrNull;
     p ??= await _service.findProductByCode(code);
     if (!mounted) return;
     if (p != null && !p.active) p = null;
@@ -914,6 +926,8 @@ class _PosPageState extends State<PosPage> {
       _table.clear();
       _payment = 'cash';
       _saleRef = _newRef();
+      _showCheckoutDetails = false;
+      _mobileDestination = 0;
     });
   }
 
@@ -1134,33 +1148,98 @@ class _PosPageState extends State<PosPage> {
   Widget build(BuildContext context) {
     return Obx(() {
       final wide = MediaQuery.of(context).size.width >= 900;
-      final scanPane = _scanPane();
-      final cartPane = _cartPane();
+      final cartPane = _cartPane(showCatalogWhenEmpty: !wide);
       return StockScaffold(
         title: BusinessAccessService.isBarBartender
             ? 'bar_bartender_title'.tr
             : 'pos_title'.tr,
-        maxWidth: 1200,
+        maxWidth: 1440,
+        centerTitle: !wide,
+        leading: wide
+            ? null
+            : IconButton(
+                tooltip: 'More',
+                onPressed: _showMoreMenu,
+                icon: const Icon(Icons.menu_rounded),
+              ),
         actions: [
-          if (BusinessAccessService.barModeEnabled.value)
+          if (!wide)
             IconButton(
-              tooltip: 'bar_orders'.tr,
-              onPressed: () => Get.to(() => const BarOrdersPage()),
-              icon: const Icon(Icons.room_service_outlined),
+              tooltip: 'stk_scan'.tr,
+              onPressed: cameraScanSupported
+                  ? _toggleCamera
+                  : _codeFocus.requestFocus,
+              icon: const Icon(Icons.qr_code_scanner_rounded),
             ),
-          if (!BusinessAccessService.isBarBartender)
+          if (BusinessAccessService.barModeEnabled.value)
+            if (wide)
+              IconButton(
+                tooltip: 'bar_orders'.tr,
+                onPressed: () => Get.to(() => const BarOrdersPage()),
+                icon: const Icon(Icons.room_service_outlined),
+              ),
+          if (wide && !BusinessAccessService.isBarBartender)
             IconButton(
               tooltip: 'pos_list_history'.tr,
               onPressed: _showListHistory,
               icon: const Icon(Icons.history),
             ),
-          if (_cart.isNotEmpty)
+          if (wide && _cart.isNotEmpty)
             IconButton(
               tooltip: 'pos_clear'.tr,
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: _saving || _listBusy ? null : _reset,
             ),
         ],
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                height: 66,
+                selectedIndex: _mobileDestination,
+                onDestinationSelected: (index) {
+                  if (index == 3) {
+                    _showMoreMenu();
+                    setState(() => _mobileDestination = 0);
+                    return;
+                  }
+                  setState(() {
+                    _mobileDestination = index;
+                    if (index == 0) _showAllMobileProducts = false;
+                    if (index == 1) _showAllMobileProducts = true;
+                  });
+                },
+                backgroundColor: Colors.white,
+                indicatorColor: const Color(0xFFE5F0FF),
+                destinations: [
+                  NavigationDestination(
+                    icon: Icon(Icons.point_of_sale_outlined),
+                    selectedIcon: Icon(Icons.point_of_sale_rounded),
+                    label: 'POS',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.inventory_2_outlined),
+                    selectedIcon: Icon(Icons.inventory_2_rounded),
+                    label: 'Products',
+                  ),
+                  NavigationDestination(
+                    icon: Badge(
+                      isLabelVisible: _cart.isNotEmpty,
+                      label: Text('${_cart.length}'),
+                      child: Icon(Icons.shopping_cart_outlined),
+                    ),
+                    selectedIcon: Badge(
+                      isLabelVisible: _cart.isNotEmpty,
+                      label: Text('${_cart.length}'),
+                      child: Icon(Icons.shopping_cart_rounded),
+                    ),
+                    label: 'Cart',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.more_horiz_rounded),
+                    label: 'More',
+                  ),
+                ],
+              ),
         body: !_loaded
             ? const Center(child: CircularProgressIndicator())
             : _loadError != null
@@ -1172,31 +1251,492 @@ class _PosPageState extends State<PosPage> {
               )
             : wide
             ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(width: 420, child: scanPane),
-                  Expanded(child: cartPane),
+                  Expanded(child: _catalogPane()),
+                  SizedBox(width: 430, child: cartPane),
                 ],
               )
-            : Column(
-                children: [
-                  scanPane,
-                  Expanded(child: cartPane),
-                ],
-              ),
+            : _mobileDestination == 2
+            ? cartPane
+            : _mobileCatalogPane(),
       );
     });
   }
 
+  Future<void> _showMoreMenu() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!BusinessAccessService.isBarBartender)
+              ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: Text('pos_list_history'.tr),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showListHistory();
+                },
+              ),
+            if (BusinessAccessService.barModeEnabled.value)
+              ListTile(
+                leading: const Icon(Icons.room_service_outlined),
+                title: Text('bar_orders'.tr),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Get.to(() => const BarOrdersPage());
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text('stk_scan_upload'.tr),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _scanPhoto(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileCatalogPane() {
+    final categories =
+        _products
+            .where(
+              (product) => product.active && product.category.trim().isNotEmpty,
+            )
+            .map((product) => product.category.trim())
+            .toSet()
+            .toList()
+          ..sort();
+    final query = _catalogQuery.trim().toLowerCase();
+    final products = _products.where((product) {
+      if (!product.active) return false;
+      if (_catalogCategory == '__others__') {
+        if (product.category.trim().isNotEmpty &&
+            product.category.trim().toLowerCase() != 'others') {
+          return false;
+        }
+      } else if (_catalogCategory.isNotEmpty &&
+          product.category != _catalogCategory) {
+        return false;
+      }
+      return query.isEmpty ||
+          product.name.toLowerCase().contains(query) ||
+          product.sku.toLowerCase().contains(query) ||
+          product.barcode.toLowerCase().contains(query);
+    }).toList();
+    final visibleProducts = _showAllMobileProducts
+        ? products
+        : products.take(6).toList();
+
+    IconData categoryIcon(String category) {
+      final value = category.toLowerCase();
+      if (value.contains('drink') ||
+          value.contains('bever') ||
+          value.contains('kinyw')) {
+        return Icons.local_drink_outlined;
+      }
+      if (value.contains('snack') || value.contains('vitafun')) {
+        return Icons.cookie_outlined;
+      }
+      if (value.contains('grocer') || value.contains('grocery')) {
+        return Icons.shopping_basket_outlined;
+      }
+      return Icons.category_outlined;
+    }
+
+    Widget categoryItem(String label, IconData icon, String category) {
+      final selected = _catalogCategory == category;
+      return InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: () => setState(() => _catalogCategory = category),
+        child: SizedBox(
+          width: 58,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selected ? kStockBlue : Colors.white,
+                  border: Border.all(
+                    color: selected ? kStockBlue : const Color(0xFFE1E8F0),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  size: 19,
+                  color: selected ? Colors.white : kStockNavy,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? kStockBlue : const Color(0xFF65758B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          child: TextField(
+            controller: _codeCtl,
+            focusNode: _codeFocus,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Scan product or search...',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'stk_scan'.tr,
+                    onPressed: cameraScanSupported
+                        ? _toggleCamera
+                        : _codeFocus.requestFocus,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                  ),
+                  IconButton(
+                    tooltip: 'stk_scan_upload'.tr,
+                    onPressed: () => _scanPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library_outlined, size: 19),
+                  ),
+                ],
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFDDE5EF)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFDDE5EF)),
+              ),
+            ),
+            onChanged: (value) => setState(() => _catalogQuery = value),
+            onSubmitted: (value) {
+              _onCode(value);
+              _codeCtl.clear();
+              setState(() => _catalogQuery = '');
+              _codeFocus.requestFocus();
+            },
+          ),
+        ),
+        if (!kIsWeb && _cameraOn && _scanner != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 150,
+                child: MobileScanner(
+                  controller: _scanner!,
+                  placeholderBuilder: (context) => ScannerLoadingFallback(
+                    compact: true,
+                    onPhoto: () => _scanPhoto(ImageSource.camera),
+                    onUpload: () => _scanPhoto(ImageSource.gallery),
+                    onRetry: _retryPosCamera,
+                  ),
+                  onDetect: (capture) {
+                    for (final barcode in capture.barcodes) {
+                      final value = barcode.rawValue;
+                      if (value != null && value.isNotEmpty) {
+                        _onCode(value);
+                        break;
+                      }
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        if (BusinessAccessService.isBarBartender)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
+            child: Text(
+              'bar_bartender_help'.tr,
+              style: const TextStyle(color: kStockNavy, fontSize: 12),
+            ),
+          ),
+        SizedBox(
+          height: 74,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+            scrollDirection: Axis.horizontal,
+            children: [
+              categoryItem('All', Icons.apps_rounded, ''),
+              for (final category in categories)
+                categoryItem(category, categoryIcon(category), category),
+              categoryItem('Others', Icons.more_horiz_rounded, '__others__'),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'stk_products'.tr,
+                  style: const TextStyle(
+                    color: MjasiColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(
+                  () => _showAllMobileProducts = !_showAllMobileProducts,
+                ),
+                child: Text(_showAllMobileProducts ? 'Show less' : 'See all'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: products.isEmpty
+              ? StockMessage(
+                  icon: Icons.inventory_2_outlined,
+                  text: 'stk_no_products'.tr,
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  itemCount: visibleProducts.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 5),
+                  itemBuilder: (context, index) {
+                    final product = visibleProducts[index];
+                    return Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _add(product, 1),
+                        child: Container(
+                          height: 66,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: const Color(0xFFE3EAF2)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              ProductImage(
+                                url: product.imageUrl,
+                                size: 48,
+                                radius: 9,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: MjasiColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'TZS ${formatMoney(product.sellPrice)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: MjasiColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton.filled(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: kStockBlue,
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(30, 30),
+                                  maximumSize: const Size(30, 30),
+                                ),
+                                onPressed: () => _add(product, 1),
+                                icon: const Icon(Icons.add_rounded, size: 19),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 3, 10, 8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: () => setState(() => _mobileDestination = 2),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFFDCE5EF)),
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0A123B70),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.shopping_bag_outlined,
+                    color: kStockBlue,
+                    size: 21,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Cart (${_cart.length})',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: MjasiColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'TZS ${formatMoney(_total)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: kStockNavy,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  const Icon(Icons.chevron_right_rounded, color: kStockBlue),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _scanPane() {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       child: StockCard(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(18),
+        borderColor: const Color(0xFFDCE5F2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.point_of_sale_rounded,
+                    color: Color(0xFF123B70),
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'stk_scan'.tr,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF102D52),
+                        ),
+                      ),
+                      Text(
+                        'pos_code_hint'.tr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blueGrey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!BusinessAccessService.isBarBartender)
+                  IconButton(
+                    tooltip: 'pos_list_history'.tr,
+                    onPressed: _showListHistory,
+                    icon: const Icon(Icons.history_rounded),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (!kIsWeb && _cameraOn && _scanner != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: SizedBox(
+                  height: 164,
+                  width: double.infinity,
+                  child: MobileScanner(
+                    controller: _scanner!,
+                    placeholderBuilder: (context) => ScannerLoadingFallback(
+                      compact: true,
+                      onPhoto: () => _scanPhoto(ImageSource.camera),
+                      onUpload: () => _scanPhoto(ImageSource.gallery),
+                      onRetry: _retryPosCamera,
+                    ),
+                    onDetect: (capture) {
+                      for (final barcode in capture.barcodes) {
+                        final value = barcode.rawValue;
+                        if (value != null && value.isNotEmpty) {
+                          _onCode(value);
+                          return;
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ),
             if (BusinessAccessService.isBarBartender) ...[
               Text(
                 'bar_bartender_help'.tr,
@@ -1208,228 +1748,372 @@ class _PosPageState extends State<PosPage> {
               ),
               const SizedBox(height: 10),
             ],
-            if (!kIsWeb && _cameraOn && _scanner != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  height: 200,
-                  width: double.infinity,
-                  child: MobileScanner(
-                    controller: _scanner!,
-                    placeholderBuilder: (context) => ScannerLoadingFallback(
-                      compact: true,
-                      onPhoto: () => _scanPhoto(ImageSource.camera),
-                      onUpload: () => _scanPhoto(ImageSource.gallery),
-                      onRetry: _retryPosCamera,
-                    ),
-                    onDetect: (capture) {
-                      for (final b in capture.barcodes) {
-                        final v = b.rawValue;
-                        if (v != null && v.isNotEmpty) {
-                          _onCode(v);
-                          return;
-                        }
-                      }
-                    },
-                    errorBuilder: (context, error) => Container(
-                      color: Colors.black87,
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'stk_camera_error'.tr,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          const SizedBox(height: 10),
-                          FilledButton.icon(
-                            icon: const Icon(Icons.photo_camera_outlined),
-                            label: Text('stk_scan_take_photo'.tr),
-                            onPressed: () => _scanPhoto(ImageSource.camera),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (!kIsWeb && _cameraOn && _scanner != null)
-              const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _codeCtl,
-                    focusNode: _codeFocus,
-                    autofocus: !cameraScanSupported,
-                    textInputAction: TextInputAction.done,
-                    decoration: stockInput(
-                      'pos_code_hint'.tr,
-                      icon: Icons.qr_code_2,
-                    ),
-                    // USB / Bluetooth scanners type the code then press Enter.
-                    onSubmitted: (v) {
-                      _onCode(v);
-                      _codeCtl.clear();
-                      _codeFocus.requestFocus();
-                    },
-                  ),
-                ),
-                if (cameraScanSupported) ...[
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    style: IconButton.styleFrom(
-                      backgroundColor: _cameraOn ? kStockBad : kStockNavy,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF123B70),
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(48, 48),
+                      minimumSize: const Size.fromHeight(46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    tooltip: _cameraOn ? 'pos_camera_off'.tr : 'stk_scan'.tr,
-                    onPressed: _toggleCamera,
-                    icon: Icon(
-                      _cameraOn ? Icons.videocam_off : Icons.qr_code_scanner,
+                    onPressed: cameraScanSupported
+                        ? _toggleCamera
+                        : _codeFocus.requestFocus,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                    label: Text('stk_scan'.tr),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kStockNavy,
+                      minimumSize: const Size.fromHeight(46),
+                      side: const BorderSide(color: Color(0xFFD4DFEE)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
+                    onPressed: () => _scanPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.image_outlined, size: 18),
+                    label: Text('stk_scan_upload'.tr),
                   ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _scanAction(
-                  tooltip: 'stk_scan_take_photo'.tr,
-                  icon: Icons.photo_camera_outlined,
-                  onPressed: () => _scanPhoto(ImageSource.camera),
-                ),
-                _scanAction(
-                  tooltip: 'stk_scan_upload'.tr,
-                  icon: Icons.image_outlined,
-                  onPressed: () => _scanPhoto(ImageSource.gallery),
-                ),
-                if (!kIsWeb && _cameraOn && _scanner != null)
-                  _scanAction(
-                    tooltip: 'stk_camera_switch'.tr,
-                    icon: Icons.cameraswitch_outlined,
-                    onPressed: () => _scanner!.switchCamera(),
-                  ),
-                _scanAction(
-                  tooltip: 'stk_products'.tr,
-                  icon: Icons.search_rounded,
-                  onPressed: _browse,
                 ),
               ],
             ),
+            const SizedBox(height: 11),
+            TextField(
+              controller: _codeCtl,
+              focusNode: _codeFocus,
+              autofocus: !cameraScanSupported,
+              textInputAction: TextInputAction.done,
+              decoration:
+                  stockInput(
+                    'pos_code_hint'.tr,
+                    icon: Icons.search_rounded,
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      tooltip: 'stk_products'.tr,
+                      onPressed: _browse,
+                      icon: const Icon(Icons.inventory_2_outlined),
+                    ),
+                  ),
+              // USB / Bluetooth scanners type the code then press Enter.
+              onSubmitted: (v) {
+                _onCode(v);
+                _codeCtl.clear();
+                _codeFocus.requestFocus();
+              },
+              onChanged: (value) => setState(() => _catalogQuery = value),
+            ),
+            if (!kIsWeb && _cameraOn && _scanner != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _scanner!.switchCamera(),
+                  icon: const Icon(Icons.cameraswitch_outlined, size: 17),
+                  label: Text('stk_camera_switch'.tr),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _scanAction({
-    required String tooltip,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return IconButton.outlined(
-      tooltip: tooltip,
-      style: IconButton.styleFrom(
-        foregroundColor: kStockNavy,
-        side: const BorderSide(color: MjasiColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      onPressed: onPressed,
-      icon: Icon(icon),
+  Widget _catalogPane() {
+    final categories =
+        _products
+            .where(
+              (product) =>
+                  product.active &&
+                  product.category.trim().isNotEmpty &&
+                  product.category.trim().toLowerCase() != 'others',
+            )
+            .map((product) => product.category.trim())
+            .toSet()
+            .toList()
+          ..sort();
+    final query = _catalogQuery.trim().toLowerCase();
+    final products = _products.where((product) {
+      if (!product.active) return false;
+      if (_catalogCategory.isNotEmpty && product.category != _catalogCategory) {
+        return false;
+      }
+      return query.isEmpty ||
+          product.name.toLowerCase().contains(query) ||
+          product.sku.toLowerCase().contains(query) ||
+          product.barcode.toLowerCase().contains(query);
+    }).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _scanPane(),
+        SizedBox(
+          height: 48,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            scrollDirection: Axis.horizontal,
+            children: [
+              ChoiceChip(
+                label: Text('transactions_all_categories'.tr),
+                selected: _catalogCategory.isEmpty,
+                onSelected: (_) => setState(() => _catalogCategory = ''),
+                selectedColor: const Color(0xFFDCEBFF),
+                side: const BorderSide(color: Color(0xFFD4DFEE)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              for (final category in categories)
+                Padding(
+                  padding: const EdgeInsets.only(left: 7),
+                  child: ChoiceChip(
+                    label: Text(category),
+                    selected: _catalogCategory == category,
+                    onSelected: (_) =>
+                        setState(() => _catalogCategory = category),
+                    selectedColor: const Color(0xFFDCEBFF),
+                    side: const BorderSide(color: Color(0xFFD4DFEE)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 2, 18, 6),
+          child: StockSectionHeading(
+            title: 'stk_products'.tr,
+            subtitle: '${products.length} ${'pos_items'.tr}',
+          ),
+        ),
+        Expanded(
+          child: products.isEmpty
+              ? StockMessage(
+                  icon: Icons.inventory_2_outlined,
+                  text: 'stk_no_products'.tr,
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = (constraints.maxWidth / 185)
+                        .floor()
+                        .clamp(2, 4)
+                        .toInt();
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.96,
+                      ),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final product = products[index];
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _add(product, 1),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0B143454),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: MjasiColors.border),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: ProductImage(
+                                      url: product.imageUrl,
+                                      size: 84,
+                                      radius: 10,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  Text(
+                                    product.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: MjasiColors.textPrimary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'TZS ${formatMoney(product.sellPrice)}',
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      color: MjasiColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: StockStateChip(product: product),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
-  Widget _cartPane() {
+  Widget _cartPane({bool showCatalogWhenEmpty = true}) {
     final availableProducts = _products
         .where((product) => product.active)
         .toList();
-    return Column(
-      children: [
-        Expanded(
-          child: _cart.isEmpty
-              ? availableProducts.isEmpty
-                    ? StockMessage(
-                        icon: Icons.shopping_cart_outlined,
-                        text: 'pos_empty'.tr,
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                        itemCount: availableProducts.length + 1,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
-                              child: Text(
-                                'stk_products'.tr,
-                                style: const TextStyle(
-                                  color: kStockNavy,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            );
-                          }
-                          final product = availableProducts[index - 1];
-                          return StockCard(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                ProductImage(
-                                  url: product.imageUrl,
-                                  size: 44,
-                                  radius: 10,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        product.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      Text(
-                                        'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
-                                        style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 12, 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_outlined,
+                    color: Color(0xFF123B70),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  '${'pos_cart'.tr} (${_cart.length})',
+                  style: const TextStyle(
+                    color: MjasiColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                if (_cart.isNotEmpty)
+                  TextButton(
+                    onPressed: _saving || _listBusy ? null : _reset,
+                    child: Text('pos_clear'.tr),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _cart.isEmpty
+                ? (!showCatalogWhenEmpty || availableProducts.isEmpty)
+                      ? StockMessage(
+                          icon: Icons.shopping_cart_outlined,
+                          text: 'pos_empty'.tr,
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                          itemCount: availableProducts.length + 1,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
+                                child: Text(
+                                  'stk_products'.tr,
+                                  style: const TextStyle(
+                                    color: kStockNavy,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                IconButton.filledTonal(
-                                  onPressed: () => _add(product, 1),
-                                  icon: const Icon(Icons.add),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  itemCount: _cart.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _lineTile(_cart[i]),
-                ),
-        ),
-        _checkoutBar(),
-      ],
+                              );
+                            }
+                            final product = availableProducts[index - 1];
+                            return StockCard(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  ProductImage(
+                                    url: product.imageUrl,
+                                    size: 44,
+                                    radius: 10,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          product.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton.filledTonal(
+                                    onPressed: () => _add(product, 1),
+                                    icon: const Icon(Icons.add),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                    itemCount: _cart.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _lineTile(_cart[i]),
+                  ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: constraints.maxHeight.isFinite
+                  ? constraints.maxHeight * .58
+                  : MediaQuery.sizeOf(context).height * .42,
+            ),
+            child: SingleChildScrollView(child: _checkoutBar()),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1449,11 +2133,12 @@ class _PosPageState extends State<PosPage> {
       ),
       onDismissed: (_) => setState(() => _cart.remove(l)),
       child: StockCard(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+        borderColor: const Color(0xFFE1E9F3),
         child: Row(
           children: [
-            ProductImage(url: p.imageUrl, size: 48, radius: 8),
-            const SizedBox(width: 10),
+            ProductImage(url: p.imageUrl, size: 54, radius: 13),
+            const SizedBox(width: 13),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1473,33 +2158,64 @@ class _PosPageState extends State<PosPage> {
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       color: kStockNavy,
+                      fontSize: 13,
                     ),
                   ),
                 ],
               ),
             ),
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed: () => _setQty(l, l.qty - 1),
-            ),
-            InkWell(
-              onTap: () => _editQty(l),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                child: Text(
-                  formatQty(l.qty),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              decoration: BoxDecoration(
+                color: kStockBg,
+                border: Border.all(color: MjasiColors.border),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: () => _add(p, 1),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Decrease quantity'.tr,
+                    icon: const Icon(Icons.remove_rounded, size: 18),
+                    onPressed: () => _setQty(l, l.qty - 1),
+                  ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _editQty(l),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 7,
+                      ),
+                      child: Text(
+                        formatQty(l.qty),
+                        style: const TextStyle(
+                          color: kStockNavy,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
+                    tooltip: 'Increase quantity'.tr,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    onPressed: () => _add(p, 1),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1513,7 +2229,7 @@ class _PosPageState extends State<PosPage> {
     final isBarWaiter = BusinessAccessService.isBarWaiter;
     final isOrderMode = barModeEnabled && isBarBartender;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFE5E9F2))),
@@ -1555,22 +2271,37 @@ class _PosPageState extends State<PosPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customer,
-                    maxLength: 120,
-                    decoration: stockInput(
-                      'pos_customer'.tr,
-                      icon: Icons.person_outline,
-                    ),
-                  ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(
+                  () => _showCheckoutDetails = !_showCheckoutDetails,
                 ),
-              ],
+                icon: Icon(
+                  _showCheckoutDetails
+                      ? Icons.expand_less_rounded
+                      : Icons.person_add_alt_1_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  _customer.text.trim().isEmpty
+                      ? 'pos_customer'.tr
+                      : _customer.text.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
+            if (_showCheckoutDetails)
+              TextField(
+                controller: _customer,
+                maxLength: 120,
+                decoration: stockInput(
+                  'pos_customer'.tr,
+                  icon: Icons.person_outline,
+                ).copyWith(isDense: true),
+                onChanged: (_) => setState(() {}),
+              ),
             if (!isOrderMode) ...[
               SizedBox(
                 width: double.infinity,
@@ -1588,21 +2319,20 @@ class _PosPageState extends State<PosPage> {
                   onSelectionChanged: (s) => setState(() => _payment = s.first),
                 ),
               ),
-              const SizedBox(height: 10),
               if (!isBarBartender)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
                     onPressed: _cart.isEmpty || _listBusy
                         ? null
                         : _generateList,
                     icon: _listBusy
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.receipt_long_outlined),
+                        : const Icon(Icons.receipt_long_outlined, size: 18),
                     label: Text(
                       _listBusy ? 'pos_list_saving'.tr : 'pos_generate_list'.tr,
                     ),
@@ -1610,48 +2340,57 @@ class _PosPageState extends State<PosPage> {
                 ),
             ],
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final total = Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F6FC),
+                    border: Border.all(color: const Color(0xFFE0E8F1)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        '${_cart.length} ${'pos_items'.tr}',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
+                      const Icon(
+                        Icons.shopping_bag_outlined,
+                        color: kStockBlue,
+                        size: 19,
                       ),
-                      Text(
-                        'TZS ${formatMoney(_total)}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: kStockNavy,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_cart.length} ${'pos_items'.tr}',
+                              style: const TextStyle(
+                                color: MjasiColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              'TZS ${formatMoney(_total)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: kStockNavy,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                if (!kIsWeb && !isOrderMode) ...[
-                  SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _saving || _listBusy || _cart.isEmpty
-                          ? null
-                          : () => _complete(printReceipt: true),
-                      icon: const Icon(Icons.print_outlined),
-                      label: Text('pos_complete_print'.tr),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                SizedBox(
+                );
+                final canComplete = !_saving && !_listBusy && _cart.isNotEmpty;
+                final completeButton = SizedBox(
                   height: 48,
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(backgroundColor: kStockOk),
-                    onPressed: _saving || _listBusy || _cart.isEmpty
+                    onPressed: !canComplete
                         ? null
                         : (isOrderMode ? _submitBarOrder : _complete),
                     icon: _saving
@@ -1668,8 +2407,56 @@ class _PosPageState extends State<PosPage> {
                       isOrderMode ? 'bar_send_order'.tr : 'pos_complete'.tr,
                     ),
                   ),
-                ),
-              ],
+                );
+                final printButton = !kIsWeb && !isOrderMode
+                    ? SizedBox(
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: canComplete
+                              ? () => _complete(printReceipt: true)
+                              : null,
+                          icon: const Icon(Icons.print_outlined),
+                          label: Text('pos_complete_print'.tr),
+                        ),
+                      )
+                    : null;
+
+                if (constraints.maxWidth < 620) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      total,
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          if (printButton != null) ...[
+                            IconButton.outlined(
+                              tooltip: 'pos_complete_print'.tr,
+                              onPressed: canComplete
+                                  ? () => _complete(printReceipt: true)
+                                  : null,
+                              icon: const Icon(Icons.print_outlined),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(child: completeButton),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: total),
+                    if (printButton != null) ...[
+                      printButton,
+                      const SizedBox(width: 8),
+                    ],
+                    completeButton,
+                  ],
+                );
+              },
             ),
           ],
         ),

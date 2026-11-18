@@ -694,8 +694,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const _blue = Color(0xFF0F66DF);
-  static const _green = Color(0xFF0E9F6E);
+  static const _blue = Color(0xFF37CFFF);
+  static const _green = Color(0xFF36D6B0);
   static const _personalBg = Color(0xFFF2FBF6);
   static const _businessBg = Color(0xFFF1F6FF);
   // Windows/Linux use a browser loopback flow that needs a desktop client ID.
@@ -742,9 +742,9 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final bg = switch (_currentPage) {
-      0 => _personalBg,
-      2 => _businessBg,
-      _ => const Color(0xFFEAF2FC),
+      0 => const Color(0xFF071B2A),
+      2 => const Color(0xFF06152E),
+      _ => const Color(0xFF06152E),
     };
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -770,12 +770,12 @@ class _LoginPageState extends State<LoginPage> {
           statusBarIconBrightness: Brightness.dark,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        foregroundColor: Colors.black87,
+        foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
         actions: [
-          const LanguageSwitcher(color: Colors.black87),
+          const LanguageSwitcher(color: Colors.white),
           const SizedBox(width: 8),
         ],
       ),
@@ -799,10 +799,23 @@ class _LoginPageState extends State<LoginPage> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFD5F2E3), Color(0xFFEAF2FC), Color(0xFFB9D0F5)],
+              colors: [Color(0xFF06152E), Color(0xFF0B3B78), Color(0xFF087CA7)],
             ),
           ),
         ),
+      ),
+      Positioned(
+        top: -110,
+        right: -90,
+        child: _welcomeGlow(280, const Color(0xFF25D8FF).withValues(alpha: .16)),
+      ),
+      Positioned(
+        bottom: -130,
+        left: -100,
+        child: _welcomeGlow(300, const Color(0xFF4169FF).withValues(alpha: .2)),
+      ),
+      Positioned.fill(
+        child: IgnorePointer(child: CustomPaint(painter: _WelcomeGridPainter())),
       ),
       SafeArea(
         child: Center(
@@ -822,14 +835,14 @@ class _LoginPageState extends State<LoginPage> {
                         width: 84,
                         height: 84,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFE500),
+                          color: Colors.white.withValues(alpha: .12),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
+                          border: Border.all(color: const Color(0xFF7DEBFF), width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: .25),
-                              blurRadius: 22,
-                              offset: const Offset(0, 8),
+                              color: const Color(0xFF21CFFF).withValues(alpha: .35),
+                              blurRadius: 28,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
@@ -846,32 +859,29 @@ class _LoginPageState extends State<LoginPage> {
                       'MJASI POS',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xFF0B1F3A),
-                        fontSize: 26,
+                        color: Colors.white,
+                        fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
+                        letterSpacing: 2.2,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'SMART BUSINESS, POWERED BY AI',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF8FEAFF), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 2),
+                    ),
+                    const SizedBox(height: 22),
                     Text(
                       'login_choose_type'.tr,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: Color(0xFF0B1F3A),
+                        color: Colors.white,
                         fontSize: 19,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 22),
-                    _welcomeModeCard(
-                      icon: Icons.person_outline_rounded,
-                      label: 'mode_personal'.tr,
-                      description: 'login_personal_desc'.tr,
-                      accent: _green,
-                      arrowOnLeft: true,
-                      onPressed: () => _goToPage(0),
-                    ),
-                    const SizedBox(height: 12),
                     _welcomeModeCard(
                       icon: Icons.storefront_outlined,
                       label: 'mode_business'.tr,
@@ -880,6 +890,15 @@ class _LoginPageState extends State<LoginPage> {
                       arrowOnLeft: false,
                       onPressed: () => _goToPage(2),
                     ),
+                    const SizedBox(height: 12),
+                    _welcomeModeCard(
+                      icon: Icons.person_outline_rounded,
+                      label: 'mode_personal'.tr,
+                      description: 'login_personal_desc'.tr,
+                      accent: _green,
+                      arrowOnLeft: true,
+                      onPressed: () => _goToPage(0),
+                    ),
                     const SizedBox(height: 14),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -887,25 +906,41 @@ class _LoginPageState extends State<LoginPage> {
                         const Icon(
                           Icons.swipe_rounded,
                           size: 16,
-                          color: Colors.black54,
+                          color: Color(0xFFB9D8F2),
                         ),
                         const SizedBox(width: 6),
                         Text(
                           'login_swipe_both'.tr,
                           style: const TextStyle(
-                            color: Colors.black54,
+                            color: Color(0xFFB9D8F2),
                             fontSize: 12.5,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    TextButton(
-                      onPressed: () => Get.toNamed(AppRoutes.register),
-                      style: TextButton.styleFrom(foregroundColor: _blue),
-                      child: Text(
-                        'login_create_account'.tr,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                    SizedBox(
+                      height: 54,
+                      child: FilledButton.icon(
+                        onPressed: () => Get.toNamed(AppRoutes.register),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: Text(
+                          'login_create_account'.tr,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF37CFFF),
+                          foregroundColor: Colors.white,
+                          elevation: 8,
+                          shadowColor: const Color(0xFF37CFFF).withValues(alpha: .4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -916,6 +951,15 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     ],
+  );
+
+  Widget _welcomeGlow(double size, Color color) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      boxShadow: [BoxShadow(color: color, blurRadius: 90, spreadRadius: 30)],
+    ),
   );
 
   Widget _welcomeModeCard({
@@ -934,9 +978,11 @@ class _LoginPageState extends State<LoginPage> {
       color: accent,
     );
     return Material(
-      color: Colors.white,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: .3),
+      color: arrowOnLeft
+          ? const Color(0xFF123B42).withValues(alpha: .97)
+          : const Color(0xFF102C50).withValues(alpha: .97),
+      elevation: 8,
+      shadowColor: Colors.black.withValues(alpha: .4),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -950,8 +996,9 @@ class _LoginPageState extends State<LoginPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: .12),
+                  color: accent.withValues(alpha: .16),
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accent.withValues(alpha: .35)),
                 ),
                 child: Icon(icon, color: accent, size: 26),
               ),
@@ -963,8 +1010,8 @@ class _LoginPageState extends State<LoginPage> {
                     Text(
                       label,
                       style: const TextStyle(
-                        color: Color(0xFF0B1F3A),
-                        fontSize: 16,
+                        color: Colors.white,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -972,7 +1019,7 @@ class _LoginPageState extends State<LoginPage> {
                     Text(
                       description,
                       style: const TextStyle(
-                        color: Colors.black54,
+                        color: const Color(0xFFB9D0E8),
                         fontSize: 12.5,
                         height: 1.35,
                       ),
@@ -994,18 +1041,20 @@ class _LoginPageState extends State<LoginPage> {
     Color accent = _blue,
   }) => InputDecoration(
     labelText: label,
-    prefixIcon: Icon(icon, size: 20),
+    floatingLabelStyle: TextStyle(color: accent),
+    prefixIcon: Icon(icon, size: 20, color: const Color(0xFF9FC7E8)),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: const Color(0xFF102C50),
+    labelStyle: const TextStyle(color: Color(0xFFC0D7EA)),
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: .16)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: .16)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -1033,13 +1082,14 @@ class _LoginPageState extends State<LoginPage> {
                     width: 64,
                     height: 64,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFE500),
+                      color: Colors.white.withValues(alpha: .12),
                       shape: BoxShape.circle,
+                      border: Border.all(color: accent.withValues(alpha: .8), width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: accent.withValues(alpha: .25),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
+                          color: accent.withValues(alpha: .3),
+                          blurRadius: 24,
+                          spreadRadius: 2,
                         ),
                       ],
                     ),
@@ -1053,10 +1103,10 @@ class _LoginPageState extends State<LoginPage> {
                   'MJASI POS',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 25,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: .6,
-                    color: Color(0xFF0B1F3A),
+                    letterSpacing: 1.6,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1067,8 +1117,9 @@ class _LoginPageState extends State<LoginPage> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: .12),
+                      color: const Color(0xFF102C50),
                       borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: accent.withValues(alpha: .4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1084,7 +1135,7 @@ class _LoginPageState extends State<LoginPage> {
                         Text(
                           isBusiness ? 'mode_business'.tr : 'mode_personal'.tr,
                           style: TextStyle(
-                            color: accent,
+                            color: Colors.white,
                             fontWeight: FontWeight.w700,
                             fontSize: 13.5,
                           ),
@@ -1102,31 +1153,52 @@ class _LoginPageState extends State<LoginPage> {
                   style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.35,
-                    color: Colors.black54,
+                    color: Color(0xFFD0E5F8),
                   ),
                 ),
                 if (isBusiness) ...[
                   const SizedBox(height: 14),
-                  Obx(
-                    () => SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      segments: [
-                        ButtonSegment(
-                          value: false,
-                          label: Text('login_as_owner'.tr),
-                          icon: const Icon(Icons.business_outlined, size: 18),
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      segmentedButtonTheme: SegmentedButtonThemeData(
+                        style: ButtonStyle(
+                          foregroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.selected)
+                                ? const Color(0xFF06152E)
+                                : const Color(0xFFE2F0FF),
+                          ),
+                          backgroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.selected)
+                                ? accent
+                                : const Color(0xFF102C50),
+                          ),
+                          side: WidgetStateProperty.all(
+                            BorderSide(color: accent.withValues(alpha: .45)),
+                          ),
                         ),
-                        ButtonSegment(
-                          value: true,
-                          label: Text('login_as_staff'.tr),
-                          icon: const Icon(Icons.badge_outlined, size: 18),
-                        ),
-                      ],
-                      selected: {controller.isStaffLogin.value},
-                      onSelectionChanged: controller.isLoading.value
-                          ? null
-                          : (selection) =>
-                                controller.setStaffLogin(selection.first),
+                      ),
+                    ),
+                    child: Obx(
+                      () => SegmentedButton<bool>(
+                        showSelectedIcon: false,
+                        segments: [
+                          ButtonSegment(
+                            value: false,
+                            label: Text('login_as_owner'.tr),
+                            icon: const Icon(Icons.business_outlined, size: 18),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text('login_as_staff'.tr),
+                            icon: const Icon(Icons.badge_outlined, size: 18),
+                          ),
+                        ],
+                        selected: {controller.isStaffLogin.value},
+                        onSelectionChanged: controller.isLoading.value
+                            ? null
+                            : (selection) =>
+                                  controller.setStaffLogin(selection.first),
+                      ),
                     ),
                   ),
                   Obx(
@@ -1139,7 +1211,7 @@ class _LoginPageState extends State<LoginPage> {
                               style: const TextStyle(
                                 fontSize: 11.5,
                                 height: 1.3,
-                                color: Color(0xFF0E5962),
+                                color: Color(0xFF8FEAFF),
                               ),
                             ),
                           )
@@ -1228,12 +1300,11 @@ class _LoginPageState extends State<LoginPage> {
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isBusiness
-                          ? const Color(0xFFFFE500)
-                          : _green,
-                      foregroundColor: isBusiness
-                          ? Colors.black87
-                          : Colors.white,
-                      elevation: 0,
+                          ? const Color(0xFF37CFFF)
+                          : const Color(0xFF36D6B0),
+                      foregroundColor: const Color(0xFF06152E),
+                      elevation: 6,
+                      shadowColor: accent.withValues(alpha: .3),
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -1245,7 +1316,7 @@ class _LoginPageState extends State<LoginPage> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.black87,
+                              color: Colors.white,
                             ),
                           )
                         : Text(
@@ -1282,34 +1353,45 @@ class _LoginPageState extends State<LoginPage> {
                       label: Text(
                         'login_google'.tr,
                         style: const TextStyle(
-                          color: Colors.black87,
+                          color: const Color(0xFFE2F0FF),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   );
                 }),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () => Get.toNamed(AppRoutes.register),
-                      child: Text('login_create_account'.tr),
-                    ),
-                    const Text('â€¢', style: TextStyle(color: Colors.black38)),
-                    TextButton.icon(
-                      onPressed: () => _goToPage(1),
-                      icon: Icon(
-                        isBusiness
-                            ? Icons.swipe_left_rounded
-                            : Icons.swipe_right_rounded,
-                        size: 18,
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Get.toNamed(AppRoutes.register),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 19),
+                    label: Text('login_create_account'.tr),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withValues(alpha: .07),
+                      side: BorderSide(color: accent.withValues(alpha: .8)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      label: Text('login_change_mode'.tr),
+                      textStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-                Wrap(
+                TextButton.icon(
+                  onPressed: () => _goToPage(1),
+                  icon: Icon(
+                    isBusiness
+                        ? Icons.swipe_left_rounded
+                        : Icons.swipe_right_rounded,
+                    size: 18,
+                  ),
+                  label: Text('login_change_mode'.tr),
+                ),                Wrap(
                   alignment: WrapAlignment.center,
                   children: [
                     TextButton(
@@ -1341,4 +1423,23 @@ class _LoginPageState extends State<LoginPage> {
       ],
     );
   }
+}
+
+class _WelcomeGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF8FEAFF).withValues(alpha: .08)
+      ..strokeWidth = 1;
+    const gap = 34.0;
+    for (double x = 0; x <= size.width; x += gap) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y <= size.height; y += gap) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

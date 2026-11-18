@@ -87,11 +87,44 @@ class TransactionService {
     if (!BusinessAccessService.can('transactions', 'delete')) {
       throw StateError('You do not have permission to delete transactions.');
     }
-    await getCollectionRef().doc(id).delete();
+    await getCollectionRef().doc(id).update({
+      'deletedAt': Timestamp.fromDate(DateTime.now()),
+    });
     await NotificationService.notifyOwner(
       action: 'transaction',
       summary: 'deleted a transaction',
     );
+  }
+
+  static Future<void> restoreTransaction(String id) async {
+    if (!BusinessAccessService.can('transactions', 'delete')) {
+      throw StateError('You do not have permission to restore transactions.');
+    }
+    await getCollectionRef().doc(id).update({'deletedAt': FieldValue.delete()});
+  }
+
+  static Future<List<TransactionModel>> getDeletedTransactions() async {
+    final snap = await getCollectionRef()
+        .where('deletedAt', isNull: false)
+        .orderBy('deletedAt', descending: true)
+        .get();
+    final cutoff = DateTime.now().subtract(const Duration(days: 30));
+    final expired = <String>[];
+    final active = <TransactionModel>[];
+    for (final doc in snap.docs) {
+      final transaction = doc.data();
+      final deletedAt = transaction.deletedAt;
+      if (deletedAt == null) continue;
+      if (deletedAt.isBefore(cutoff)) {
+        expired.add(doc.id);
+      } else {
+        active.add(transaction);
+      }
+    }
+    for (final id in expired) {
+      await getCollectionRef().doc(id).delete();
+    }
+    return active;
   }
 
   static Future<QuerySnapshot<TransactionModel>> getTransactions({
@@ -107,7 +140,6 @@ class TransactionService {
       'date',
       descending: true,
     );
-
     if (startDate != null) {
       query = query.where('date', isGreaterThanOrEqualTo: startDate);
     }
@@ -143,6 +175,7 @@ class TransactionService {
     return snapshot.docs.fold<double>(0, (total, document) {
       final transaction = document.data();
       if (transaction.type != TransactionType.expense ||
+          transaction.deletedAt != null ||
           document.id == excludeTransactionId) {
         return total;
       }
@@ -158,7 +191,6 @@ class TransactionService {
   }) async {
     final effectiveShopNickname = _shopFilter(shopNickname);
     Query<TransactionModel> query = getCollectionRef();
-
     // Apply date filters if they exist
     if (startDate != null) {
       query = query.where('date', isGreaterThanOrEqualTo: startDate);
@@ -173,35 +205,19 @@ class TransactionService {
       query = query.where('category', isEqualTo: category);
     }
 
-    // Aggregation queries are not supported on Windows desktop, so fall back
-    // to summing the documents client-side.
-    try {
-      final incomeAggregateSnapshot = await query
-          .where('type', isEqualTo: 'income')
-          .aggregate(sum('amount'))
-          .get();
-      final expenseAggregateSnapshot = await query
-          .where('type', isEqualTo: 'expense')
-          .aggregate(sum('amount'))
-          .get();
-      return {
-        'income': incomeAggregateSnapshot.getSum('amount') ?? 0.0,
-        'expense': expenseAggregateSnapshot.getSum('amount') ?? 0.0,
-      };
-    } catch (_) {
-      var income = 0.0;
-      var expense = 0.0;
-      final snap = await query.get();
-      for (final doc in snap.docs) {
-        final t = doc.data();
-        if (t.type == TransactionType.income) {
-          income += t.amount;
-        } else {
-          expense += t.amount;
-        }
+    var income = 0.0;
+    var expense = 0.0;
+    final snap = await query.get();
+    for (final doc in snap.docs) {
+      final t = doc.data();
+      if (t.deletedAt != null) continue;
+      if (t.type == TransactionType.income) {
+        income += t.amount;
+      } else {
+        expense += t.amount;
       }
-      return {'income': income, 'expense': expense};
     }
+    return {'income': income, 'expense': expense};
   }
 
   /// Checks if a category is currently used by any transaction.
@@ -211,7 +227,7 @@ class TransactionService {
           .where('category', isEqualTo: categoryName)
           .limit(1);
       final snapshot = await query.get();
-      return snapshot.docs.isNotEmpty;
+      return snapshot.docs.any((doc) => doc.data().deletedAt == null);
     } catch (e) {
       // On error, assume it's in use to be safe.
       return true;

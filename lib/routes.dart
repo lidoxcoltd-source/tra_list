@@ -56,6 +56,7 @@ import 'package:tra_list/CreateAccountPage.dart';
 import 'invoice/InvoicePage.dart';
 import 'invoice/InvoicesPage.dart';
 import 'invoice/transactions_page.dart';
+import 'invoice/deleted_transactions_page.dart';
 import 'invoice/quotation_page.dart';
 import 'package:tra_list/invoice/document_shares_page.dart';
 import 'package:tra_list/invoice/shared_document_page.dart';
@@ -160,6 +161,7 @@ class AppRoutes {
   static const String documentShares = '/document-shares';
   static const String sharedDocument = '/shared-document/:token';
   static const String transactions = '/transactions';
+  static const String deletedTransactions = '/deleted-transactions';
   static const String addTransaction = '/AddTransactionPage';
   static const String chat = '/chat';
   static const String chatRoom = '/chat/:id';
@@ -398,6 +400,12 @@ class AppRoutes {
     GetPage(
       name: transactions,
       page: () => const TransactionsPage(),
+      middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+      transition: Transition.rightToLeft,
+    ),
+    GetPage(
+      name: deletedTransactions,
+      page: () => const DeletedTransactionsPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
       transition: Transition.rightToLeft,
     ),

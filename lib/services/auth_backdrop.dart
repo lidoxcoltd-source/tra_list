@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
 /// Gradient background shared by the login and registration pages.
-/// Personal uses soft green waves, Business uses blue with a fine texture.
 class AuthBackdrop extends StatelessWidget {
   const AuthBackdrop({super.key, required this.isBusiness});
 
   final bool isBusiness;
 
-  static const personalAccent = Color(0xFF0E9F6E);
-  static const businessAccent = Color(0xFF0F66DF);
+  static const personalAccent = Color(0xFF36D6B0);
+  static const businessAccent = Color(0xFF37CFFF);
 
   @override
   Widget build(BuildContext context) {
@@ -20,12 +19,12 @@ class AuthBackdrop extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isBusiness
-              ? const [Color(0xFFF1F6FF), Color(0xFFD3E2FA), Color(0xFFB9D0F5)]
-              : const [Color(0xFFF2FBF6), Color(0xFFD5F2E3), Color(0xFFB4E6CC)],
+              ? const [Color(0xFF06152E), Color(0xFF0B3B78), Color(0xFF087CA7)]
+              : const [Color(0xFF071B2A), Color(0xFF0A4A5B), Color(0xFF087C78)],
         ),
       ),
       child: CustomPaint(
-        painter: isBusiness ? _TexturePainter(accent) : _WavePainter(accent),
+        painter: _TexturePainter(accent),
         size: Size.infinite,
       ),
     );

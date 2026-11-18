@@ -31,6 +31,7 @@ class TransactionsController extends GetxController {
   final RxList<TransactionModel> allFetchedTransactions =
       <TransactionModel>[].obs;
   final RxSet<String> pendingTransactionIds = <String>{}.obs;
+  final RxSet<String> selectedTransactionIds = <String>{}.obs;
   final RxList<TransactionModel> transactions = <TransactionModel>[].obs;
   DocumentSnapshot? lastDoc;
   final RxBool loadingMore = false.obs;
@@ -316,7 +317,10 @@ class TransactionsController extends GetxController {
       hasMore.value = false;
     }
 
-    final newTransactions = snap.docs.map((d) => d.data()).toList();
+    final newTransactions = snap.docs
+        .map((d) => d.data())
+        .where((transaction) => transaction.deletedAt == null)
+        .toList();
 
     if (isFirstPage) {
       allFetchedTransactions.clear();
@@ -601,7 +605,7 @@ class TransactionsController extends GetxController {
             if (canDelete)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
-                title: Text('transactions_delete_title'.tr),
+                title: Text('transactions_mark_deleted'.tr),
                 onTap: () async {
                   Get.back();
                   final confirm = await _confirmDeleteDialog();
@@ -623,6 +627,66 @@ class TransactionsController extends GetxController {
       await deleteTransaction(t);
     }
     return confirm;
+  }
+
+  bool get isSelectingTransactions => selectedTransactionIds.isNotEmpty;
+
+  bool isTransactionSelected(TransactionModel transaction) =>
+      transaction.id != null && selectedTransactionIds.contains(transaction.id);
+
+  void startSelectingTransaction(TransactionModel transaction) {
+    if (!BusinessAccessService.can('transactions', 'delete') ||
+        transaction.id == null) {
+      return;
+    }
+    selectedTransactionIds.add(transaction.id!);
+  }
+
+  void toggleTransactionSelection(TransactionModel transaction) {
+    final id = transaction.id;
+    if (id == null) return;
+    if (selectedTransactionIds.contains(id)) {
+      selectedTransactionIds.remove(id);
+    } else {
+      selectedTransactionIds.add(id);
+    }
+  }
+
+  void clearTransactionSelection() => selectedTransactionIds.clear();
+
+  Future<void> confirmDeleteSelected() async {
+    if (!BusinessAccessService.can('transactions', 'delete')) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return;
+    }
+    final selected = allFetchedTransactions
+        .where((transaction) =>
+            transaction.id != null &&
+            selectedTransactionIds.contains(transaction.id))
+        .toList();
+    if (selected.isEmpty) {
+      clearTransactionSelection();
+      return;
+    }
+    final confirmed = await _confirmDeleteDialog(count: selected.length);
+    if (confirmed != true) return;
+    try {
+      for (final transaction in selected) {
+        final id = transaction.id!;
+        final removedOffline = await OfflineService.deletePendingTransaction(id);
+        if (removedOffline) {
+          pendingTransactionIds.remove(id);
+        } else {
+          await TransactionService.deleteTransaction(id);
+        }
+      }
+      clearTransactionSelection();
+      await fetchFirstPage();
+      Get.snackbar('transactions_deleted_success'.tr, '');
+    } catch (error) {
+      await fetchFirstPage();
+      Get.snackbar('error'.tr, 'Failed to mark selected transactions: $error');
+    }
   }
 
   Future<void> deleteTransaction(TransactionModel t) async {
@@ -671,7 +735,7 @@ class TransactionsController extends GetxController {
         duration: const Duration(seconds: 5),
       ),
     );
-    // After the snackbar duration, if the user didn't undo, perform deletion.
+    // After the snackbar duration, if the user didn't undo, mark it deleted.
     Future.delayed(const Duration(seconds: 5), () async {
       if (!undoPressed) {
         try {
@@ -692,11 +756,13 @@ class TransactionsController extends GetxController {
     });
   }
 
-  Future<bool?> _confirmDeleteDialog() async {
+  Future<bool?> _confirmDeleteDialog({int count = 1}) async {
     return await Get.dialog<bool>(
       AlertDialog(
-        title: Text('transactions_delete_title'.tr),
-        content: Text('transactions_delete_confirm'.tr),
+        title: Text('transactions_mark_deleted'.tr),
+        content: Text(
+          'transactions_delete_confirm'.trParams({'count': '$count'}),
+        ),
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
@@ -704,7 +770,10 @@ class TransactionsController extends GetxController {
           ),
           TextButton(
             onPressed: () => Get.back(result: true),
-            child: Text('delete'.tr, style: const TextStyle(color: Colors.red)),
+            child: Text(
+              'transactions_mark_deleted'.tr,
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),

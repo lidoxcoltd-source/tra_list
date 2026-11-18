@@ -1566,10 +1566,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final accent = isExpense ? MjasiColors.error : MjasiColors.success;
 
     // Dismissible for swipe-to-delete with undo
-    return Dismissible(
+    return Obx(() {
+      final selecting = controller.isSelectingTransactions;
+      final selected = controller.isTransactionSelected(t);
+      return Dismissible(
       // Keep Dismissible for swipe actions
       key: ValueKey(t.id ?? index),
-      direction: DismissDirection.horizontal,
+      direction: selecting ? DismissDirection.none : DismissDirection.horizontal,
       background: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: 20,
@@ -1614,11 +1617,25 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => controller.showActions(t),
+          onTap: () {
+            if (controller.isSelectingTransactions) {
+              controller.toggleTransactionSelection(t);
+            } else {
+              controller.showActions(t);
+            }
+          },
+          onLongPress: () => controller.startSelectingTransaction(t),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
+                if (controller.isSelectingTransactions) ...[
+                  Icon(
+                    selected ? Icons.check_circle : Icons.circle_outlined,
+                    color: selected ? MjasiColors.primaryBlue : MjasiColors.textSecondary,
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 // REDESIGN: Avatar with icon
                 Container(
                   height: 48,
@@ -1755,7 +1772,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
           ),
         ),
       ),
-    );
+      );
+    });
   }
 
   Widget _buildSliverAppBar(BuildContext context) {
@@ -1849,26 +1867,32 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   List<Widget> _buildAppBarActions() {
-    return [
-      // Show a compact clear action in the toolbar when single-day filter is active
-      if (controller.filter.value == FilterPeriod.singleDay &&
-          !controller.isSearching.value)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-          child: TextButton.icon(
-            onPressed: controller.clearSingleDayFilter,
-            icon: const Icon(Icons.close, color: Colors.white, size: 18),
-            label: Text(
-              'clear'.tr,
+    if (controller.isSelectingTransactions) {
+      return [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              '${controller.selectedTransactionIds.length}',
               style: const TextStyle(color: Colors.white),
-            ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              minimumSize: const Size(0, 0),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
         ),
+        IconButton(
+          tooltip: 'transactions_mark_selected'.tr,
+          onPressed: controller.selectedTransactionIds.isEmpty
+              ? null
+              : controller.confirmDeleteSelected,
+          icon: const Icon(Icons.delete_outline),
+        ),
+        IconButton(
+          tooltip: 'cancel'.tr,
+          onPressed: controller.clearTransactionSelection,
+          icon: const Icon(Icons.close),
+        ),
+      ];
+    }
+    return [
       IconButton(
         tooltip: 'search'.tr,
         onPressed: controller.toggleSearch,
@@ -1880,83 +1904,23 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ),
       ),
       if (!controller.isSearching.value)
-        PopupMenuButton<SortOption>(
-          tooltip: 'Sort by'.tr,
-          icon: const Icon(Icons.sort),
-          onSelected: controller.setSortOption,
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              enabled: false,
-              child: Text(
-                'Sort by'.tr,
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            CheckedPopupMenuItem(
-              value: SortOption.dateDesc,
-              checked: controller.sortOption.value == SortOption.dateDesc,
-              child: Text('Date (Newest First)'.tr),
-            ),
-            CheckedPopupMenuItem(
-              value: SortOption.dateAsc,
-              checked: controller.sortOption.value == SortOption.dateAsc,
-              child: Text('Date (Oldest First)'.tr),
-            ),
-            CheckedPopupMenuItem(
-              value: SortOption.amountDesc,
-              checked: controller.sortOption.value == SortOption.amountDesc,
-              child: Text('Amount (Highest First)'.tr),
-            ),
-            CheckedPopupMenuItem(
-              value: SortOption.amountAsc,
-              checked: controller.sortOption.value == SortOption.amountAsc,
-              child: Text('Amount (Lowest First)'.tr),
-            ),
-          ],
-        ),
-      if (!controller.isSearching.value)
-        IconButton(
-          tooltip: 'transactions_export_pdf'.tr,
-          onPressed:
-              controller.transactions.isEmpty || controller.isPdfBusy.value
-              ? null
-              : controller.exportPdf,
-          icon: controller.isPdfBusy.value
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ), // No tr needed for widgets
-                )
-              : const Icon(Icons.picture_as_pdf_outlined),
-        ),
-      if (!controller.isSearching.value)
-        IconButton(
-          tooltip: 'Export as Excel'.tr,
-          onPressed:
-              controller.transactions.isEmpty || controller.isExcelBusy.value
-              ? null
-              : controller.exportExcel,
-          icon: controller.isExcelBusy.value
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ) // No tr needed for widgets
-              : const Icon(Icons.table_chart_outlined),
-        ),
-      if (!controller.isSearching.value)
         PopupMenuButton<String>(
+          tooltip: 'More options'.tr,
+          icon: const Icon(Icons.more_vert),
           onSelected: (v) {
             if (v == 'refresh') controller.fetchFirstPage();
             if (v == 'clear_filters') controller.setFilter(FilterPeriod.all);
             if (v == 'export_excel') controller.exportExcel();
             if (v == 'export_pdf') controller.exportPdf();
+            if (v == 'sort_date_desc') controller.setSortOption(SortOption.dateDesc);
+            if (v == 'sort_date_asc') controller.setSortOption(SortOption.dateAsc);
+            if (v == 'sort_amount_desc') controller.setSortOption(SortOption.amountDesc);
+            if (v == 'sort_amount_asc') controller.setSortOption(SortOption.amountAsc);
+            if (v == 'clear_day') controller.clearSingleDayFilter();
+            if (v == 'deleted' &&
+                BusinessAccessService.can('transactions', 'delete')) {
+              Get.toNamed(AppRoutes.deletedTransactions);
+            }
             if (v == 'analytics') {
               Get.to(() => const AnalyticsPage());
             }
@@ -1967,6 +1931,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
               value: 'clear_filters',
               child: Text('transactions_clear_filters'.tr),
             ),
+            if (controller.filter.value == FilterPeriod.singleDay)
+              PopupMenuItem(value: 'clear_day', child: Text('clear'.tr)),
+            const PopupMenuDivider(),
+            PopupMenuItem(value: 'sort_date_desc', child: Text('Date (Newest First)'.tr)),
+            PopupMenuItem(value: 'sort_date_asc', child: Text('Date (Oldest First)'.tr)),
+            PopupMenuItem(value: 'sort_amount_desc', child: Text('Amount (Highest First)'.tr)),
+            PopupMenuItem(value: 'sort_amount_asc', child: Text('Amount (Lowest First)'.tr)),
             const PopupMenuDivider(),
             PopupMenuItem(
               value: 'export_pdf',
@@ -2001,6 +1972,17 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 ],
               ),
             ),
+            if (BusinessAccessService.can('transactions', 'delete'))
+              PopupMenuItem(
+                value: 'deleted',
+                child: Row(
+                  children: [
+                    const Icon(Icons.delete_outline, size: 20),
+                    const SizedBox(width: 8),
+                    Text('deleted_transactions'.tr),
+                  ],
+                ),
+              ),
           ],
         ),
     ];

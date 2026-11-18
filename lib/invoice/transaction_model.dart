@@ -11,6 +11,7 @@ class TransactionModel {
   final String category;
   final String uid;
   final String shopNickname;
+  final DateTime? deletedAt;
 
   TransactionModel({
     this.id,
@@ -21,6 +22,7 @@ class TransactionModel {
     required this.category,
     required this.uid,
     this.shopNickname = '',
+    this.deletedAt,
   });
 
   factory TransactionModel.fromFirestore(DocumentSnapshot doc) {
@@ -36,6 +38,7 @@ class TransactionModel {
       category: data['category'] ?? 'Uncategorized',
       uid: data['uid'] ?? '',
       shopNickname: data['shopNickname']?.toString() ?? '',
+      deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -55,6 +58,9 @@ class TransactionModel {
       category: json['category'] ?? 'Uncategorized',
       uid: json['uid'] ?? '',
       shopNickname: json['shopNickname']?.toString() ?? '',
+      deletedAt: json['deletedAt'] is String
+          ? DateTime.tryParse(json['deletedAt'] as String)
+          : (json['deletedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -67,6 +73,7 @@ class TransactionModel {
       'category': category,
       'uid': uid,
       'shopNickname': shopNickname,
+      'deletedAt': deletedAt == null ? null : Timestamp.fromDate(deletedAt!),
     };
   }
 
@@ -81,6 +88,7 @@ class TransactionModel {
       'category': category,
       'uid': uid,
       'shopNickname': shopNickname,
+      'deletedAt': deletedAt?.toIso8601String(),
     };
   }
 }

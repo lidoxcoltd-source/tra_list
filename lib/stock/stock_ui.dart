@@ -14,8 +14,7 @@ const kStockOk = MjasiColors.success;
 const kStockWarn = MjasiColors.warning;
 const kStockBad = MjasiColors.error;
 
-const double _stockRadius = 14;
-const double _stockPagePadding = 16;
+const double _stockRadius = 16;
 
 String fmtText(String key, Map<String, String> values) {
   var text = key.tr;
@@ -86,56 +85,75 @@ class StockScaffold extends StatelessWidget {
     required this.title,
     required this.body,
     this.actions,
+    this.leading,
+    this.centerTitle = false,
     this.fab,
     this.bottom,
-    this.maxWidth = 1100,
+    this.bottomNavigationBar,
+    this.maxWidth = 1240,
   });
 
   final String title;
   final Widget body;
   final List<Widget>? actions;
+  final Widget? leading;
+  final bool centerTitle;
   final Widget? fab;
   final PreferredSizeWidget? bottom;
+  final Widget? bottomNavigationBar;
   final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 720;
     return Scaffold(
       backgroundColor: kStockBg,
       appBar: AppBar(
-        toolbarHeight: 58,
+        toolbarHeight: wide ? 66 : 58,
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: kStockNavy,
         foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        titleSpacing: 4,
+        centerTitle: centerTitle,
+        titleSpacing: wide ? 8 : 4,
         title: Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 18,
+          style: TextStyle(
+            fontSize: wide ? 20 : 18,
             fontWeight: FontWeight.w700,
             letterSpacing: -.3,
           ),
         ),
-        leading: IconButton(
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          onPressed: () => stockGoBack(context),
-          icon: const Icon(Icons.arrow_back_rounded, size: 21),
-        ),
+        leading:
+            leading ??
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: () => stockGoBack(context),
+              icon: Icon(Icons.arrow_back_rounded, size: wide ? 23 : 21),
+            ),
         actions: actions,
         bottom: bottom,
       ),
       floatingActionButton: fab,
+      bottomNavigationBar: bottomNavigationBar,
       body: SafeArea(
         top: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: SizedBox(width: double.infinity, child: body),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalInset = constraints.maxWidth >= 720 ? 20.0 : 0.0;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontalInset),
+                  child: SizedBox(width: double.infinity, child: body),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -157,41 +175,50 @@ class StockSectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: MjasiColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.2,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      color: MjasiColors.textSecondary,
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 430;
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: MjasiColors.textPrimary,
+                fontSize: constraints.maxWidth >= 720 ? 17 : 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -.2,
+              ),
             ),
-          ),
-          if (action != null) ...[const SizedBox(width: 8), action!],
-        ],
-      ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 3),
+              Text(
+                subtitle!,
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ],
+        );
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: narrow && action != null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [heading, const SizedBox(height: 8), action!],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: heading),
+                    if (action != null) ...[const SizedBox(width: 8), action!],
+                  ],
+                ),
+        );
+      },
     );
   }
 }
@@ -217,8 +244,9 @@ class StockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
+      clipBehavior: Clip.antiAlias,
       borderRadius: BorderRadius.circular(_stockRadius),
-      elevation: onTap == null ? 0.5 : 1,
+      elevation: onTap == null ? 0 : 1,
       shadowColor: kStockNavy.withValues(alpha: .08),
       child: InkWell(
         onTap: onTap,
@@ -230,7 +258,7 @@ class StockCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(_stockRadius),
             border: Border.all(
               color: borderColor ?? MjasiColors.border,
-              width: 1,
+              width: onTap == null ? 1 : 1.2,
             ),
           ),
           child: child,
@@ -263,12 +291,12 @@ class StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return StockCard(
       onTap: onTap,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: .09),
@@ -288,7 +316,7 @@ class StatTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: MjasiColors.textSecondary,
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

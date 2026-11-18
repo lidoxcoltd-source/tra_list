@@ -434,6 +434,7 @@ class BusinessAccessService {
     }
     final permission = switch (route) {
       '/transactions' => ('transactions', 'view'),
+      '/deleted-transactions' => ('transactions', 'view'),
       '/AddTransactionPage' => ('transactions', 'create'),
       '/invoice' => ('invoices', 'create'),
       '/add-receipt' => ('receipts', 'create'),

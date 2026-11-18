@@ -285,15 +285,15 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: isBusiness
-          ? const Color(0xFFF1F6FF)
-          : const Color(0xFFF2FBF6),
+          ? const Color(0xFF06152E)
+          : const Color(0xFF071B2A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
           onPressed: () => Get.back(),
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           tooltip: 'Back'.tr,
         ),
       ),
@@ -322,13 +322,14 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             width: 96,
                             height: 96,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFE500),
+                              color: const Color(0xFF102C50),
                               borderRadius: BorderRadius.circular(48),
+                              border: Border.all(color: accent, width: 2),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
+                                  color: accent.withValues(alpha: .28),
+                                  blurRadius: 24,
+                                  spreadRadius: 2,
                                 ),
                               ],
                             ),
@@ -346,13 +347,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             height: 40,
                             margin: const EdgeInsets.only(bottom: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFE500),
+                              color: const Color(0xFF102C50),
                               borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: accent, width: 1.5),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: .1),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                                  color: accent.withValues(alpha: .26),
+                                  blurRadius: 16,
                                 ),
                               ],
                             ),
@@ -371,7 +372,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                           style: TextStyle(
                             fontSize: tight ? 19 : (compact ? 21 : 27),
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: Colors.white,
                           ),
                         ),
                         if (!compact) const SizedBox(height: 8),
@@ -381,7 +382,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: compact ? 12 : 16,
-                              color: Colors.black54,
+                              color: const Color(0xFFC0D7EA),
                             ),
                           ),
                         SizedBox(height: tight ? 3 : (compact ? 5 : 16)),
@@ -397,8 +398,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                           constraints: const BoxConstraints(maxWidth: 400),
                           child: Card(
                             elevation: 5,
-                            color: Colors.white.withValues(alpha: .94),
-                            shadowColor: Colors.black.withValues(alpha: 0.1),
+                            color: const Color(0xFF0D2747).withValues(alpha: .97),
+                            shadowColor: Colors.black.withValues(alpha: .4),
+                            surfaceTintColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -604,12 +606,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                           ? null
                                           : _createAccount,
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: isBusiness
-                                            ? const Color(0xFFFFE500)
-                                            : accent,
-                                        foregroundColor: isBusiness
-                                            ? Colors.black87
-                                            : Colors.white,
+                                        backgroundColor: accent,
+                                        foregroundColor: const Color(0xFF06152E),
                                         minimumSize: Size.fromHeight(
                                           compact ? 42 : 48,
                                         ),
@@ -629,7 +627,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                               width: 20,
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
-                                                color: Colors.black87,
+                                                color: Colors.white,
                                               ),
                                             )
                                           : Text(
@@ -669,7 +667,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                         label: Text(
                                           'login_google'.tr,
                                           style: const TextStyle(
-                                            color: Colors.black87,
+                                            color: const Color(0xFFE2F0FF),
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -728,7 +726,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         : AuthBackdrop.personalAccent;
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon),
+      prefixIcon: Icon(icon, color: const Color(0xFF9FC7E8)),
       suffixIcon: suffix,
       prefixIconConstraints: BoxConstraints(
         minWidth: compact ? 38 : 48,
@@ -740,8 +738,15 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       ),
       isDense: true,
       filled: true,
-      fillColor: Colors.white,
-      labelStyle: TextStyle(fontSize: compact ? 13 : 14),
+      fillColor: const Color(0xFF102C50),
+      labelStyle: TextStyle(
+        fontSize: compact ? 13 : 14,
+        color: const Color(0xFFC0D7EA),
+      ),
+      floatingLabelStyle: TextStyle(color: accent),
+      hintStyle: const TextStyle(color: Color(0xFF9FB6CA)),
+      helperStyle: const TextStyle(color: Color(0xFFC0D7EA)),
+      errorStyle: const TextStyle(color: Color(0xFFFFA6A6)),
       contentPadding: EdgeInsets.symmetric(
         horizontal: 12,
         vertical: tight ? 6 : (compact ? 8 : 10),
@@ -749,7 +754,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: .18)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

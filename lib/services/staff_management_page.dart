@@ -253,7 +253,8 @@ class StaffManagementPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: MjasiSpacing.sm),
-                  const _TransactionThresholdSettings(),
+                  if (BusinessAccessService.isOwner.value)
+                    const _TransactionThresholdSettings(),
                   const SizedBox(height: MjasiSpacing.md),
                   _StaffInsights(
                     staff: staff,

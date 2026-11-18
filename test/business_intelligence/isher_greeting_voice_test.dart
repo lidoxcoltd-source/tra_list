@@ -26,7 +26,12 @@ void main() {
           }
           return 1;
         });
-    await DeviceIsherGreetingVoice().speak('Habari Duka', 'sw', () => true);
+    await DeviceIsherGreetingVoice().speak(
+      'Habari Duka',
+      'sw',
+      () => true,
+      greetingVariant: 0,
+    );
     final selected = calls.firstWhere((call) => call.method == 'setVoice');
     expect((selected.arguments as Map)['name'], 'offline');
     expect(calls.where((call) => call.method == 'speak'), hasLength(1));
@@ -45,7 +50,12 @@ void main() {
           return 1;
         });
     await expectLater(
-      DeviceIsherGreetingVoice().speak('Habari Duka', 'sw', () => true),
+      DeviceIsherGreetingVoice().speak(
+        'Habari Duka',
+        'sw',
+        () => true,
+        greetingVariant: 0,
+      ),
       throwsStateError,
     );
     expect(calls.where((call) => call.method == 'speak'), isEmpty);

@@ -162,6 +162,7 @@ class _HomePageState extends State<HomePage> {
   Map<String, String> _nameByStaffUid = {};
   String _selectedShopNickname = '';
   _FinancePeriod _financePeriod = _FinancePeriod.thisWeek;
+  DateTime? _customFinanceDate;
   int _financeRequest = 0;
   bool _desktop = false;
   bool _isOnline = false;
@@ -288,12 +289,21 @@ class _HomePageState extends State<HomePage> {
         now.day - (now.weekday - 1),
       ),
       _FinancePeriod.thisMonth => DateTime(now.year, now.month, 1),
+      _FinancePeriod.customDay =>
+        _customFinanceDate == null
+            ? DateTime(now.year, now.month, now.day)
+            : DateTime(
+                _customFinanceDate!.year,
+                _customFinanceDate!.month,
+                _customFinanceDate!.day,
+              ),
     };
     final end = switch (_financePeriod) {
       _FinancePeriod.today ||
       _FinancePeriod.yesterday => start.add(const Duration(days: 1)),
       _FinancePeriod.thisWeek => start.add(const Duration(days: 7)),
       _FinancePeriod.thisMonth => DateTime(now.year, now.month + 1, 1),
+      _FinancePeriod.customDay => start.add(const Duration(days: 1)),
     };
     try {
       final totals = await TransactionService.getTotals(
@@ -518,6 +528,14 @@ class _HomePageState extends State<HomePage> {
       _FinancePeriod.yesterday => 'yesterday'.tr,
       _FinancePeriod.thisWeek => 'transactions_this_week'.tr,
       _FinancePeriod.thisMonth => 'transactions_this_month'.tr,
+      _FinancePeriod.customDay =>
+        _customFinanceDate == null
+            ? (Get.locale?.languageCode == 'sw'
+                  ? 'Chagua tarehe'
+                  : 'Choose date')
+            : DateFormat.yMMMd(
+                Get.locale?.toString(),
+              ).format(_customFinanceDate!),
     };
   }
 
@@ -958,9 +976,27 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _selectFinancePeriod(_FinancePeriod period) {
-    if (_financePeriod == period) return;
-    setState(() => _financePeriod = period);
+  Future<void> _selectFinancePeriod(_FinancePeriod period) async {
+    if (period == _FinancePeriod.customDay) {
+      final now = DateTime.now();
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: _customFinanceDate ?? now,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(now.year, now.month, now.day),
+        helpText: Get.locale?.languageCode == 'sw'
+            ? 'Chagua tarehe ya muamala'
+            : 'Choose transaction date',
+      );
+      if (picked == null || !mounted) return;
+      setState(() {
+        _customFinanceDate = picked;
+        _financePeriod = period;
+      });
+    } else {
+      if (_financePeriod == period) return;
+      setState(() => _financePeriod = period);
+    }
     _loadFinanceSummary();
   }
 
@@ -1310,6 +1346,10 @@ class _HomePageState extends State<HomePage> {
 
         final actionsColumn = <Widget>[
           _sectionHeading('home_quick_access'.tr, 'home_quick_access_sub'.tr),
+          if (wide && BusinessAccessService.canUseBarPos) ...[
+            const SizedBox(height: _Spacing.md),
+            _primarySellButton(),
+          ],
           const SizedBox(height: _Spacing.md),
           _buildQuickActions(),
           const SizedBox(height: _Spacing.xl),
@@ -2433,6 +2473,20 @@ class _HomePageState extends State<HomePage> {
                 destination: _HomeDestination.reports,
               ),
       );
+    }
+    final canOpenAi =
+        !_isPersonalMode &&
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.can('analytics', 'view');
+    if (canOpenAi) {
+      destinations.add(
+        NavigationRailDestination(
+          icon: const IsherBrandMark(size: 24),
+          selectedIcon: const IsherBrandMark(size: 24),
+          label: Text('bi_title'.tr),
+        ),
+      );
+      actions.add(() => _openRestrictedRoute(AppRoutes.businessIntelligence));
     }
     destinations.add(
       NavigationRailDestination(
@@ -4706,7 +4760,7 @@ class _HomePageState extends State<HomePage> {
           Icons.analytics_outlined,
           () => _openRestrictedRoute(AppRoutes.analytics),
         ),
-      if (BusinessAccessService.canUseBarPos)
+      if (BusinessAccessService.canUseBarPos && !_desktop)
         _quickAction(
           'pos_title'.tr,
           Icons.qr_code_scanner,
@@ -4819,6 +4873,53 @@ class _HomePageState extends State<HomePage> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _primarySellButton() {
+    return Material(
+      color: _AppColors.positive,
+      borderRadius: BorderRadius.circular(_Radius.md),
+      child: InkWell(
+        onTap: () => _openRestrictedRoute(AppRoutes.pos),
+        borderRadius: BorderRadius.circular(_Radius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: _Spacing.lg,
+            vertical: 16,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(_Radius.sm),
+                ),
+                child: const Icon(
+                  Icons.point_of_sale_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: _Spacing.md),
+              Expanded(
+                child: Text(
+                  'pos_title'.tr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
