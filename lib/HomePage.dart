@@ -110,6 +110,156 @@ class _SubscriptionDialogColors {
 // ─────────────────────────────────────────────────────────────────────────────
 // HomePage
 // ─────────────────────────────────────────────────────────────────────────────
+class _HomeLoadingView extends StatefulWidget {
+  const _HomeLoadingView();
+
+  @override
+  State<_HomeLoadingView> createState() => _HomeLoadingViewState();
+}
+
+class _HomeLoadingViewState extends State<_HomeLoadingView>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final AnimationController _motion;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _motion = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _motion.repeat();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (!_motion.isAnimating && mounted) _motion.repeat();
+    } else {
+      _motion.stop(canceled: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _motion.stop(canceled: false);
+    _motion.dispose();
+    super.dispose();
+  }
+
+  Widget _shimmer(double width, double height) => AnimatedBuilder(
+    animation: _motion,
+    builder: (context, _) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          begin: Alignment(-1.2 + 2.4 * _motion.value, 0),
+          end: Alignment(-.2 + 2.4 * _motion.value, 0),
+          colors: [
+            _AppColors.border.withValues(alpha: .45),
+            _AppColors.surface.withValues(alpha: .9),
+            _AppColors.border.withValues(alpha: .45),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _mobileSkeleton() => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 24, 18, 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [_shimmer(142, 26), _shimmer(42, 42)],
+        ),
+        const SizedBox(height: 22),
+        _shimmer(185, 22),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _shimmer(0, 88)),
+            const SizedBox(width: 12),
+            Expanded(child: _shimmer(0, 88)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _shimmer(0, 88)),
+            const SizedBox(width: 12),
+            Expanded(child: _shimmer(0, 88)),
+          ],
+        ),
+        const SizedBox(height: 22),
+        _shimmer(155, 22),
+        const SizedBox(height: 14),
+        Expanded(child: _shimmer(double.infinity, double.infinity)),
+      ],
+    ),
+  );
+
+  Widget _desktopSkeleton() => Padding(
+    padding: const EdgeInsets.fromLTRB(48, 36, 48, 32),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [_shimmer(210, 30), _shimmer(180, 38)],
+        ),
+        const SizedBox(height: 34),
+        _shimmer(230, 24),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(child: _shimmer(0, 112)),
+            const SizedBox(width: 18),
+            Expanded(child: _shimmer(0, 112)),
+            const SizedBox(width: 18),
+            Expanded(child: _shimmer(0, 112)),
+            const SizedBox(width: 18),
+            Expanded(child: _shimmer(0, 112)),
+          ],
+        ),
+        const SizedBox(height: 30),
+        Row(
+          children: [_shimmer(180, 24), const Spacer(), _shimmer(120, 36)],
+        ),
+        const SizedBox(height: 18),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 2, child: _shimmer(0, double.infinity)),
+              const SizedBox(width: 20),
+              Expanded(child: _shimmer(0, double.infinity)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 900;
+      return SizedBox.expand(
+        child: ColoredBox(
+          color: _AppColors.canvas,
+          child: desktop ? _desktopSkeleton() : _mobileSkeleton(),
+        ),
+      );
+    },
+  );
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.initialSection});
 
@@ -1182,7 +1332,7 @@ class _HomePageState extends State<HomePage> {
     if (loading) {
       return const Scaffold(
         backgroundColor: _AppColors.canvas,
-        body: Center(child: CircularProgressIndicator()),
+        body: _HomeLoadingView(),
       );
     }
 
@@ -5115,6 +5265,8 @@ class _HomePageState extends State<HomePage> {
 
   void _showSubscriptionRequiredDialog() {
     var trialBusy = false;
+    final trialSettingsFuture =
+        SuperAdminSubscriptionService.loadTrialSettings();
     Get.dialog(
       StatefulBuilder(
         builder: (dialogContext, setDialogState) => Dialog(
@@ -5375,7 +5527,18 @@ class _HomePageState extends State<HomePage> {
                                           ),
                                         )
                                       : const Icon(Icons.bolt_rounded),
-                                  label: Text('subx_trial_start'.tr),
+                                  label: FutureBuilder<TrialSettings>(
+                                    future: trialSettingsFuture,
+                                    builder: (context, snapshot) {
+                                      final days = snapshot.data?.durationDays ??
+                                          TrialSettings.defaults.durationDays;
+                                      return Text(
+                                        'subx_trial_try_first'.trParams({
+                                          'days': '$days',
+                                        }),
+                                      );
+                                    },
+                                  ),
                                   style: FilledButton.styleFrom(
                                     minimumSize: const Size.fromHeight(50),
                                     backgroundColor:

@@ -1,12 +1,20 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:tra_list/jobs/controllers/debt_controller.dart';
 import 'package:tra_list/jobs/models/debt.dart';
+import 'package:tra_list/jobs/services/debt_proof_pdf.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
@@ -18,6 +26,18 @@ class AddDebtPage extends StatefulWidget {
 
   @override
   State<AddDebtPage> createState() => _AddDebtPageState();
+}
+
+class _DebtEvidenceFile {
+  const _DebtEvidenceFile({
+    required this.name,
+    required this.bytes,
+    required this.contentType,
+  });
+
+  final String name;
+  final Uint8List bytes;
+  final String contentType;
 }
 
 class _AddDebtPageState extends State<AddDebtPage> {
@@ -41,6 +61,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
   bool _draftSaveErrorShown = false;
   Timer? _draftSaveTimer;
   List<String> _shops = [];
+  final List<_DebtEvidenceFile> _evidenceFiles = [];
 
   bool get _isEditing => widget.debt != null;
 
@@ -241,6 +262,313 @@ class _AddDebtPageState extends State<AddDebtPage> {
   double _parseAmount() =>
       double.tryParse(_amountController.text.trim().replaceAll(',', '')) ?? 0;
 
+  Future<void> _pickEvidencePhoto() async {
+    try {
+      final photo = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 82,
+        maxWidth: 1800,
+      );
+      if (photo == null) return;
+      final bytes = await photo.readAsBytes();
+      _addEvidenceFile(
+        _DebtEvidenceFile(
+          name: photo.name.isEmpty ? 'evidence.jpg' : photo.name,
+          bytes: bytes,
+          contentType: 'image/jpeg',
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not capture debt evidence photo: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) Get.snackbar('error'.tr, 'debt_evidence_pick_error'.tr);
+    }
+  }
+
+  Future<void> _pickEvidenceDocument() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        Get.snackbar('error'.tr, 'debt_evidence_pick_error'.tr);
+        return;
+      }
+      final extension = file.extension?.toLowerCase() ?? '';
+      final contentType = switch (extension) {
+        'pdf' => 'application/pdf',
+        'png' => 'image/png',
+        _ => 'image/jpeg',
+      };
+      _addEvidenceFile(
+        _DebtEvidenceFile(
+          name: file.name,
+          bytes: bytes,
+          contentType: contentType,
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Could not pick debt evidence document: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) Get.snackbar('error'.tr, 'debt_evidence_pick_error'.tr);
+    }
+  }
+
+  void _addEvidenceFile(_DebtEvidenceFile file) {
+    if (file.bytes.length >= 10 * 1024 * 1024) {
+      Get.snackbar('error'.tr, 'debt_evidence_file_too_large'.tr);
+      return;
+    }
+    final existingCount = widget.debt?.evidenceUrls.length ?? 0;
+    if (_evidenceFiles.length + existingCount >= 5) {
+      Get.snackbar('info'.tr, 'debt_evidence_limit'.tr);
+      return;
+    }
+    setState(() => _evidenceFiles.add(file));
+  }
+
+  Future<List<String>> _uploadEvidence(
+    String debtId,
+    List<Reference> uploadedReferences,
+  ) async {
+    final urls = <String>[];
+    for (var index = 0; index < _evidenceFiles.length; index++) {
+      final file = _evidenceFiles[index];
+      final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final reference = FirebaseStorage.instance.ref(
+        'users/${BusinessAccessService.businessId}/debts/$debtId/evidence/${DateTime.now().microsecondsSinceEpoch}_${index}_$safeName',
+      );
+      uploadedReferences.add(reference);
+      await reference.putData(
+        file.bytes,
+        SettableMetadata(contentType: file.contentType),
+      );
+      urls.add(await reference.getDownloadURL());
+    }
+    return urls;
+  }
+
+  Widget _buildEvidenceSection() {
+    final existingFiles = widget.debt?.evidenceUrls ?? const <String>[];
+    return _sectionCard(
+      context,
+      icon: Icons.verified_user_outlined,
+      title: 'debt_evidence_title'.tr,
+      subtitle: 'debt_evidence_hint'.tr,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickEvidencePhoto,
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: Text('debt_evidence_take_photo'.tr),
+              ),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickEvidenceDocument,
+                icon: const Icon(Icons.attach_file_rounded),
+                label: Text('debt_evidence_choose_document'.tr),
+              ),
+            ],
+          ),
+          if (existingFiles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              '${'debt_evidence_existing'.trParams({'count': '${existingFiles.length}'})} / 5',
+              style: const TextStyle(color: Color(0xFF52666C), fontSize: 13),
+            ),
+          ],
+          for (var index = 0; index < _evidenceFiles.length; index++) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F7F7),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDCE8E8)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _evidenceFiles[index].contentType == 'application/pdf'
+                        ? Icons.picture_as_pdf_outlined
+                        : Icons.image_outlined,
+                    color: const Color(0xFF0E5962),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      _evidenceFiles[index].name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'debt_evidence_remove'.tr,
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() => _evidenceFiles.removeAt(index)),
+                    icon: const Icon(Icons.close_rounded, size: 19),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDebtProof(Debt debt) async {
+    final proofUrl = _publicDebtProofUrl(debt);
+    final qrData = proofUrl;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => PopScope(
+        canPop: !_saving,
+        child: AlertDialog(
+        title: Text('debt_proof_title'.tr),
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE3ECEC)),
+                  ),
+                  child: QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 190,
+                    backgroundColor: Colors.white,
+                    errorCorrectionLevel: QrErrorCorrectLevel.H,
+                    gapless: false,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'debt_proof_created'.tr,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 14),
+                _proofDetail('debt_person_name'.tr, debt.debtorName),
+                _proofDetail(
+                  'debt_original_amount'.tr,
+                  'TZS ${NumberFormat('#,##0.00').format(debt.principal)}',
+                ),
+                _proofDetail('transactions_filter_shop'.tr, debt.shopNickname),
+                _proofDetail('debt_proof_reference'.tr, debt.id),
+                if (debt.evidenceUrls.isNotEmpty)
+                  _proofDetail(
+                    'debt_evidence_existing'.trParams({
+                      'count': '${debt.evidenceUrls.length}',
+                    }),
+                    '',
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('close'.tr),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                final bytes = await DebtProofPdf.build(
+                  debt: debt,
+                  proofUrl: proofUrl,
+                  title: 'debt_proof_title'.tr,
+                  referenceLabel: 'debt_proof_reference'.tr,
+                  debtorLabel: 'debt_person_name'.tr,
+                  phoneLabel: 'phone_primary'.tr,
+                  amountLabel: 'debt_original_amount'.tr,
+                  balanceLabel: 'debt_balance'.tr,
+                  directionLabel: 'debt_direction'.tr,
+                  directionValue:
+                      (debt.direction == DebtDirection.customerOwesShop
+                              ? 'debt_customer_owes'
+                              : 'debt_shop_owes')
+                          .tr,
+                  reasonLabel: 'debt_reason'.tr,
+                  reasonValue: 'debt_reason_${debt.reason}'.tr,
+                  shopLabel: 'transactions_filter_shop'.tr,
+                  dateLabel: 'debt_proof_date'.tr,
+                  dueDateLabel: 'debt_due_date_optional'.tr,
+                  notesLabel: 'debt_notes_optional'.tr,
+                  evidenceLabel: 'debt_evidence_title'.tr,
+                  qrPayloadLabel: 'debt_proof_qr_hint'.tr,
+                  currency: 'TZS',
+                );
+                await Printing.sharePdf(
+                  bytes: bytes,
+                  filename: 'debt_proof_${debt.id}.pdf',
+                );
+              } catch (error, stackTrace) {
+                debugPrint('Could not share debt proof: $error');
+                debugPrintStack(stackTrace: stackTrace);
+                if (dialogContext.mounted) {
+                  Get.snackbar('error'.tr, 'debt_proof_share_error'.tr);
+                }
+              }
+            },
+            icon: const Icon(Icons.ios_share_rounded),
+            label: Text('debt_proof_share'.tr),
+          ),
+        ],
+        ),
+      ),
+    );
+  }
+
+  String _publicDebtProofUrl(Debt debt) {
+    final route = '/debt-proof/${Uri.encodeComponent(BusinessAccessService.businessId)}/${Uri.encodeComponent(debt.id)}';
+    final base = Uri.base;
+    if (base.scheme == 'https' || base.scheme == 'http') {
+      return base
+          .replace(path: '/', query: null, fragment: route)
+          .toString();
+    }
+    return 'https://mjasipos.web.app/#$route';
+  }
+
+  Widget _proofDetail(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(label, style: const TextStyle(color: Colors.black54)),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_loadingShops) {
@@ -260,22 +588,24 @@ class _AddDebtPageState extends State<AddDebtPage> {
     await _persistDraft(force: true);
     try {
       final existing = widget.debt;
-      await _controller.save(
-        Debt(
-          id: existing?.id,
-          debtorName: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          direction: _direction,
-          reason: _reason,
-          notes: _notesController.text.trim(),
-          principal: _parseAmount(),
-          amountPaid: existing?.amountPaid ?? 0,
-          dueDate: _dueDate,
-          shopNickname: _shopNickname,
-          createdAt: existing?.createdAt,
-        ),
-        isEditing: _isEditing,
+      final newDebt = Debt(
+        id: existing?.id,
+        debtorName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        direction: _direction,
+        reason: _reason,
+        notes: _notesController.text.trim(),
+        principal: _parseAmount(),
+        amountPaid: existing?.amountPaid ?? 0,
+        dueDate: _dueDate,
+        shopNickname: _shopNickname,
+        evidenceUrls: existing?.evidenceUrls ?? const [],
+        createdAt: existing?.createdAt,
       );
+      final uploadedReferences = <Reference>[];
+      final newEvidenceUrls = await _uploadEvidence(newDebt.id, uploadedReferences);
+      final savedDebt = newDebt.copyWith(evidenceUrls: [...newDebt.evidenceUrls, ...newEvidenceUrls]);
+      await _controller.save(savedDebt, isEditing: _isEditing);
       if (!_isEditing) {
         try {
           await _draftStorage.remove(_draftKey);
@@ -284,7 +614,8 @@ class _AddDebtPageState extends State<AddDebtPage> {
           debugPrintStack(stackTrace: stackTrace);
         }
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted && !_isEditing) await _showDebtProof(savedDebt);
+      if (mounted) Navigator.of(context).pop(savedDebt);
     } catch (error, stackTrace) {
       debugPrint('Debt form save failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -690,6 +1021,8 @@ class _AddDebtPageState extends State<AddDebtPage> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 14),
+                          _buildEvidenceSection(),
                         ],
                       ),
                     ),

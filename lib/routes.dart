@@ -13,6 +13,7 @@ import 'package:tra_list/business_intelligence/business_intelligence_page.dart';
 import 'package:tra_list/business_intelligence/ai_assistant_page.dart';
 import 'package:tra_list/business_intelligence/ai_quota_page.dart';
 import 'package:tra_list/jobs/views/jobs_page.dart';
+import 'package:tra_list/jobs/views/public_debt_proof_page.dart';
 import 'package:tra_list/jobs/views/archived_jobs_page.dart';
 import 'package:tra_list/subscription_page.dart';
 import 'package:tra_list/services/business_access_service.dart';
@@ -156,6 +157,7 @@ class AppRoutes {
   static const String firebaseTest = '/firebase-test';
   static const String routeTest = '/route-test';
   static const String viewReceipt = '/receipt/:id';
+  static const String publicDebtProof = '/debt-proof/:businessId/:id';
   static const String invoice = '/invoice';
   static const String invoicesList = '/invoices';
   static const String documentShares = '/document-shares';
@@ -278,6 +280,14 @@ class AppRoutes {
   }
 
   static final pages = <GetPage>[
+    GetPage(
+      name: publicDebtProof,
+      page: () => PublicDebtProofPage(
+        businessId: Get.parameters['businessId'] ?? '',
+        debtId: Get.parameters['id'] ?? '',
+      ),
+      transition: Transition.fadeIn,
+    ),
     GetPage(
       name: splash,
       page: () => const SplashPage(),

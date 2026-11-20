@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -43,8 +44,11 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
   static const _cyan = Color(0xFF57D7FF);
   static const _violet = Color(0xFF9572FF);
   final _briefController = TextEditingController();
+  final _customWidthController = TextEditingController(text: '30');
+  final _customHeightController = TextEditingController(text: '40');
   String _selectedCategory = 'Poster';
   String _selectedSize = 'Instagram post';
+  String _customUnit = 'cm';
   String _selectedLanguage = 'sw';
   String _selectedModel = 'gpt-image-2.5-sunburst';
   bool _planning = false;
@@ -106,7 +110,56 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
   @override
   void dispose() {
     _briefController.dispose();
+    _customWidthController.dispose();
+    _customHeightController.dispose();
     super.dispose();
+  }
+
+  double? get _customWidthCm {
+    final value = double.tryParse(_customWidthController.text.trim());
+    if (value == null || value <= 0) return null;
+    return _customUnit == 'm' ? value * 100 : value;
+  }
+
+  double? get _customHeightCm {
+    final value = double.tryParse(_customHeightController.text.trim());
+    if (value == null || value <= 0) return null;
+    return _customUnit == 'm' ? value * 100 : value;
+  }
+
+  String get _effectiveSize {
+    if (_selectedSize != 'Custom size') return _selectedSize;
+    final width = _customWidthCm;
+    final height = _customHeightCm;
+    if (width == null || height == null) return 'Custom size';
+    return 'Custom size: ${_formatCm(width)} × ${_formatCm(height)} cm';
+  }
+
+  String get _effectiveAspect {
+    if (_selectedSize != 'Custom size') {
+      return _selectedSize.toLowerCase().contains('story') ||
+              _selectedSize.toLowerCase().contains('a4')
+          ? 'portrait'
+          : 'square';
+    }
+    final width = _customWidthCm;
+    final height = _customHeightCm;
+    if (width == null || height == null) return 'square';
+    final ratio = width / height;
+    if (ratio > 1.12) return 'landscape';
+    if (ratio < .88) return 'portrait';
+    return 'square';
+  }
+
+  String _formatCm(double value) =>
+      value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+
+  bool _customSizeIsValid() {
+    if (_selectedSize != 'Custom size') return true;
+    final width = _customWidthCm;
+    final height = _customHeightCm;
+    return width != null && height != null &&
+        width >= 1 && height >= 1 && width <= 1000 && height <= 1000;
   }
 
   void _showComingSoon() {
@@ -119,6 +172,16 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
 
   Future<void> _createPlan() async {
     final brief = _briefController.text.trim();
+    if (!_customSizeIsValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_selectedLanguage == 'sw'
+              ? 'Weka upana na urefu kati ya 1 na 1000 cm.'
+              : 'Enter a width and height between 1 and 1000 cm.'),
+        ),
+      );
+      return;
+    }
     if (_referenceBytes != null && _referenceAnalysis == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -168,7 +231,7 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
               : '$brief\n\nReference insights:\n$referenceNotes',
         ),
         category: _selectedCategory,
-        size: _selectedSize,
+        size: _effectiveSize,
         language: _selectedLanguage,
       );
       if (mounted) setState(() => _plan = plan);
@@ -342,13 +405,19 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
 
   Future<void> _generateConcept() async {
     if (_plan == null) return;
+    if (!_customSizeIsValid()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_selectedLanguage == 'sw'
+              ? 'Weka upana na urefu sahihi kabla ya kutengeneza design.'
+              : 'Enter valid width and height before generating the design.'),
+        ),
+      );
+      return;
+    }
     setState(() => _generating = true);
     try {
-      final aspect =
-          _selectedSize.toLowerCase().contains('story') ||
-              _selectedSize.toLowerCase().contains('a4')
-          ? 'portrait'
-          : 'square';
+      final aspect = _effectiveAspect;
       final brief = _withBrandGuidance(_briefController.text.trim());
       final copy = await generateCreativePosterCopy(
         brief: brief,
@@ -380,7 +449,7 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
         prompt:
             '$brief\nApproved poster text to typeset exactly as written:\n$copyForImage\nArt direction: ${_plan!.values}',
         category: _selectedCategory,
-        size: _selectedSize,
+        size: _effectiveSize,
         aspect: aspect,
         language: _selectedLanguage,
         model: _selectedModel,
@@ -1237,6 +1306,86 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                   ),
                 ],
               ),
+              if (_selectedSize == 'Custom size') ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _customDimensionField(
+                        _selectedLanguage == 'sw' ? 'Upana' : 'Width',
+                        _customWidthController,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _customDimensionField(
+                        _selectedLanguage == 'sw' ? 'Urefu' : 'Length',
+                        _customHeightController,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 82,
+                      child: DropdownButtonFormField<String>(
+                        value: _customUnit,
+                        decoration: InputDecoration(
+                          labelText: _selectedLanguage == 'sw' ? 'Kipimo' : 'Unit',
+                          filled: true,
+                          fillColor: const Color(0xFF0B1322),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        dropdownColor: const Color(0xFF17233A),
+                        items: const [
+                          DropdownMenuItem(value: 'cm', child: Text('cm')),
+                          DropdownMenuItem(value: 'm', child: Text('m')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            final factor = _customUnit == 'cm' ? .01 : 100.0;
+                            for (final controller in [
+                              _customWidthController,
+                              _customHeightController,
+                            ]) {
+                              final current =
+                                  double.tryParse(controller.text.trim());
+                              if (current != null) {
+                                final converted = current * factor;
+                                controller.value = TextEditingValue(
+                                  text: _formatCm(converted),
+                                  selection: TextSelection.collapsed(
+                                    offset: _formatCm(converted).length,
+                                  ),
+                                );
+                              }
+                            }
+                            _customUnit = value;
+                            _plan = null;
+                            _concept = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _selectedLanguage == 'sw'
+                      ? 'Uwiano wa muundo: ${_effectiveAspect == 'square' ? 'mraba' : _effectiveAspect == 'portrait' ? 'wima' : 'mlalo'}. Vipimo vinaongoza muundo; resolution ya picha huamuliwa na AI.'
+                      : 'Design orientation: $_effectiveAspect. Dimensions guide the layout; the AI model sets image resolution.',
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 10,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1283,6 +1432,30 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
       ],
     ),
   );
+
+  Widget _customDimensionField(String label, TextEditingController controller) =>
+      TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        ],
+        style: const TextStyle(color: _ink, fontSize: 13),
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: const Color(0xFF0B1322),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 12,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onChanged: (_) => setState(() {
+          _plan = null;
+          _concept = null;
+        }),
+      );
 
   Widget _selector(
     String label,
@@ -2282,22 +2455,14 @@ class _CreativePosterCarouselState extends State<_CreativePosterCarousel> {
     if (entry.sample != null) {
       image = _samplePoster(entry.sample!);
     } else if (entry.previewUrl != null) {
-      image = Image.network(
-        entry.previewUrl!,
+      image = CachedNetworkImage(
+        imageUrl: entry.previewUrl!,
         fit: BoxFit.cover,
-        cacheWidth: 720,
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
-            wasSynchronouslyLoaded
-            ? child
-            : AnimatedOpacity(
-                opacity: frame == null ? 0 : 1,
-                duration: const Duration(milliseconds: 220),
-                child: child,
-              ),
-        loadingBuilder: (context, child, progress) => progress == null
-            ? child
-            : _posterFallback(entry.title, loading: true),
-        errorBuilder: (_, _, _) => _posterFallback(entry.title),
+        memCacheWidth: 720,
+        maxWidthDiskCache: 720,
+        fadeInDuration: const Duration(milliseconds: 120),
+        placeholder: (_, _) => _posterFallback(entry.title, loading: true),
+        errorWidget: (_, _, _) => _posterFallback(entry.title),
       );
     } else if (entry.project != null &&
         entry.project!.backgroundPath.isNotEmpty) {
@@ -2309,22 +2474,15 @@ class _CreativePosterCarouselState extends State<_CreativePosterCarousel> {
       image = FutureBuilder<String>(
         future: future,
         builder: (context, snapshot) => snapshot.hasData
-            ? Image.network(
-                snapshot.data!,
+            ? CachedNetworkImage(
+                imageUrl: snapshot.data!,
                 fit: BoxFit.cover,
-                cacheWidth: 720,
-                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
-                    wasSynchronouslyLoaded
-                    ? child
-                    : AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 220),
-                        child: child,
-                      ),
-                loadingBuilder: (context, child, progress) => progress == null
-                    ? child
-                    : _posterFallback(entry.title, loading: true),
-                errorBuilder: (_, _, _) => _posterFallback(entry.title),
+                memCacheWidth: 720,
+                maxWidthDiskCache: 720,
+                fadeInDuration: const Duration(milliseconds: 120),
+                placeholder: (_, _) =>
+                    _posterFallback(entry.title, loading: true),
+                errorWidget: (_, _, _) => _posterFallback(entry.title),
               )
             : _posterFallback(entry.title, loading: !snapshot.hasError),
       );

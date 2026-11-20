@@ -63,10 +63,16 @@ class DebtService {
       amountPaid: debt.amountPaid,
       dueDate: debt.dueDate,
       shopNickname: shopNickname,
+      evidenceUrls: debt.evidenceUrls,
       createdAt: debt.createdAt,
     );
 
     final reference = _collection().doc(savedDebt.id);
+    final publicProofReference = _db
+        .collection('users')
+        .doc(BusinessAccessService.businessId)
+        .collection('publicDebtProofs')
+        .doc(savedDebt.id);
     if (isEditing) {
       await _db.runTransaction((transaction) async {
         final snapshot = await transaction.get(reference);
@@ -86,9 +92,13 @@ class DebtService {
           'createdAt': Timestamp.fromDate(existing.createdAt),
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        transaction.set(publicProofReference, _publicProofData(savedDebt));
       });
     } else {
-      await reference.set(savedDebt);
+      final batch = _db.batch();
+      batch.set(reference, savedDebt);
+      batch.set(publicProofReference, _publicProofData(savedDebt));
+      await batch.commit();
     }
     await NotificationService.notifyOwner(
       action: 'debt',
@@ -110,27 +120,41 @@ class DebtService {
     }
     if (amount <= 0) throw ArgumentError('Payment must be greater than zero.');
 
-    final reference = _db
+    // Use the converted Debt reference so transaction.get returns a Debt,
+    // including its computed `balance` getter, instead of a raw map.
+    final reference = _collection().doc(debtId);
+    final publicProofReference = _db
         .collection('users')
         .doc(BusinessAccessService.businessId)
-        .collection('debts')
+        .collection('publicDebtProofs')
         .doc(debtId);
     final paymentReference = reference.collection('payments').doc();
     final userId = FirebaseAuth.instance.currentUser!.uid;
-    final batch = _db.batch();
-    batch.update(reference, {
-      'amountPaid': FieldValue.increment(amount),
-      'lastPaymentId': paymentReference.id,
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(reference);
+      if (!snapshot.exists) throw StateError('This debt no longer exists.');
+      final debt = snapshot.data()!;
+      if (amount > debt.balance) {
+        throw ArgumentError('Payment cannot be greater than the remaining balance.');
+      }
+      final nextAmountPaid = debt.amountPaid + amount;
+      transaction.update(reference, {
+        'amountPaid': nextAmountPaid,
+        'lastPaymentId': paymentReference.id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.set(publicProofReference, _publicProofData(
+        debt,
+        amountPaid: nextAmountPaid,
+      ));
+      transaction.set(paymentReference, {
+        'amount': amount,
+        'paidAt': Timestamp.fromDate(paidAt),
+        'method': method,
+        'notes': notes.trim(),
+        'recordedBy': userId,
+      });
     });
-    batch.set(paymentReference, {
-      'amount': amount,
-      'paidAt': Timestamp.fromDate(paidAt),
-      'method': method,
-      'notes': notes.trim(),
-      'recordedBy': userId,
-    });
-    await batch.commit();
     await NotificationService.notifyOwner(
       action: 'debt',
       summary: 'recorded a debt payment of TSH ${amount.toStringAsFixed(0)}',
@@ -150,4 +174,18 @@ class DebtService {
         .orderBy('paidAt', descending: true)
         .snapshots();
   }
+
+  static Map<String, dynamic> _publicProofData(
+    Debt debt, {
+    double? amountPaid,
+  }) => {
+    'id': debt.id,
+    'debtorName': debt.debtorName,
+    'direction': debt.direction.name,
+    'principal': debt.principal,
+    'amountPaid': amountPaid ?? debt.amountPaid,
+    'dueDate': debt.dueDate == null ? null : Timestamp.fromDate(debt.dueDate!),
+    'shopNickname': debt.shopNickname,
+    'createdAt': Timestamp.fromDate(debt.createdAt),
+  };
 }

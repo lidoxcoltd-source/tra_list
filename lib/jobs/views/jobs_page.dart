@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 import 'package:tra_list/services/thousands_separator_formatter.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +11,7 @@ import 'package:tra_list/jobs/controllers/debt_controller.dart';
 import 'package:tra_list/jobs/models/debt.dart';
 import 'package:tra_list/jobs/services/debt_service.dart';
 import 'package:tra_list/jobs/views/add_debt_page.dart';
+import 'package:tra_list/services/pdf/pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,6 +27,114 @@ class _JobsPageState extends State<JobsPage> {
   late final DebtController _controller;
   late final NumberFormat _currency;
   final _dateFormat = DateFormat.yMMMd();
+
+  Future<void> _exportDebts({required bool share}) async {
+    final debts = _controller.filtered;
+    if (debts.isEmpty) {
+      Get.snackbar('info'.tr, 'debt_export_empty'.tr);
+      return;
+    }
+    try {
+      final bytes = await _buildDebtsPdf(debts);
+      final fileName = 'madeni_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+      if (share) {
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [
+              XFile.fromData(
+                bytes,
+                mimeType: 'application/pdf',
+                name: fileName,
+              ),
+            ],
+            fileNameOverrides: [fileName],
+            title: 'debt_pdf_title'.tr,
+            subject: 'debt_pdf_title'.tr,
+          ),
+        );
+      } else {
+        await pdf_saver.savePdf(bytes, fileName);
+        if (mounted) Get.snackbar('success'.tr, 'debt_downloaded'.tr);
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Could not export debt list: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) Get.snackbar('error'.tr, 'debt_export_error'.tr);
+    }
+  }
+
+  Future<Uint8List> _buildDebtsPdf(List<Debt> debts) async {
+    final document = pw.Document();
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final money = NumberFormat('#,##0.00');
+    final totalBalance = debts.fold<double>(
+      0,
+      (sum, debt) => sum + debt.balance,
+    );
+    final teal = PdfColor.fromHex('#0E5962');
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          pw.Text(
+            'debt_pdf_title'.tr,
+            style: pw.TextStyle(
+              color: teal,
+              fontSize: 22,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 5),
+          pw.Text('${'debt_pdf_generated'.tr}: ${dateFormat.format(DateTime.now())}'),
+          pw.SizedBox(height: 14),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#EAF3F4'),
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('${'debt_pdf_count'.tr}: ${debts.length}'),
+                pw.Text('${'debt_balance'.tr}: TZS ${money.format(totalBalance)}'),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Table.fromTextArray(
+            headers: [
+              'debt_person_name'.tr,
+              'transactions_filter_shop'.tr,
+              'debt_original_amount'.tr,
+              'debt_paid_so_far'.tr,
+              'debt_balance'.tr,
+              'due_date'.tr,
+            ],
+            data: debts.map((debt) => [
+              debt.debtorName,
+              debt.shopNickname,
+              money.format(debt.principal),
+              money.format(debt.amountPaid),
+              money.format(debt.balance),
+              debt.dueDate == null ? '-' : dateFormat.format(debt.dueDate!),
+            ]).toList(),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
+            headerStyle: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            headerDecoration: pw.BoxDecoration(color: teal),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellPadding: const pw.EdgeInsets.all(6),
+          ),
+        ],
+      ),
+    );
+    return document.save();
+  }
 
   @override
   void initState() {
@@ -54,6 +168,33 @@ class _JobsPageState extends State<JobsPage> {
         foregroundColor: const Color(0xFF19313A),
         elevation: 0,
         actions: [
+          PopupMenuButton<String>(
+            tooltip: 'debt_export_pdf'.tr,
+            icon: const Icon(Icons.ios_share_rounded),
+            onSelected: (action) => _exportDebts(share: action == 'share'),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'download',
+                child: Row(
+                  children: [
+                    const Icon(Icons.download_outlined),
+                    const SizedBox(width: 10),
+                    Text('debt_download_pdf'.tr),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'share',
+                child: Row(
+                  children: [
+                    const Icon(Icons.share_outlined),
+                    const SizedBox(width: 10),
+                    Text('debt_share_pdf'.tr),
+                  ],
+                ),
+              ),
+            ],
+          ),
           PopupMenuButton<DebtSortOption>(
             tooltip: 'debt_sort'.tr,
             icon: const Icon(Icons.sort_rounded),

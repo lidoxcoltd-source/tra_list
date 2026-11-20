@@ -25,6 +25,12 @@ class CreateAccountPage extends StatefulWidget {
 
 class _CreateAccountPageState extends State<CreateAccountPage> {
   final _formKey = GlobalKey<FormState>();
+  final _nameKey = GlobalKey<FormFieldState<String>>();
+  final _businessNameKey = GlobalKey<FormFieldState<String>>();
+  final _phoneKey = GlobalKey<FormFieldState<String>>();
+  final _emailKey = GlobalKey<FormFieldState<String>>();
+  final _passwordKey = GlobalKey<FormFieldState<String>>();
+  final _confirmPasswordKey = GlobalKey<FormFieldState<String>>();
   final _nameController = TextEditingController();
   final _businessNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -39,6 +45,218 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   bool _hidePassword = true;
   bool _hideConfirmPassword = true;
   AccountMode _mode = AccountMode.business;
+  int _step = 0;
+
+  static const _stepCount = 5;
+
+  bool _validateCurrentStep() {
+    final keys = switch (_step) {
+      0 => [_nameKey],
+      1 => _mode == AccountMode.business
+          ? [_businessNameKey, _phoneKey]
+          : [_phoneKey],
+      2 => [_emailKey],
+      3 => [_passwordKey],
+      _ => [_confirmPasswordKey],
+    };
+    var valid = true;
+    for (final key in keys) {
+      if (!(key.currentState?.validate() ?? false)) valid = false;
+    }
+    return valid;
+  }
+
+  void _nextStep() {
+    if (!_validateCurrentStep()) return;
+    if (_step < _stepCount - 1) setState(() => _step++);
+  }
+
+  void _previousStep() {
+    if (_step > 0) setState(() => _step--);
+  }
+
+  Widget _buildStepFields(double fieldGap) {
+    switch (_step) {
+      case 0:
+        return TextFormField(
+          key: _nameKey,
+          controller: _nameController,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          textCapitalization: TextCapitalization.words,
+          autofillHints: const [AutofillHints.name],
+          decoration: _inputDecoration(
+            label: 'account_full_name'.tr,
+            icon: Icons.person_outline,
+          ),
+          validator: (value) => _isGoogleSignUpAttempt
+              ? null
+              : value == null || value.trim().isEmpty
+                  ? 'account_full_name_required'.tr
+                  : null,
+        );
+      case 1:
+        return Column(
+          key: const ValueKey('account-step-business'),
+          children: [
+            if (_mode == AccountMode.business) ...[
+              TextFormField(
+                key: _businessNameKey,
+                controller: _businessNameController,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+                textCapitalization: TextCapitalization.words,
+                decoration: _inputDecoration(
+                  label: 'account_business_name'.tr,
+                  icon: Icons.storefront_outlined,
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'account_business_name_required'.tr
+                    : null,
+              ),
+              SizedBox(height: fieldGap),
+            ],
+            TextFormField(
+              key: _phoneKey,
+              controller: _phoneController,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+              keyboardType: TextInputType.phone,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              decoration: _inputDecoration(
+                label: _mode == AccountMode.business
+                    ? 'convert_business_phone'.tr
+                    : 'account_phone_optional'.tr,
+                icon: _mode == AccountMode.business
+                    ? Icons.chat_outlined
+                    : Icons.phone_outlined,
+              ),
+              validator: (value) => _mode == AccountMode.business
+                  ? validateBusinessWhatsapp(value)
+                  : null,
+            ),
+          ],
+        );
+      case 2:
+        return TextFormField(
+          key: _emailKey,
+          controller: _emailController,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          decoration: _inputDecoration(
+            label: 'login_email'.tr,
+            icon: Icons.email_outlined,
+          ),
+          validator: (value) {
+            if (_isGoogleSignUpAttempt) return null;
+            final email = value?.trim() ?? '';
+            if (email.isEmpty) return 'Please enter your email address'.tr;
+            if (!GetUtils.isEmail(email)) return 'Invalid email format'.tr;
+            return null;
+          },
+        );
+      case 3:
+        return TextFormField(
+          key: _passwordKey,
+          controller: _passwordController,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          obscureText: _hidePassword,
+          autofillHints: const [AutofillHints.newPassword],
+          decoration: _inputDecoration(
+            label: 'login_password'.tr,
+            icon: Icons.lock_outline,
+            suffix: IconButton(
+              onPressed: () => setState(() => _hidePassword = !_hidePassword),
+              icon: Icon(_hidePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined),
+            ),
+          ),
+          validator: (value) {
+            if (_isGoogleSignUpAttempt) return null;
+            if (value == null || value.isEmpty) return 'Please enter a password'.tr;
+            if (value.length < 6) return 'Password must be at least 6 characters'.tr;
+            return null;
+          },
+        );
+      default:
+        return TextFormField(
+          key: _confirmPasswordKey,
+          controller: _confirmPasswordController,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          obscureText: _hideConfirmPassword,
+          decoration: _inputDecoration(
+            label: 'account_confirm_password'.tr,
+            icon: Icons.lock_outline,
+            suffix: IconButton(
+              onPressed: () => setState(
+                () => _hideConfirmPassword = !_hideConfirmPassword,
+              ),
+              icon: Icon(_hideConfirmPassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined),
+            ),
+          ),
+          validator: (value) {
+            if (_isGoogleSignUpAttempt) return null;
+            if (value == null || value.isEmpty) {
+              return 'Please confirm your password'.tr;
+            }
+            if (value != _passwordController.text) {
+              return 'Passwords do not match'.tr;
+            }
+            return null;
+          },
+        );
+    }
+  }
+
+  Widget _buildStepProgress(Color accent) => Column(
+    children: [
+      Row(
+        children: List.generate(_stepCount, (index) {
+          final active = index <= _step;
+          return Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              height: 4,
+              margin: EdgeInsets.only(right: index == _stepCount - 1 ? 0 : 7),
+              decoration: BoxDecoration(
+                color: active ? accent : Colors.white.withValues(alpha: .16),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          );
+        }),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(_stepCount, (index) {
+          final active = index <= _step;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active ? accent : const Color(0xFF102C50),
+              border: Border.all(
+                color: active ? accent : Colors.white.withValues(alpha: .3),
+              ),
+            ),
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(
+                color: active ? const Color(0xFF06152E) : const Color(0xFFC0D7EA),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          );
+        }),
+      ),
+    ],
+  );
 
   @override
   void initState() {
@@ -292,7 +510,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          onPressed: () => Get.back(),
+          onPressed: _step > 0 ? _previousStep : () => Get.back(),
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           tooltip: 'Back'.tr,
         ),
@@ -371,7 +589,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: tight ? 19 : (compact ? 21 : 27),
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
                         ),
@@ -388,314 +606,168 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                         SizedBox(height: tight ? 3 : (compact ? 5 : 16)),
                         Container(
                           constraints: const BoxConstraints(maxWidth: 400),
-                          child: AccountModeSelector(
-                            mode: _mode,
-                            onChanged: (mode) => setState(() => _mode = mode),
+                          child: Theme(
+                            data: Theme.of(context).copyWith(
+                              segmentedButtonTheme: SegmentedButtonThemeData(
+                                style: ButtonStyle(
+                                  foregroundColor: WidgetStateProperty.resolveWith(
+                                    (states) => states.contains(WidgetState.selected)
+                                        ? const Color(0xFF06152E)
+                                        : const Color(0xFFE2F0FF),
+                                  ),
+                                  backgroundColor: WidgetStateProperty.resolveWith(
+                                    (states) => states.contains(WidgetState.selected)
+                                        ? accent
+                                        : const Color(0xFF102C50),
+                                  ),
+                                  side: WidgetStateProperty.all(
+                                    BorderSide(color: accent.withValues(alpha: .45)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            child: AccountModeSelector(
+                              mode: _mode,
+                              onChanged: (mode) => setState(() {
+                                _mode = mode;
+                                _step = 0;
+                              }),
+                            ),
                           ),
                         ),
                         SizedBox(height: tight ? 3 : (compact ? 5 : 12)),
                         Container(
                           constraints: const BoxConstraints(maxWidth: 400),
                           child: Card(
-                            elevation: 5,
+                            elevation: 12,
                             color: const Color(0xFF0D2747).withValues(alpha: .97),
                             shadowColor: Colors.black.withValues(alpha: .4),
                             surfaceTintColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(24),
                             ),
                             child: Padding(
                               padding: EdgeInsets.all(
-                                tight ? 8 : (compact ? 10 : 22),
+                              tight ? 14 : (compact ? 20 : 28),
                               ),
-                              child: Form(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: compact ? 330 : 430,
+                                ),
+                                child: Form(
                                 key: _formKey,
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    if (_mode == AccountMode.business)
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                    _buildStepProgress(accent),
+                                    const SizedBox(height: 18),
+                                    AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 460),
+                                      reverseDuration: const Duration(milliseconds: 360),
+                                      transitionBuilder: (child, animation) => FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position: Tween<Offset>(
+                                            begin: const Offset(.035, 0),
+                                            end: Offset.zero,
+                                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic)),
+                                          child: child,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        key: ValueKey('registration-step-$_step-$_mode'),
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          Expanded(
-                                            child: TextFormField(
-                                              controller: _nameController,
-                                              textCapitalization:
-                                                  TextCapitalization.words,
-                                              autofillHints: const [
-                                                AutofillHints.name,
-                                              ],
-                                              decoration: _inputDecoration(
-                                                label: 'account_full_name'.tr,
-                                                icon: Icons.person_outline,
-                                              ),
-                                              validator: (value) {
-                                                if (_isGoogleSignUpAttempt) {
-                                                  return null;
-                                                }
-                                                if (value == null ||
-                                                    value.trim().isEmpty) {
-                                                  return 'account_full_name_required'
-                                                      .tr;
-                                                }
-                                                return null;
-                                              },
-                                            ),
+                                          Text(
+                                            'Step ${_step + 1} of $_stepCount',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 1.1),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: TextFormField(
-                                              controller:
-                                                  _businessNameController,
-                                              textCapitalization:
-                                                  TextCapitalization.words,
-                                              decoration: _inputDecoration(
-                                                label:
-                                                    'account_business_name'.tr,
-                                                icon: Icons.storefront_outlined,
-                                              ),
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.trim().isEmpty) {
-                                                  return 'account_business_name_required'
-                                                      .tr;
-                                                }
-                                                return null;
-                                              },
-                                            ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            switch (_step) {
+                                              0 => 'account_full_name'.tr,
+                                              1 => _mode == AccountMode.business ? 'account_business_name'.tr : 'account_phone_optional'.tr,
+                                              2 => 'login_email'.tr,
+                                              3 => 'login_password'.tr,
+                                              _ => 'account_confirm_password'.tr,
+                                            },
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w500),
                                           ),
+                                            const SizedBox(height: 24),
+                                            Center(
+                                              child: ConstrainedBox(
+                                                constraints: const BoxConstraints(maxWidth: 340),
+                                                child: _buildStepFields(fieldGap),
+                                              ),
+                                            ),
                                         ],
-                                      )
-                                    else
-                                      TextFormField(
-                                        controller: _nameController,
-                                        textCapitalization:
-                                            TextCapitalization.words,
-                                        autofillHints: const [
-                                          AutofillHints.name,
-                                        ],
-                                        decoration: _inputDecoration(
-                                          label: 'account_full_name'.tr,
-                                          icon: Icons.person_outline,
-                                        ),
-                                        validator: (value) {
-                                          if (_isGoogleSignUpAttempt)
-                                            return null;
-                                          if (value == null ||
-                                              value.trim().isEmpty) {
-                                            return 'account_full_name_required'
-                                                .tr;
-                                          }
-                                          return null;
-                                        },
                                       ),
-                                    SizedBox(height: fieldGap),
-                                    TextFormField(
-                                      controller: _phoneController,
-                                      keyboardType: TextInputType.phone,
-                                      autofillHints: const [
-                                        AutofillHints.telephoneNumber,
-                                      ],
-                                      decoration: _inputDecoration(
-                                        label: _mode == AccountMode.business
-                                            ? 'convert_business_phone'.tr
-                                            : 'account_phone_optional'.tr,
-                                        icon: _mode == AccountMode.business
-                                            ? Icons.chat_outlined
-                                            : Icons.phone_outlined,
-                                      ),
-                                      validator: (value) =>
-                                          _mode == AccountMode.business
-                                          ? validateBusinessWhatsapp(value)
-                                          : null,
                                     ),
-                                    SizedBox(height: fieldGap),
-                                    TextFormField(
-                                      controller: _emailController,
-                                      keyboardType: TextInputType.emailAddress,
-                                      autofillHints: const [
-                                        AutofillHints.email,
-                                      ],
-                                      decoration: _inputDecoration(
-                                        label: 'login_email'.tr,
-                                        icon: Icons.email_outlined,
-                                      ),
-                                      validator: (value) {
-                                        if (_isGoogleSignUpAttempt) return null;
-                                        final email = value?.trim() ?? '';
-                                        if (email.isEmpty) {
-                                          return 'Please enter your email address'
-                                              .tr;
-                                        }
-                                        if (!GetUtils.isEmail(email)) {
-                                          return 'Invalid email format'.tr;
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    SizedBox(height: fieldGap),
-                                    TextFormField(
-                                      controller: _passwordController,
-                                      obscureText: _hidePassword,
-                                      autofillHints: const [
-                                        AutofillHints.newPassword,
-                                      ],
-                                      decoration: _inputDecoration(
-                                        label: 'login_password'.tr,
-                                        icon: Icons.lock_outline,
-                                        suffix: IconButton(
-                                          onPressed: () => setState(
-                                            () =>
-                                                _hidePassword = !_hidePassword,
-                                          ),
-                                          icon: Icon(
-                                            _hidePassword
-                                                ? Icons.visibility_outlined
-                                                : Icons.visibility_off_outlined,
-                                          ),
-                                        ),
-                                      ),
-                                      validator: (value) {
-                                        if (_isGoogleSignUpAttempt) return null;
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please enter a password'.tr;
-                                        }
-                                        if (value.length < 6) {
-                                          return 'Password must be at least 6 characters'
-                                              .tr;
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    SizedBox(height: fieldGap),
-                                    TextFormField(
-                                      controller: _confirmPasswordController,
-                                      obscureText: _hideConfirmPassword,
-                                      decoration: _inputDecoration(
-                                        label: 'account_confirm_password'.tr,
-                                        icon: Icons.lock_outline,
-                                        suffix: IconButton(
-                                          onPressed: () => setState(
-                                            () => _hideConfirmPassword =
-                                                !_hideConfirmPassword,
-                                          ),
-                                          icon: Icon(
-                                            _hideConfirmPassword
-                                                ? Icons.visibility_outlined
-                                                : Icons.visibility_off_outlined,
-                                          ),
-                                        ),
-                                      ),
-                                      validator: (value) {
-                                        if (_isGoogleSignUpAttempt) return null;
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please confirm your password'
-                                              .tr;
-                                        }
-                                        if (value != _passwordController.text) {
-                                          return 'Passwords do not match'.tr;
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    SizedBox(height: compact ? 7 : 18),
-                                    ElevatedButton(
-                                      onPressed: _isLoading
-                                          ? null
-                                          : _createAccount,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: accent,
-                                        foregroundColor: const Color(0xFF06152E),
-                                        minimumSize: Size.fromHeight(
-                                          compact ? 42 : 48,
-                                        ),
-                                        padding: EdgeInsets.symmetric(
-                                          vertical: compact ? 7 : 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        elevation: 2,
-                                      ),
-                                      child: _isLoading
-                                          ? const SizedBox(
-                                              height: 20,
-                                              width: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : Text(
-                                              'account_create_button'.tr,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                    SizedBox(height: compact ? 14 : 22),
+                                    Row(
+                                      children: [
+                                        if (_step > 0)
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              onPressed: _isLoading ? null : _previousStep,
+                                              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                                              label: Text('Back'.tr),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.white,
+                                                side: BorderSide(color: Colors.white.withValues(alpha: .3)),
+                                                minimumSize: Size.fromHeight(compact ? 42 : 48),
                                               ),
                                             ),
+                                          ),
+                                        if (_step > 0) const SizedBox(width: 10),
+                                        Expanded(
+                                          flex: 2,
+                                          child: ElevatedButton.icon(
+                                            onPressed: _isLoading
+                                                ? null
+                                                : _step == _stepCount - 1
+                                                    ? _createAccount
+                                                    : _nextStep,
+                                            icon: Icon(_step == _stepCount - 1 ? Icons.check_circle_outline_rounded : Icons.arrow_forward_rounded, size: 19),
+                                            label: _isLoading
+                                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                                : Text(_step == _stepCount - 1 ? 'account_create_button'.tr : 'Continue'.tr, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: accent,
+                                              foregroundColor: const Color(0xFF06152E),
+                                              minimumSize: Size.fromHeight(compact ? 42 : 48),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                              elevation: 4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    if (_googleSupported) ...[
-                                      SizedBox(height: compact ? 2 : 12),
+                                    if (_step == _stepCount - 1 && _googleSupported) ...[
+                                      SizedBox(height: compact ? 4 : 12),
                                       Row(
                                         children: [
-                                          const Expanded(child: Divider()),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                            ),
-                                            child: Text('login_or'.tr),
-                                          ),
-                                          const Expanded(child: Divider()),
+                                          Expanded(child: Divider(color: Colors.white.withValues(alpha: .2))),
+                                          Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('login_or'.tr, style: const TextStyle(color: Color(0xFFC0D7EA)))),
+                                          Expanded(child: Divider(color: Colors.white.withValues(alpha: .2))),
                                         ],
                                       ),
                                       TextButton.icon(
-                                        onPressed: _isLoading
-                                            ? null
-                                            : _createAccountWithGoogle,
-                                        icon: const Text(
-                                          'G',
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFFDB4437),
-                                          ),
-                                        ),
-                                        label: Text(
-                                          'login_google'.tr,
-                                          style: const TextStyle(
-                                            color: const Color(0xFFE2F0FF),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        style: TextButton.styleFrom(
-                                          minimumSize: Size.fromHeight(
-                                            compact ? 34 : 44,
-                                          ),
-                                          visualDensity: compact
-                                              ? VisualDensity.compact
-                                              : VisualDensity.standard,
-                                        ),
+                                        onPressed: _isLoading ? null : _createAccountWithGoogle,
+                                        icon: const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFFDB4437))),
+                                        label: Text('login_google'.tr, style: const TextStyle(color: Color(0xFFE2F0FF), fontWeight: FontWeight.w600)),
                                       ),
                                     ],
-                                    SizedBox(height: compact ? 2 : 12),
+                                    SizedBox(height: compact ? 2 : 8),
                                     TextButton(
-                                      onPressed: () =>
-                                          Get.offNamed(AppRoutes.login),
-                                      style: TextButton.styleFrom(
-                                        minimumSize: Size.fromHeight(
-                                          compact ? 32 : 44,
-                                        ),
-                                        visualDensity: compact
-                                            ? VisualDensity.compact
-                                            : VisualDensity.standard,
-                                      ),
+                                      onPressed: () => Get.offNamed(AppRoutes.login),
                                       child: Text('account_already_have'.tr),
                                     ),
                                   ],
+                                ),
                                 ),
                               ),
                             ),

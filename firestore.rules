@@ -413,6 +413,28 @@ service cloud.firestore {
         );
     }
 
+    function validPublicDebtProof(businessUid, debtId, data) {
+      let debtPath = /databases/$(database)/documents/users/$(businessUid)/debts/$(debtId);
+      let debt = getAfter(debtPath).data;
+      return existsAfter(debtPath)
+        && data.keys().hasOnly([
+          'id', 'debtorName', 'direction', 'principal', 'amountPaid',
+          'dueDate', 'shopNickname', 'createdAt'
+        ])
+        && data.keys().hasAll([
+          'id', 'debtorName', 'direction', 'principal', 'amountPaid',
+          'dueDate', 'shopNickname', 'createdAt'
+        ])
+        && data.id == debtId
+        && data.debtorName == debt.debtorName
+        && data.direction == debt.direction
+        && data.principal == debt.principal
+        && data.amountPaid == debt.amountPaid
+        && data.dueDate == debt.dueDate
+        && data.shopNickname == debt.shopNickname
+        && data.createdAt == debt.createdAt;
+    }
+
     function canViewCategories(businessUid) {
       return hasPermission(businessUid, 'categories', 'view')
         || hasPermission(businessUid, 'transactions', 'view')
@@ -1833,6 +1855,18 @@ service cloud.firestore {
               + request.resource.data.amount;
         allow update, delete: if false;
       }
+    }
+
+    match /users/{businessUid}/publicDebtProofs/{debtId} {
+      // Only the deliberately limited proof projection is publicly readable.
+      allow get: if true;
+      allow list: if false;
+      allow create: if (hasPermission(businessUid, 'jobs', 'create')
+          || hasPermission(businessUid, 'jobs', 'edit'))
+        && validPublicDebtProof(businessUid, debtId, request.resource.data);
+      allow update: if hasPermission(businessUid, 'jobs', 'edit')
+        && validPublicDebtProof(businessUid, debtId, request.resource.data);
+      allow delete: if hasPermission(businessUid, 'jobs', 'delete');
     }
 
     match /receipts/{receiptId} {

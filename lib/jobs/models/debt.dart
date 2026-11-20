@@ -13,6 +13,7 @@ class Debt {
   final double amountPaid;
   final DateTime? dueDate;
   final String shopNickname;
+  final List<String> evidenceUrls;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -27,6 +28,7 @@ class Debt {
     this.amountPaid = 0,
     this.dueDate,
     required this.shopNickname,
+    this.evidenceUrls = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? DateTime.now().microsecondsSinceEpoch.toString(),
@@ -44,6 +46,22 @@ class Debt {
         dueDate!.day,
       ).isBefore(DateTime.now().dateOnly);
 
+  Debt copyWith({List<String>? evidenceUrls}) => Debt(
+    id: id,
+    debtorName: debtorName,
+    phone: phone,
+    direction: direction,
+    reason: reason,
+    notes: notes,
+    principal: principal,
+    amountPaid: amountPaid,
+    dueDate: dueDate,
+    shopNickname: shopNickname,
+    evidenceUrls: evidenceUrls ?? this.evidenceUrls,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  );
+
   Map<String, dynamic> toFirestore() => {
     'id': id,
     'debtorName': debtorName,
@@ -55,6 +73,7 @@ class Debt {
     'amountPaid': amountPaid,
     'dueDate': dueDate == null ? null : Timestamp.fromDate(dueDate!),
     'shopNickname': shopNickname,
+    'evidenceUrls': evidenceUrls,
     'createdAt': Timestamp.fromDate(createdAt),
     'updatedAt': Timestamp.fromDate(updatedAt),
   };
@@ -76,6 +95,9 @@ class Debt {
       amountPaid: (data['amountPaid'] as num?)?.toDouble() ?? 0,
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
       shopNickname: data['shopNickname']?.toString() ?? '',
+      evidenceUrls: (data['evidenceUrls'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );

@@ -334,6 +334,18 @@ service firebase.storage {
             && request.resource.contentType.matches('image/.*')));
     }
 
+    match /users/{businessUid}/debts/{debtId}/evidence/{fileName} {
+      allow read: if hasPermission(businessUid, 'jobs', 'view');
+      allow create: if (hasPermission(businessUid, 'jobs', 'create')
+          || hasPermission(businessUid, 'jobs', 'edit'))
+        && request.resource.size > 0
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches(
+          '(application/pdf|image/(jpeg|png))'
+        );
+      allow update, delete: if false;
+    }
+
     match /chatAttachments/{businessUid}/{conversationId}/{fileName} {
       allow read: if canReadChat(businessUid, conversationId);
       allow create: if isChatMember(businessUid, conversationId)
