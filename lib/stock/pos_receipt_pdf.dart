@@ -16,10 +16,10 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
   final itemHeight = items.fold<double>(0, (height, item) {
     final description = (item['description'] ?? item['name'] ?? '').toString();
     // Allow long product names to wrap on the 80 mm roll.
-    final lines = (description.length / 27).ceil().clamp(1, 8).toInt();
-    return height + lines * 11 + 5;
+    final lines = (description.length / 23).ceil().clamp(1, 8).toInt();
+    return height + lines * 6 + 2;
   });
-  final pageHeight = (104 + itemHeight).clamp(110, 2000).toDouble();
+  final pageHeight = (160 + itemHeight).clamp(170, 2000).toDouble();
   final pdf = pw.Document();
   final muted = PdfColors.grey700;
 
@@ -43,7 +43,7 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
       builder: (context, constraints) => pw.Text(
         List.filled(((constraints?.maxWidth ?? 0) / 3).floor(), '-').join(),
         maxLines: 1,
-        style: pw.TextStyle(fontSize: 7, color: muted),
+        style: pw.TextStyle(fontSize: 8, color: muted),
       ),
     ),
   );
@@ -57,14 +57,14 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
             pw.Text(
               label,
               style: pw.TextStyle(
-                fontSize: bold ? 11 : 9,
+                fontSize: bold ? 16 : 12,
                 fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
               ),
             ),
             pw.Text(
               money(amount),
               style: pw.TextStyle(
-                fontSize: bold ? 11 : 9,
+                fontSize: bold ? 16 : 12,
                 fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
               ),
             ),
@@ -80,8 +80,8 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
   final qrCode = pw.BarcodeWidget(
     barcode: pw.Barcode.qrCode(),
     data: receiptUrl,
-    width: 92,
-    height: 92,
+    width: 160,
+    height: 160,
   );
 
   pdf.addPage(
@@ -102,7 +102,7 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
           pw.Center(
             child: pw.Text(
               'CASH RECEIPT',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
             ),
           ),
           if (text(company['name']).isNotEmpty)
@@ -111,7 +111,7 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
                 text(company['name']).toUpperCase(),
                 textAlign: pw.TextAlign.center,
                 style: pw.TextStyle(
-                  fontSize: 10,
+                  fontSize: 15,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
@@ -121,21 +121,21 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
               child: pw.Text(
                 text(company['addressLine'], text(company['address'])),
                 textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 8),
+                style: pw.TextStyle(fontSize: 11),
               ),
             ),
           if (text(company['mobile'], text(company['phone'])).isNotEmpty)
             pw.Center(
               child: pw.Text(
                 'Tel: ${text(company['mobile'], text(company['phone']))}',
-                style: pw.TextStyle(fontSize: 8),
+                style: pw.TextStyle(fontSize: 11),
               ),
             ),
           if (text(company['tin']).isNotEmpty)
             pw.Center(
               child: pw.Text(
                 'TIN: ${text(company['tin'])}',
-                style: pw.TextStyle(fontSize: 8),
+                style: pw.TextStyle(fontSize: 11),
               ),
             ),
           divider(),
@@ -143,20 +143,23 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Expanded(
-                child: pw.Text('Date: $date', style: pw.TextStyle(fontSize: 8)),
+                child: pw.Text(
+                  'Date: $date',
+                  style: pw.TextStyle(fontSize: 11),
+                ),
               ),
-              pw.Text(time, style: pw.TextStyle(fontSize: 8)),
+              pw.Text(time, style: pw.TextStyle(fontSize: 11)),
             ],
           ),
-          pw.Text('Receipt: $number', style: pw.TextStyle(fontSize: 8)),
+          pw.Text('Receipt: $number', style: pw.TextStyle(fontSize: 11)),
           if (text(client['name']).isNotEmpty)
             pw.Text(
               'Customer: ${text(client['name'])}',
-              style: pw.TextStyle(fontSize: 8),
+              style: pw.TextStyle(fontSize: 11),
             ),
           pw.Text(
             'Served by: ${text(data['cashierName'], 'Mhudumu')}',
-            style: pw.TextStyle(fontSize: 8),
+            style: pw.TextStyle(fontSize: 11),
           ),
           divider(),
           for (final item in items)
@@ -168,13 +171,13 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
                   pw.Expanded(
                     child: pw.Text(
                       '${text(item['description'], text(item['name'], 'Item'))}  x${_quantity(item['qty'])}',
-                      style: pw.TextStyle(fontSize: 9),
+                      style: pw.TextStyle(fontSize: 13),
                     ),
                   ),
                   pw.SizedBox(width: 5),
                   pw.Text(
                     money(_number(item['amount'])),
-                    style: pw.TextStyle(fontSize: 9),
+                    style: pw.TextStyle(fontSize: 13),
                   ),
                 ],
               ),
@@ -188,16 +191,16 @@ Future<Uint8List> buildPosReceiptPdf(Map<String, dynamic> data) async {
           pw.Center(
             child: pw.Text(
               'THANK YOU',
-              style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 21, fontWeight: pw.FontWeight.bold),
             ),
           ),
-          pw.SizedBox(height: 6),
+          pw.SizedBox(height: 8),
           pw.Center(child: qrCode),
-          pw.SizedBox(height: 3),
+          pw.SizedBox(height: 4),
           pw.Center(
             child: pw.Text(
               number,
-              style: pw.TextStyle(fontSize: 7, color: muted),
+              style: pw.TextStyle(fontSize: 11, color: muted),
             ),
           ),
         ],

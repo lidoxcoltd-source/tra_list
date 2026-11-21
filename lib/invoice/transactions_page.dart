@@ -1719,6 +1719,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           fontSize: 12,
                         ),
                       ),
+                      if (t.recordedByName.trim().isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          '${'transactions_recorded_by'.tr}: ${t.recordedByName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                       if (controller.isPending(t)) ...[
                         const SizedBox(height: 7),
                         Container(

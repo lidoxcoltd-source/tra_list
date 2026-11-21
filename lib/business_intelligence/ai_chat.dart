@@ -35,6 +35,9 @@ import 'package:tra_list/services/pdf/invoice_pdf.dart';
 import 'package:tra_list/stock/stock_models.dart';
 import 'package:tra_list/stock/stock_service.dart';
 import 'package:tra_list/stock/stock_ui.dart';
+import 'package:tra_list/jobs/models/debt.dart';
+import 'package:tra_list/jobs/services/debt_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 @visibleForTesting
 String aiResourceLimitMessageKey(String? message) => switch (message) {
@@ -715,6 +718,157 @@ class BusinessAiChatState extends State<BusinessAiChat> {
     await _send(draft.chatCommand);
   }
 
+  bool _isDebtQuestion(String prompt) => RegExp(
+    r'\b(debt|debts|owe|owes|owed|owing|deadline|due|overdue|madeni|deni|ananidai|unaowadadai|ninaodai|ninayodai|wanaonidai|tarehe ya mwisho|muda wa kulipa|waliochelewa)\b',
+    caseSensitive: false,
+  ).hasMatch(prompt);
+
+  bool _isDebtReminderRequest(String prompt) => RegExp(
+    r'\b(remind|reminder|send.*whatsapp|whatsapp.*send|kumbush|wakumbushe|mkumbushe|tuma.*whatsapp|whatsapp.*tuma)\b',
+    caseSensitive: false,
+  ).hasMatch(prompt);
+
+  Debt? _matchReminderTarget(String prompt, List<Debt> debts) {
+    final text = prompt.toLowerCase();
+    final matches = debts.where((debt) =>
+      !debt.isSettled && debt.phone.trim().isNotEmpty &&
+      debt.direction == DebtDirection.customerOwesShop &&
+      debt.debtorName.trim().length >= 2 &&
+      text.contains(debt.debtorName.trim().toLowerCase())
+    ).toList();
+    if (matches.isEmpty) return null;
+    matches.sort((a, b) => b.debtorName.length.compareTo(a.debtorName.length));
+    if (matches.length > 1 &&
+        matches[0].debtorName.length == matches[1].debtorName.length) {
+      return null;
+    }
+    return matches.first;
+  }
+
+  String _debtFactsForAi(List<Debt> debts, String prompt) {
+    final open = debts.where((debt) => !debt.isSettled).toList()
+      ..sort((a, b) {
+        if (a.dueDate == null) return b.dueDate == null ? 0 : 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
+    final language = supportedAiLanguage(Get.locale?.languageCode);
+    final lines = open.take(50).map((debt) => [
+      debt.debtorName,
+      debt.direction == DebtDirection.customerOwesShop
+          ? 'customer owes business' : 'business owes supplier',
+      'balance ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS',
+      'due ${debt.dueDate == null ? 'not set' : DateFormat('yyyy-MM-dd').format(debt.dueDate!)}',
+      if (debt.isOverdue) 'overdue',
+    ].join(' | ')).toList();
+    final isReminder = _isDebtReminderRequest(prompt);
+    final facts = lines.isEmpty ? 'No open debts.' : lines.join('\n');
+    return '${language == 'sw' ? 'Taarifa mpya za madeni zilizopatikana kwa ruhusa ya kazi zilizopo. Tumia majina, salio na tarehe hizi pekee.' : 'Fresh debt records retrieved under the existing jobs view permission. Use only these names, balances and dates.'}\n$facts${isReminder ? '\n${language == 'sw' ? 'Andaa ujumbe mfupi wa WhatsApp kwa mtu aliyetajwa tu. Tumia salio na tarehe zilizothibitishwa. Rudisha ujumbe pekee bila maelezo.' : 'Draft a brief WhatsApp reminder only for the named person. Use the verified balance and due date. Return only the message, no explanation.'}' : ''}';
+  }
+
+  Future<bool> _reviewChatDebtReminder(Debt debt, String draft) async {
+    if (!BusinessAccessService.can('jobs', 'view') || !widget.isCurrent()) return false;
+    final editor = TextEditingController(text: draft.trim());
+    String? approvedMessage;
+    try {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('bi_debt_reminder_review_title'.tr),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: editor,
+                  maxLines: 5,
+                  maxLength: 1000,
+                  decoration: InputDecoration(
+                    labelText: 'bi_debt_reminder_message'.tr,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                Text('bi_debt_reminder_whatsapp_notice'.tr, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
+            FilledButton.icon(
+              onPressed: () {
+                if (editor.text.trim().isEmpty) return;
+                approvedMessage = editor.text.trim();
+                Navigator.pop(dialogContext, true);
+              },
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: Text('bi_debt_reminder_open_whatsapp'.tr),
+            ),
+          ],
+        ),
+      );
+      if (approved != true || approvedMessage == null || !widget.isCurrent()) return false;
+    } finally {
+      editor.dispose();
+    }
+    final current = await DebtService.loadAssistantDebt(debt.id);
+    if (!widget.isCurrent() || current == null || current.isSettled || current.phone.isEmpty) return false;
+    var phone = current.phone.replaceAll(RegExp(r'\D'), '');
+    if (phone.startsWith('00')) phone = phone.substring(2);
+    if (phone.startsWith('0')) phone = '255${phone.substring(1)}';
+    if (phone.length == 9) phone = '255$phone';
+    if (phone.length < 8 || phone.length > 15) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
+      return false;
+    }
+    final uri = Uri.https('wa.me', '/$phone', {'text': approvedMessage!});
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)));
+    }
+    return opened;
+  }
+
+  Future<bool> _confirmDebtDataForAi(List<Debt> debts) async {
+    final openDebts = debts.where((debt) => !debt.isSettled).take(50).toList();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('bi_debt_ai_review_title'.tr),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('bi_debt_ai_review_notice'.tr),
+                const SizedBox(height: 10),
+                for (final debt in openDebts)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(
+                      '${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS  -  ${debt.dueDate == null ? 'debt_due_date_unspecified'.tr : DateFormat.yMMMd().format(debt.dueDate!)}',
+                    ),
+                  ),
+                if (debts.length >= 100)
+                  Text('bi_debt_ai_review_limited'.tr),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text('bi_chat_send_confirm'.tr)),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _send([String? suggestion]) async {
     final typed = (suggestion ?? _input.text).trim();
     final reply = suggestion == null ? _replyTo : null;
@@ -852,6 +1006,19 @@ class BusinessAiChatState extends State<BusinessAiChat> {
       final requestContext = widget.businessContext.withPeriod(selectedPeriod);
       var snapshot = await _provider.prepare(requestContext);
       if (!mounted || !widget.isCurrent()) return;
+      final asksAboutDebts = _isDebtQuestion(prompt);
+      final currentDebts = asksAboutDebts
+          ? await DebtService.loadForAssistant()
+          : const <Debt>[];
+      if (!mounted || !widget.isCurrent()) return;
+      if (asksAboutDebts && !await _confirmDebtDataForAi(currentDebts)) return;
+      if (!mounted || !widget.isCurrent()) return;
+      final reminderTarget = _isDebtReminderRequest(prompt)
+          ? _matchReminderTarget(prompt, currentDebts)
+          : null;
+      final debtFacts = asksAboutDebts
+          ? _debtFactsForAi(currentDebts, prompt)
+          : '';
       final Object provider = _provider;
       if (provider is AiDocumentReviewProvider) {
         final review = await provider.prepareDocumentReview(
@@ -880,7 +1047,12 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                     : m.content,
               },
             ),
-        {'role': 'user', 'content': prompt},
+        {
+          'role': 'user',
+          'content': debtFacts.isEmpty
+              ? prompt
+              : '$prompt\n\n$debtFacts',
+        },
       ];
       final userMessage =
           _pendingUser?.content == prompt &&
@@ -922,6 +1094,10 @@ class BusinessAiChatState extends State<BusinessAiChat> {
       );
       if (!mounted || !widget.isCurrent()) return;
       setState(() => _awaitingResponse = false);
+      if (reminderTarget != null) {
+        await _reviewChatDebtReminder(reminderTarget, answer);
+        if (!mounted || !widget.isCurrent()) return;
+      }
       final aiMessage = newAiChatMessage('assistant', answer);
       try {
         await _history.save(widget.businessContext.businessId, aiMessage);
@@ -1836,6 +2012,8 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                               const SizedBox(height: 12),
                               for (final key in [
                                 'bi_question_performance',
+                                if (BusinessAccessService.can('jobs', 'view'))
+                                  'bi_question_debts',
                                 if (widget
                                     .businessContext
                                     .expenseCategories

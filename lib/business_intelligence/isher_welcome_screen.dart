@@ -1,21 +1,111 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tra_list/business_intelligence/ai_models.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
 import 'package:tra_list/business_intelligence/isher_brand_mark.dart';
 import 'package:tra_list/business_intelligence/isher_greeting_voice.dart';
+import 'package:tra_list/stock/daily_brief_weather_service.dart';
 
 @visibleForTesting
 bool shouldIntroduceIsher(DateTime? lastGreeting, DateTime now) =>
     lastGreeting == null ||
     !lastGreeting.isAfter(now) &&
         now.difference(lastGreeting) >= const Duration(days: 7);
+
+const _swahiliSmallNumbers = [
+  'sifuri',
+  'moja',
+  'mbili',
+  'tatu',
+  'nne',
+  'tano',
+  'sita',
+  'saba',
+  'nane',
+  'tisa',
+  'kumi',
+  'kumi na moja',
+  'kumi na mbili',
+  'kumi na tatu',
+  'kumi na nne',
+  'kumi na tano',
+  'kumi na sita',
+  'kumi na saba',
+  'kumi na nane',
+  'kumi na tisa',
+];
+
+const _swahiliTens = {
+  20: 'ishirini',
+  30: 'thelathini',
+  40: 'arobaini',
+  50: 'hamsini',
+  60: 'sitini',
+  70: 'sabini',
+  80: 'themanini',
+  90: 'tisini',
+};
+
+String _swahiliBelowHundred(int value) {
+  if (value < 20) return _swahiliSmallNumbers[value];
+  final tens = value ~/ 10 * 10;
+  final remainder = value % 10;
+  final tensWord = _swahiliTens[tens]!;
+  return remainder == 0
+      ? tensWord
+      : '$tensWord na ${_swahiliSmallNumbers[remainder]}';
+}
+
+String _swahiliBelowThousand(int value) {
+  if (value < 100) return _swahiliBelowHundred(value);
+  final hundreds = value ~/ 100;
+  final remainder = value % 100;
+  final hundredsWord = 'mia ${_swahiliSmallNumbers[hundreds]}';
+  return remainder == 0
+      ? hundredsWord
+      : '$hundredsWord na ${_swahiliBelowHundred(remainder)}';
+}
+
+String _swahiliIntegerWords(int value) {
+  if (value == 0) return _swahiliSmallNumbers.first;
+  var remaining = value;
+  final parts = <String>[];
+  const scales = [
+    1000000000000,
+    1000000000,
+    1000000,
+    100000,
+    1000,
+  ];
+  const scaleNames = ['trilioni', 'bilioni', 'milioni', 'laki', 'elfu'];
+  for (var index = 0; index < scales.length; index++) {
+    final group = remaining ~/ scales[index];
+    if (group == 0) continue;
+    parts.add('${scaleNames[index]} ${_swahiliIntegerWords(group)}');
+    remaining %= scales[index];
+  }
+  if (remaining > 0) parts.add(_swahiliBelowThousand(remaining));
+  return parts.join(' na ');
+}
+
+String _swahiliTanzaniaShillings(num amount) {
+  if (!amount.isFinite) throw ArgumentError.value(amount, 'amount');
+  final totalCents = (amount.abs() * 100).round();
+  final shillings = totalCents ~/ 100;
+  final cents = totalCents % 100;
+  final amountWords = _swahiliIntegerWords(shillings);
+  final centsWords = cents == 0
+      ? ''
+      : ' na senti ${_swahiliIntegerWords(cents)}';
+  return '${amount < 0 ? 'hasi ' : ''}shilingi $amountWords$centsWords';
+}
 
 @visibleForTesting
 String isherWelcomeGreeting({
@@ -24,6 +114,8 @@ String isherWelcomeGreeting({
   required DateTime now,
   required bool introduce,
   required BusinessContext? business,
+  DailyBriefWeather? weather,
+  bool weatherUnavailable = false,
 }) {
   final sw = language == 'sw';
   final tanzaniaTime = now.toUtc().add(const Duration(hours: 3));
@@ -57,54 +149,77 @@ String isherWelcomeGreeting({
           ? 'Naitwa Isher AI, msaidizi wako wa biashara.'
           : 'My name is Isher AI, your business assistant.',
   ];
-  if (business == null) return lines.join(' ');
-
-  final money = NumberFormat('#,##0.##', 'en_US');
-  final period = DateFormat('yyyy-MM').format(business.period.start);
-  lines.add(
-    sw
-        ? 'Muhtasari wa biashara yako kwa kipindi cha $period.'
-        : 'Here is your business summary for $period.',
-  );
-  if (business.income != null) {
+  if (business != null) {
+    final money = NumberFormat('#,##0.##', 'en_US');
+    final period = DateFormat('yyyy-MM').format(business.period.start);
     lines.add(
       sw
-          ? 'Mapato yaliyorekodiwa ni TZS ${money.format(business.income)}.'
-          : 'Recorded income is TZS ${money.format(business.income)}.',
+          ? 'Muhtasari wa biashara yako kwa kipindi cha $period.'
+          : 'Here is your business summary for $period.',
     );
+    if (business.income != null) {
+      lines.add(
+        sw
+            ? 'Mapato yaliyorekodiwa ni ${_swahiliTanzaniaShillings(business.income!)}.'
+            : 'Recorded income is ${money.format(business.income)} Tanzanian shillings.',
+      );
+    }
+    if (business.expenses != null) {
+      lines.add(
+        sw
+            ? 'Matumizi yaliyorekodiwa ni ${_swahiliTanzaniaShillings(business.expenses!)}.'
+            : 'Recorded expenses are ${money.format(business.expenses)} Tanzanian shillings.',
+      );
+    }
+    if (business.income != null && business.expenses != null) {
+      final cashFlow = business.income! - business.expenses!;
+      final swahiliCashFlow = cashFlow < 0
+          ? 'upungufu wa ${_swahiliTanzaniaShillings(-cashFlow)}'
+          : _swahiliTanzaniaShillings(cashFlow);
+      lines.add(
+        sw
+            ? 'Salio la fedha, si faida ni $swahiliCashFlow.'
+            : 'Cash flow, not profit, is ${money.format(cashFlow)} Tanzanian shillings.',
+      );
+    }
+    if (business.lowStock != null && business.lowStock!.isNotEmpty) {
+      final products = business.lowStock!.take(3).join(', ');
+      lines.add(
+        sw
+            ? 'Bidhaa zenye akiba ndogo: $products.'
+            : 'Low-stock products: $products.',
+      );
+    }
+    if (business.receivable != null && business.receivable! > 0) {
+      lines.add(
+        sw
+            ? 'Madeni ya wateja ni ${_swahiliTanzaniaShillings(business.receivable!)}.'
+            : 'Customer debts are ${money.format(business.receivable)} Tanzanian shillings.',
+      );
+    }
+    if (business.payable != null && business.payable! > 0) {
+      lines.add(
+        sw
+            ? 'Madeni ya biashara ni ${_swahiliTanzaniaShillings(business.payable!)}.'
+            : 'Business debts are ${money.format(business.payable)} Tanzanian shillings.',
+      );
+    }
   }
-  if (business.expenses != null) {
+  if (weather != null) {
+    lines.add(weather.explanation(language));
+    final tips = weather.practicalTips(language);
+    if (tips.isNotEmpty) {
+      lines.add(
+        sw
+            ? 'Hatua za kuchukua: ${tips.join(' ')}'
+            : 'Actions to consider: ${tips.join(' ')}',
+      );
+    }
+  } else if (weatherUnavailable) {
     lines.add(
       sw
-          ? 'Matumizi yaliyorekodiwa ni TZS ${money.format(business.expenses)}.'
-          : 'Recorded expenses are TZS ${money.format(business.expenses)}.',
-    );
-  }
-  if (business.income != null && business.expenses != null) {
-    lines.add(
-      sw
-          ? 'Salio la fedha, si faida ni TZS ${money.format(business.income! - business.expenses!)}.'
-          : 'Cash flow, not profit, is TZS ${money.format(business.income! - business.expenses!)}.',
-    );
-  }
-  if (business.lowStock != null && business.lowStock!.isNotEmpty) {
-    final products = business.lowStock!.take(3).join(', ');
-    lines.add(
-      sw
-          ? 'Bidhaa zenye akiba ndogo: $products.'
-          : 'Low-stock products: $products.',
-    );
-  }
-  if (business.receivable != null && business.receivable! > 0) {
-    lines.add(
-      '${sw ? 'Madeni ya wateja' : 'Customer debts'} ni TZS ${money.format(business.receivable)}.',
-    );
-  }
-  if (business.payable != null && business.payable! > 0) {
-    lines.add(
-      sw
-          ? 'Madeni ya biashara ni TZS ${money.format(business.payable)}.'
-          : 'Business debts are TZS ${money.format(business.payable)}.',
+          ? 'Sikuweza kupata taarifa za hali ya hewa ya eneo lako kwa sasa.'
+          : "I couldn't get your local weather right now.",
     );
   }
   return lines.join(' ');
@@ -122,6 +237,8 @@ class IsherWelcomeScreen extends StatefulWidget {
     this.greetingName = '',
     this.greetingUserId,
     required this.greetingReady,
+    this.voiceProvidersLoader,
+    this.weatherLoader,
     required this.onRetry,
     required this.onChat,
     required this.onVoice,
@@ -139,6 +256,8 @@ class IsherWelcomeScreen extends StatefulWidget {
   final String greetingName;
   final String? greetingUserId;
   final bool greetingReady;
+  final Future<List<String>> Function()? voiceProvidersLoader;
+  final Future<DailyBriefWeather> Function()? weatherLoader;
   final IsherGreetingVoice? greetingVoice;
   final VoidCallback onRetry;
   final VoidCallback onChat;
@@ -158,14 +277,24 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
 
   late final AnimationController _ambient;
   late final IsherGreetingVoice _voice;
+  late final DailyBriefWeatherService _weatherService;
   int _voiceGeneration = 0;
+  int _providerGeneration = 0;
   bool? _shouldIntroduce;
-  bool _scheduled = false;
-  bool _attempted = false;
   bool _voiceError = false;
-  bool _cloudFallback = false;
+  bool _voiceBusy = false;
+  Object? _voiceFailure;
   bool _leaving = false;
   bool _foreground = true;
+  List<String> _greetingProviders = const [];
+  String _greetingProvider = 'gemini';
+  bool _greetingProvidersLoading = false;
+  bool _greetingProvidersReady = false;
+  bool _greetingProviderLoadError = false;
+  bool _greetingProviderPreferenceError = false;
+  DailyBriefWeather? _greetingWeather;
+  bool _greetingWeatherLoaded = false;
+  bool _greetingWeatherUnavailable = false;
 
   @override
   void initState() {
@@ -177,68 +306,187 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
         widget.greetingVoice ??
         CloudIsherGreetingVoice(
           businessId: () => widget.businessId,
-          onFallback: () {
-            if (mounted) setState(() => _cloudFallback = true);
-          },
         );
+    _weatherService = DailyBriefWeatherService();
     _ambient = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scheduleGreeting();
+    if (widget.greetingReady) unawaited(_loadGreetingProviders());
   }
 
   @override
   void didUpdateWidget(covariant IsherWelcomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.businessId != widget.businessId ||
+    final identityChanged =
+        oldWidget.businessId != widget.businessId ||
         oldWidget.businessName != widget.businessName ||
-        oldWidget.greetingUserId != widget.greetingUserId) {
+        oldWidget.greetingUserId != widget.greetingUserId;
+    if (identityChanged ||
+        (oldWidget.greetingReady && !widget.greetingReady)) {
       _stopGreeting();
-      _attempted = false;
       _shouldIntroduce = null;
-    } else if (oldWidget.greetingReady && !widget.greetingReady) {
-      _stopGreeting();
-      _attempted = false;
-      _shouldIntroduce = null;
-    } else if ((!oldWidget.ready || oldWidget.loading) &&
-        widget.ready &&
-        !widget.loading) {
-      _attempted = false;
     }
-    _scheduleGreeting();
+    if (!widget.greetingReady) {
+      _providerGeneration++;
+      _greetingProvidersLoading = false;
+      _greetingProvidersReady = false;
+    } else if (identityChanged ||
+        (!oldWidget.greetingReady && widget.greetingReady)) {
+      unawaited(_loadGreetingProviders());
+    }
   }
 
-  void _scheduleGreeting() {
-    if (!widget.greetingReady ||
-        !widget.ready ||
-        widget.loading ||
-        !_foreground ||
-        _leaving ||
-        _attempted ||
-        _scheduled) {
-      return;
-    }
-    _scheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scheduled = false;
-      if (!mounted ||
-          !widget.greetingReady ||
-          !widget.ready ||
-          widget.loading ||
-          !_foreground ||
-          _leaving ||
-          _attempted) {
-        return;
-      }
-      _attempted = true;
-      _playGreeting();
+  String _greetingProviderPreferenceKey() =>
+      'isher_greeting_provider_${widget.greetingUserId ?? ''}_${widget.businessId ?? ''}';
+
+  Future<void> _loadGreetingProviders() async {
+    final generation = ++_providerGeneration;
+    setState(() {
+      _greetingProvidersLoading = true;
+      _greetingProvidersReady = false;
+      _greetingProviderLoadError = false;
+      _greetingProviderPreferenceError = false;
     });
+    try {
+      final loader = widget.voiceProvidersLoader;
+      final configured = loader == null
+          ? await AiModelRepository().voiceProviders()
+          : await loader();
+      final providers = configured
+          .where((provider) => provider == 'gemini' || provider == 'openai')
+          .toSet()
+          .toList();
+      if (providers.isEmpty) throw StateError('No voice providers available');
+
+      SharedPreferences? preferences;
+      String? savedProvider;
+      var preferenceError = false;
+      try {
+        preferences = await SharedPreferences.getInstance();
+        savedProvider = preferences.getString(
+          _greetingProviderPreferenceKey(),
+        );
+      } catch (error, stackTrace) {
+        debugPrint('Greeting model preference load failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        preferenceError = true;
+      }
+      final selected = providers.contains(savedProvider)
+          ? savedProvider!
+          : defaultVoiceEngine(providers);
+      if (!mounted || generation != _providerGeneration) return;
+      setState(() {
+        _greetingProviders = providers;
+        _greetingProvider = selected;
+        _greetingProvidersLoading = false;
+        _greetingProvidersReady = true;
+        _greetingProviderPreferenceError = preferenceError;
+      });
+      if (preferences != null && savedProvider != selected) {
+        try {
+          await preferences.setString(
+            _greetingProviderPreferenceKey(),
+            selected,
+          );
+        } catch (error, stackTrace) {
+          debugPrint('Greeting model preference save failed: $error');
+          debugPrintStack(stackTrace: stackTrace);
+          if (mounted && generation == _providerGeneration) {
+            setState(() => _greetingProviderPreferenceError = true);
+          }
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Greeting voice providers failed to load: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted || generation != _providerGeneration) return;
+      setState(() {
+        _greetingProvidersLoading = false;
+        _greetingProvidersReady = false;
+        _greetingProviderLoadError = true;
+      });
+    }
+  }
+
+  Future<void> _selectGreetingProvider(String provider) async {
+    if (_voiceBusy || !_greetingProviders.contains(provider)) return;
+    setState(() {
+      _greetingProvider = provider;
+      _greetingProviderPreferenceError = false;
+    });
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_greetingProviderPreferenceKey(), provider);
+    } catch (error, stackTrace) {
+      debugPrint('Greeting model preference save failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) setState(() => _greetingProviderPreferenceError = true);
+    }
+  }
+
+  Widget _greetingModelSelector() {
+    final providerLabel = _greetingProvider == 'gemini' ? 'Gemini' : 'OpenAI';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'isher_greeting_model'.tr,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 7),
+        if (_greetingProvidersLoading)
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else if (_greetingProviderLoadError)
+          TextButton.icon(
+            onPressed: () => unawaited(_loadGreetingProviders()),
+            icon: const Icon(Icons.refresh_rounded, size: 17),
+            label: Text('isher_greeting_model_retry'.tr),
+          )
+        else if (_greetingProviders.length > 1)
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              for (final provider in _greetingProviders)
+                ButtonSegment(
+                  value: provider,
+                  label: Text(provider == 'gemini' ? 'Gemini' : 'OpenAI'),
+                ),
+            ],
+            selected: {_greetingProvider},
+            onSelectionChanged: _voiceBusy
+                ? null
+                : (selection) =>
+                      unawaited(_selectGreetingProvider(selection.first)),
+          )
+        else
+          Text(
+            providerLabel,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        if (_greetingProviderPreferenceError) ...[
+          const SizedBox(height: 4),
+          Text(
+            'isher_greeting_model_preference_error'.tr,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 10),
+          ),
+        ],
+      ],
+    );
   }
 
   int _nextGreetingVariant(String language) {
@@ -254,6 +502,22 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
 
   String _greetingPreferenceKey() =>
       'isher_last_greeting_${widget.greetingUserId ?? ''}_${widget.businessId ?? ''}';
+
+  Future<void> _loadGreetingWeather() async {
+    if (_greetingWeatherLoaded) return;
+    try {
+      final loader = widget.weatherLoader;
+      _greetingWeather = loader == null
+          ? await _weatherService.fetch()
+          : await loader();
+    } catch (error, stackTrace) {
+      debugPrint('Isher greeting weather unavailable: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _greetingWeatherUnavailable = true;
+    } finally {
+      _greetingWeatherLoaded = true;
+    }
+  }
 
   Future<bool> _introductionDue(DateTime now) async {
     final cached = _shouldIntroduce;
@@ -275,11 +539,13 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
   }
 
   Future<void> _playGreeting() async {
+    if (!_greetingProvidersReady) return;
     final generation = ++_voiceGeneration;
     if (mounted) {
       setState(() {
         _voiceError = false;
-        _cloudFallback = false;
+        _voiceBusy = true;
+        _voiceFailure = null;
       });
     }
     try {
@@ -303,12 +569,23 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
           _leaving) {
         return;
       }
+      await _loadGreetingWeather();
+      if (!mounted ||
+          generation != _voiceGeneration ||
+          !widget.ready ||
+          widget.loading ||
+          !_foreground ||
+          _leaving) {
+        return;
+      }
       final greetingText = isherWelcomeGreeting(
         language: language,
         name: widget.greetingName,
         now: now,
         introduce: introduce,
         business: widget.businessContext,
+        weather: _greetingWeather,
+        weatherUnavailable: _greetingWeatherUnavailable,
       );
       await _voice.speak(
         greetingText,
@@ -320,6 +597,7 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
             !_leaving &&
             generation == _voiceGeneration,
         greetingVariant: greetingVariant,
+        provider: _greetingProvider,
       );
       if (mounted &&
           generation == _voiceGeneration &&
@@ -340,13 +618,45 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
       debugPrint('Isher greeting voice failed: $error');
       debugPrintStack(stackTrace: stack);
       if (mounted && generation == _voiceGeneration) {
-        setState(() => _voiceError = true);
+        setState(() {
+          _voiceError = true;
+          _voiceFailure = error;
+        });
+      }
+    } finally {
+      if (mounted && generation == _voiceGeneration) {
+        setState(() => _voiceBusy = false);
       }
     }
   }
 
-  Future<void> _stopGreeting() {
+  String _voiceErrorMessage() {
+    final failure = _voiceFailure;
+    if (failure is FirebaseFunctionsException &&
+        failure.code == 'resource-exhausted') {
+      return 'isher_greeting_limit'.tr;
+    }
+    return 'isher_greeting_voice_unavailable'.tr;
+  }
+
+  Future<void> _toggleGreetingPlayback() async {
+    if (_voiceBusy) {
+      await _stopGreeting();
+      return;
+    }
+    if (!_greetingProvidersReady) return;
+    await _playGreeting();
+  }
+
+  Future<void> _stopGreeting({bool updateState = true}) {
     _voiceGeneration++;
+    if (_voiceBusy) {
+      if (mounted && updateState) {
+        setState(() => _voiceBusy = false);
+      } else {
+        _voiceBusy = false;
+      }
+    }
     return _voice.stop().catchError((Object error, StackTrace stack) {
       debugPrint('Isher greeting stop failed: $error');
       debugPrintStack(stackTrace: stack);
@@ -355,7 +665,6 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
 
   void _navigate(VoidCallback action) {
     _leaving = true;
-    _attempted = true;
     _stopGreeting();
     action();
   }
@@ -365,19 +674,18 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground) {
       _stopGreeting();
-    } else {
-      _scheduleGreeting();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    final stopped = _stopGreeting();
+    final stopped = _stopGreeting(updateState: false);
     final voice = _voice;
     if (voice is CloudIsherGreetingVoice) {
       unawaited(stopped.then((_) => voice.dispose()));
     }
+    _weatherService.dispose();
     _ambient.dispose();
     super.dispose();
   }
@@ -474,29 +782,31 @@ class _IsherWelcomeScreenState extends State<IsherWelcomeScreen>
                                   ),
                                   if (widget.greetingReady) ...[
                                     const SizedBox(height: 8),
-                                    if (_cloudFallback && !_voiceError)
-                                      Text(
-                                        'isher_greeting_cloud_fallback'.tr,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 10,
-                                        ),
-                                      ),
                                     if (_voiceError)
                                       Text(
-                                        (!kIsWeb &&
-                                                    defaultTargetPlatform ==
-                                                        TargetPlatform.android
-                                                ? 'isher_greeting_voice_error'
-                                                : 'isher_greeting_voice_unavailable')
-                                            .tr,
+                                        _voiceErrorMessage(),
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
                                           color: Colors.white70,
-                                          fontSize: 10,
+                                          fontSize: 11,
                                         ),
                                       ),
+                                    const SizedBox(height: 12),
+                                    _greetingModelSelector(),
+                                    const SizedBox(height: 10),
+                                    _GreetingListenButton(
+                                      animation: reduceMotion
+                                          ? const AlwaysStoppedAnimation<double>(
+                                              0.5,
+                                            )
+                                          : _ambient,
+                                      busy: _voiceBusy,
+                                      enabled:
+                                          _greetingProvidersReady ||
+                                          _voiceBusy,
+                                      onPressed: () =>
+                                          unawaited(_toggleGreetingPlayback()),
+                                    ),
                                   ],
                                   const SizedBox(height: 20),
                                   Wrap(
@@ -921,6 +1231,117 @@ class _WelcomeButtonState extends State<_WelcomeButton> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _GreetingListenButton extends StatelessWidget {
+  const _GreetingListenButton({
+    required this.animation,
+    required this.busy,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final Animation<double> animation;
+  final bool busy;
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: animation,
+    builder: (context, _) => Transform.scale(
+      scale: busy ? 1 : 0.97 + animation.value * 0.05,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF9C43F4), Color(0xFF176CFF)],
+          ),
+          border: Border.all(color: const Color(0xFFCFB4FF), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF8A28F5).withValues(
+                alpha: 0.24 + animation.value * 0.18,
+              ),
+              blurRadius: 16 + animation.value * 8,
+              spreadRadius: animation.value * 1.5,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(28),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.58,
+            child: InkWell(
+              onTap: enabled ? onPressed : null,
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 9,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      child: Center(
+                        child: busy
+                            ? const Icon(
+                                Icons.stop_rounded,
+                                color: Colors.white,
+                                size: 25,
+                              )
+                            : const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 27,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          busy
+                              ? 'isher_greeting_stop'.tr
+                              : 'isher_greeting_replay'.tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (busy)
+                          Text(
+                            'isher_greeting_listening'.tr,
+                            style: const TextStyle(
+                              color: Color(0xFFE9DFFF),
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

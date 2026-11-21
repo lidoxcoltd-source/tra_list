@@ -31,6 +31,7 @@ void main() {
       'sw',
       () => true,
       greetingVariant: 0,
+      provider: 'gemini',
     );
     final selected = calls.firstWhere((call) => call.method == 'setVoice');
     expect((selected.arguments as Map)['name'], 'offline');
@@ -55,6 +56,7 @@ void main() {
         'sw',
         () => true,
         greetingVariant: 0,
+        provider: 'gemini',
       ),
       throwsStateError,
     );

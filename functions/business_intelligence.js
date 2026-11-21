@@ -27,6 +27,26 @@ function scopeFor({ uid, businessUid, profileExists, accountDisabled, businessDi
   };
 }
 
+function dailyBriefScopeFor({ uid, businessUid, profileExists, accountDisabled, businessDisabled, modern, legacy, barEnabled }) {
+  if (accountDisabled || businessDisabled || !profileExists) {
+    throw new Error("disabled");
+  }
+  const member = modern?.businessUid === businessUid && modern?.employeeUid === uid
+    ? modern
+    : legacy?.businessUid === businessUid ? legacy : null;
+  const owner = (uid === businessUid && !member) ||
+    (member?.active === true && member?.role === "owner" &&
+      modern?.businessUid === businessUid && modern?.employeeUid === uid);
+  if (!owner && (!member || member.active !== true ||
+      (barEnabled && member.barRole === "bartender") ||
+      member.permissions?.dailyBrief?.view !== true)) {
+    throw new Error("permission-denied");
+  }
+  const shop = owner ? "" : String(member.shopNickname || "").trim();
+  if (!owner && !shop) throw new Error("missing-shop");
+  return { owner, shop };
+}
+
 function summarizePurchases(records) {
   let total = 0, count = 0, invalid = 0;
   for (const record of records) {
@@ -333,7 +353,7 @@ function validateMessages(messages) {
 }
 
 module.exports = {
-  MAX_RECORDS, MAX_SNAPSHOT_BYTES, scopeFor, signSnapshot,
+  MAX_RECORDS, MAX_SNAPSHOT_BYTES, scopeFor, dailyBriefScopeFor, signSnapshot,
   verifySnapshot, summarizeTransactions, summarizeTransactionDetails, summarizePurchases, summarizeTasks,
   summarizeDocuments, summarizeInventory, summarizeStaff, summarizeStaffTasks, validateMessages,
   summarizeProductCatalog, summarizeCategories,

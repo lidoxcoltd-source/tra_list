@@ -224,6 +224,15 @@ class StockService {
       .snapshots()
       .map((s) => s.docs.map(StockMovement.fromDoc).toList());
 
+  Stream<List<StockMovement>> watchMovementsSince(DateTime since) => movements
+      .where(
+        'createdAt',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(since),
+      )
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .map((s) => s.docs.map(StockMovement.fromDoc).toList());
+
   Stream<List<StockMovement>> watchProductMovements(
     String productId, {
     int limit = 100,

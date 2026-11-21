@@ -78,6 +78,10 @@ void stockGoBack(BuildContext context) {
   }
 }
 
+void stockGoHome() {
+  Get.offAllNamed(AppRoutes.home);
+}
+
 /// Shared page scaffold for all stock-management screens.
 class StockScaffold extends StatelessWidget {
   const StockScaffold({

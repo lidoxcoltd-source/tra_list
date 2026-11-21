@@ -1,6 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const WebSocket = require("ws");
 const { dayInTanzania } = require("./business_ai_quota");
+const packageUsage = require("./isher_package_usage");
 
 const LIMIT = 3;
 const LEASE_MS = 90000;
@@ -35,10 +36,10 @@ function greetingText(language, name, variant, suppliedText) {
   return greetings[variant](cleanName);
 }
 
-async function reserve(db, uid) {
+async function reserve(db, uid, businessUid) {
   const ref = db.doc(`isherGreetingUsage/${uid}`);
   const id = randomUUID();
-  await db.runTransaction(async (tx) => {
+  const packageCharge = await db.runTransaction(async (tx) => {
     const now = Date.now();
     const day = dayInTanzania(now);
     const data = (await tx.get(ref)).data() || {};
@@ -50,11 +51,21 @@ async function reserve(db, uid) {
       Object.entries(data.day === day && data.leases ? data.leases : {})
         .filter(([, expires]) => Number.isSafeInteger(expires) && expires > now),
     );
-    if (used + Object.keys(leases).length >= LIMIT || attempts >= 12) throw new Error("quota-exhausted");
+    const packageReservation = businessUid
+      ? await packageUsage.reserve(tx, db, businessUid, "voice", now, id)
+      : null;
+    const charge = packageReservation && !packageReservation.exhausted
+      ? packageReservation
+      : null;
+    if (!charge && attempts >= 12) throw new Error("quota-exhausted");
+    if (!charge && used + Object.keys(leases).length >= LIMIT) {
+      throw new Error("quota-exhausted");
+    }
     leases[id] = now + LEASE_MS;
-    tx.set(ref, { day, used, attempts: attempts + 1, leases });
+    tx.set(ref, { day, used, attempts: charge ? 0 : attempts + 1, leases });
+    return charge;
   });
-  return { ref, id };
+  return { ref, id, businessUid, packageCharge };
 }
 
 async function finish(db, reservation, success) {
@@ -63,10 +74,26 @@ async function finish(db, reservation, success) {
     if (!data || !data.leases || !Object.hasOwn(data.leases, reservation.id)) return;
     const leases = { ...data.leases };
     delete leases[reservation.id];
+    if (reservation.packageCharge) {
+      const updated = success
+        ? await packageUsage.finalize(
+            tx,
+            db,
+            reservation.businessUid,
+            reservation.packageCharge,
+          )
+        : await packageUsage.refund(
+            tx,
+            db,
+            reservation.businessUid,
+            reservation.packageCharge,
+          );
+      if (!updated) throw new Error("package-charge-finalization-failed");
+    }
     tx.set(reservation.ref, {
       ...data,
       leases,
-      used: data.used + (success ? 1 : 0),
+      used: data.used + (success && !reservation.packageCharge ? 1 : 0),
     });
   });
 }
@@ -170,6 +197,33 @@ async function synthesizeGemini({ apiKey, text, fetchImpl = fetch }) {
 
 const PROVIDERS = Object.freeze(["openai", "gemini"]);
 
+function providerFromSettings(settings) {
+  return settings?.greetingProvider === "openai" ? "openai" : "gemini";
+}
+
+function providersForRequest(requestedProvider, settings, enabledProviders) {
+  if (requestedProvider !== undefined && !PROVIDERS.includes(requestedProvider)) {
+    throw new Error("invalid-voice-provider");
+  }
+  const preferred = requestedProvider || providerFromSettings(settings);
+  return enabledProviders.includes(preferred)
+    ? [preferred, ...enabledProviders.filter((provider) => provider !== preferred)]
+    : [...enabledProviders];
+}
+
+async function synthesizeWithFallback(providers, synthesizeProvider) {
+  let lastError;
+  for (const provider of providers) {
+    try {
+      return await synthesizeProvider(provider);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("no-voice-provider-enabled");
+}
+
 module.exports = {
-  reserve, finish, synthesize, synthesizeGemini, wav, greetingText, PROVIDERS,
+  reserve, finish, synthesize, synthesizeGemini, wav, greetingText,
+  providerFromSettings, providersForRequest, synthesizeWithFallback, PROVIDERS,
 };

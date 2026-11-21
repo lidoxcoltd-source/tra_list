@@ -13,6 +13,7 @@ abstract class IsherGreetingVoice {
     String language,
     bool Function() isCurrent, {
     required int greetingVariant,
+    required String provider,
   });
   Future<void> stop();
 }
@@ -50,11 +51,9 @@ class _GreetingAudioSource extends StreamAudioSource {
 }
 
 class CloudIsherGreetingVoice implements IsherGreetingVoice {
-  CloudIsherGreetingVoice({required this.businessId, required this.onFallback});
+  CloudIsherGreetingVoice({required this.businessId});
 
   final String? Function() businessId;
-  final void Function() onFallback;
-  final _device = DeviceIsherGreetingVoice();
   final _player = AudioPlayer();
   Uint8List? _cachedAudio;
   String? _cacheKey;
@@ -65,22 +64,29 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
     String language,
     bool Function() isCurrent, {
     required int greetingVariant,
+    required String provider,
   }) async {
     try {
       final id = businessId();
       if (id == null || id.isEmpty) throw StateError('Business unavailable');
-      final key = '$id:$language:$text';
+      final key = '$id:$provider:$language:$text';
       Uint8List bytes;
       if (_cacheKey == key && _cachedAudio != null) {
         bytes = _cachedAudio!;
       } else {
         final response = await FirebaseFunctions.instance
-            .httpsCallable('generateIsherGreeting')
+            .httpsCallable(
+              'generateIsherGreeting',
+              options: HttpsCallableOptions(
+                timeout: const Duration(seconds: 60),
+              ),
+            )
             .call({
               'businessUid': id,
               'language': language,
               'greetingVariant': greetingVariant,
               'greetingText': text,
+              'provider': provider,
             });
         final data = response.data;
         if (data is! Map || data['audio'] is! String) {
@@ -104,24 +110,14 @@ class CloudIsherGreetingVoice implements IsherGreetingVoice {
       }
       await _player.play();
     } catch (error, stack) {
-      debugPrint('Cloud greeting failed: $error');
+      debugPrint('AI greeting audio failed: $error');
       debugPrintStack(stackTrace: stack);
-      if (!isCurrent()) return;
-      onFallback();
-      await _device.speak(
-        text,
-        language,
-        isCurrent,
-        greetingVariant: greetingVariant,
-      );
+      if (isCurrent()) rethrow;
     }
   }
 
   @override
-  Future<void> stop() async {
-    await _player.stop();
-    await _device.stop();
-  }
+  Future<void> stop() => _player.stop();
 
   Future<void> dispose() => _player.dispose();
 }
@@ -135,6 +131,7 @@ class DeviceIsherGreetingVoice implements IsherGreetingVoice {
     String language,
     bool Function() isCurrent, {
     required int greetingVariant,
+    required String provider,
   }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       throw UnsupportedError('Offline greeting voice is not supported');

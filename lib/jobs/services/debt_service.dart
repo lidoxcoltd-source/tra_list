@@ -40,6 +40,34 @@ class DebtService {
     return query.orderBy('createdAt', descending: true).snapshots();
   }
 
+  /// Fresh, shop-scoped debt records for an explicit AI debt question.
+  static Future<List<Debt>> loadForAssistant() async {
+    if (!BusinessAccessService.can('jobs', 'view')) {
+      throw StateError('You do not have permission to view debts.');
+    }
+    Query<Debt> query = _collection();
+    if (!BusinessAccessService.isOwner.value) {
+      query = query.where('shopNickname', isEqualTo: assignedShop);
+    }
+    final snapshot = await query.orderBy('createdAt', descending: true)
+        .limit(100).get();
+    return snapshot.docs.map((doc) => doc.data()).toList(growable: false);
+  }
+
+  static Future<Debt?> loadAssistantDebt(String debtId) async {
+    if (!BusinessAccessService.can('jobs', 'view')) {
+      throw StateError('You do not have permission to view debts.');
+    }
+    final snapshot = await _collection().doc(debtId).get();
+    if (!snapshot.exists) return null;
+    final debt = snapshot.data()!;
+    if (!BusinessAccessService.isOwner.value &&
+        debt.shopNickname != assignedShop) {
+      return null;
+    }
+    return debt;
+  }
+
   static Future<void> save(Debt debt, {required bool isEditing}) async {
     final action = isEditing ? 'edit' : 'create';
     if (!BusinessAccessService.can('jobs', action)) {
@@ -160,6 +188,28 @@ class DebtService {
       summary: 'recorded a debt payment of TSH ${amount.toStringAsFixed(0)}',
       amount: amount,
     );
+  }
+
+  static Future<void> delete(String debtId) async {
+    if (!BusinessAccessService.can('jobs', 'delete')) {
+      throw StateError('You do not have permission to delete debts.');
+    }
+
+    final reference = _collection().doc(debtId);
+    final paymentSnapshot = await reference.collection('payments').get();
+    final batch = _db.batch();
+    for (final payment in paymentSnapshot.docs) {
+      batch.delete(payment.reference);
+    }
+    batch.delete(reference);
+    batch.delete(
+      _db
+          .collection('users')
+          .doc(BusinessAccessService.businessId)
+          .collection('publicDebtProofs')
+          .doc(debtId),
+    );
+    await batch.commit();
   }
 
   static Stream<QuerySnapshot<DebtPayment>> watchPayments(String debtId) {

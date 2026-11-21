@@ -48,6 +48,30 @@ const navigation = {
     required: ["destination"],
   },
 };
+const debts = {
+  name: "get_current_debts",
+  description: "When the user asks who owes the business, which debts are overdue, or which deadlines are coming, retrieve current debt records. Use due_within_days for upcoming deadlines, 0 for today, and overdue_only for overdue debts. Results may be truncated; disclose the truncated field and do not claim they are complete. The result is limited to debts the signed-in user can view. Never guess or expose phone numbers.",
+  parameters: {
+    type: "object",
+    properties: {
+      due_within_days: { type: "integer", description: "Optional look-ahead from 0 to 365 days." },
+      overdue_only: { type: "boolean", description: "Set true only when the user asks specifically for overdue debts." },
+    },
+    required: [],
+  },
+};
+const debtReminder = {
+  name: "review_whatsapp_debt_reminder",
+  description: "Only after the user asks to remind a specific debtor. First retrieve current debts, identify one exact debt by its returned id, and draft a brief message using its verified balance and due date. Pass the debt id and complete proposed message. This opens an editable approval screen; WhatsApp opens only after the user approves. Never claim the reminder was sent.",
+  parameters: {
+    type: "object",
+    properties: {
+      debt_id: { type: "string", description: "Exact id from get_current_debts." },
+      message: { type: "string", description: "Complete reminder text to show for review, at most 1000 characters." },
+    },
+    required: ["debt_id", "message"],
+  },
+};
 const document = {
   name: "open_document_draft",
   description: "Only after the user explicitly asks to create a document and provides its details, open an editable draft for manual review and saving. Invoice, proforma, and quotation may include up to 30 items; receipts support one item only and advance invoices have no items. This ends the voice session. Never invent details or claim it was saved. Items are not linked to stock.",
@@ -99,6 +123,6 @@ function geminiDeclaration(tool) {
 }
 
 module.exports = {
-  geminiTools: [{ functionDeclarations: [summary, details, document, transaction, navigation].map(geminiDeclaration) }],
-  openAiTools: [summary, details, document, transaction, navigation].map((tool) => ({ type: "function", ...tool })),
+  geminiTools: [{ functionDeclarations: [summary, details, document, transaction, navigation, debts, debtReminder].map(geminiDeclaration) }],
+  openAiTools: [summary, details, document, transaction, navigation, debts, debtReminder].map((tool) => ({ type: "function", ...tool })),
 };

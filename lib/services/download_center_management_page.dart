@@ -464,10 +464,74 @@ class _DownloadCenterManagementPageState
   }
 }
 
-class _StatsCard extends StatelessWidget {
+class _StatsCard extends StatefulWidget {
   const _StatsCard({required this.future});
 
   final Future<Map<String, int>> future;
+
+  @override
+  State<_StatsCard> createState() => _StatsCardState();
+}
+
+class _StatsCardState extends State<_StatsCard> {
+  DateTimeRange? _range;
+  Future<Map<String, int>>? _rangeFuture;
+
+  void _setPreset(String preset) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    late final DateTime start;
+    late final DateTime end;
+    switch (preset) {
+      case 'Today':
+        start = today;
+        end = today;
+      case 'Yesterday':
+        start = today.subtract(const Duration(days: 1));
+        end = start;
+      case 'This week':
+        start = today.subtract(Duration(days: today.weekday - 1));
+        end = today;
+      case 'Last 7 days':
+        start = today.subtract(const Duration(days: 6));
+        end = today;
+      case 'This month':
+        start = DateTime(today.year, today.month);
+        end = today;
+      case 'Last month':
+        start = DateTime(today.year, today.month - 1);
+        end = DateTime(today.year, today.month, 0);
+      case 'This year':
+        start = DateTime(today.year);
+        end = today;
+      default:
+        return;
+    }
+    setState(() {
+      _range = DateTimeRange(start: start, end: end);
+      _rangeFuture = DownloadCenterService.loadStatsForRange(start, end);
+    });
+  }
+
+  Future<void> _chooseRange() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange: _range ?? DateTimeRange(
+        start: DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6)),
+        end: DateTime(now.year, now.month, now.day),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _range = selected;
+      _rangeFuture = DownloadCenterService.loadStatsForRange(
+        selected.start,
+        selected.end,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -475,7 +539,7 @@ class _StatsCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: FutureBuilder<Map<String, int>>(
-          future: future,
+          future: _rangeFuture ?? widget.future,
           builder: (context, snap) {
             final stats = snap.data ?? const <String, int>{};
             final visits = stats['visits'] ?? 0;
@@ -515,6 +579,48 @@ class _StatsCard extends StatelessWidget {
                 const Text(
                   'Page statistics',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final preset in [
+                      'Today',
+                      'Yesterday',
+                      'This week',
+                      'Last 7 days',
+                      'This month',
+                      'Last month',
+                      'This year',
+                    ])
+                      ActionChip(
+                        label: Text(preset),
+                        onPressed: () => _setPreset(preset),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: _chooseRange,
+                      icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                      label: Text(_range == null
+                          ? 'Filter by dates'
+                          : '${_formatDate(_range!.start)} – ${_formatDate(_range!.end)}'),
+                    ),
+                    if (_range != null)
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _range = null;
+                          _rangeFuture = null;
+                        }),
+                        child: const Text('Lifetime'),
+                      ),
+                    if (_range != null)
+                      const Text(
+                        'Daily history is available from this update onward.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 if (snap.connectionState == ConnectionState.waiting)
@@ -563,4 +669,7 @@ class _StatsCard extends StatelessWidget {
       ),
     );
   }
+
+  String _formatDate(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }

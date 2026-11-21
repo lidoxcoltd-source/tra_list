@@ -24,8 +24,8 @@ class _AiModelsAdminPageState extends State<AiModelsAdminPage> {
   bool _loading = true;
   String? _error;
 
-  String _greetingProvider = 'openai';
-  Set<String> _voiceProviders = {'openai'};
+  String _greetingProvider = 'gemini';
+  Set<String> _voiceProviders = {'openai', 'gemini'};
 
   @override
   void initState() {

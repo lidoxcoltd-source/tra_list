@@ -49,6 +49,7 @@ class BusinessAccessService {
     'analytics': 'staff_module_analytics',
     'categories': 'staff_module_categories',
     'stock': 'staff_module_stock',
+    'dailyBrief': 'staff_module_daily_brief',
     'profile': 'staff_module_profile',
     'staff': 'staff_module_staff',
   };
@@ -60,6 +61,15 @@ class BusinessAccessService {
     'delete': 'staff_action_delete',
     'manage': 'staff_action_manage',
   };
+
+  static Iterable<MapEntry<String, String>> actionsFor(String module) =>
+      actions.entries.where(
+        (action) => module == 'dailyBrief'
+            ? action.key == 'view'
+            : module == 'staff'
+            ? action.key == 'manage'
+            : action.key != 'manage',
+      );
 
   static final businessUid = ''.obs;
   static final isOwner = false.obs;
@@ -455,7 +465,9 @@ class BusinessAccessService {
 
   static Map<String, Map<String, bool>> emptyPermissions() => {
     for (final module in modules.keys)
-      module: {for (final action in actions.keys) action: false},
+      module: {
+        for (final action in actionsFor(module)) action.key: false,
+      },
   };
 
   static void clear() {

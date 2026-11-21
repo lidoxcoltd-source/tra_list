@@ -17,6 +17,7 @@ import 'package:tra_list/services/pdf/pdf_saver.dart' as pdf_saver;
 import 'package:tra_list/theme/app_theme.dart';
 import 'stock_media.dart';
 import 'stock_models.dart';
+import 'scan_frame.dart';
 import 'pos_list_document.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
@@ -31,6 +32,10 @@ class _CartLine {
   double get amount => roundMoney(qty * product.sellPrice);
 }
 
+enum _ScanProductAction { add, next, finish, cancel }
+
+enum _PosReceiptAction { print, save, share, done, cancel }
+
 /// Quick sale screen: scan products, build a cart, complete the sale.
 /// Completing creates the invoice and deducts stock in one transaction.
 class PosPage extends StatefulWidget {
@@ -44,6 +49,7 @@ class PosPage extends StatefulWidget {
 class _PosPageState extends State<PosPage> {
   final _service = StockService.current();
   final _codeCtl = TextEditingController();
+  final _productSearchCtl = TextEditingController();
   final _codeFocus = FocusNode();
   final _customer = TextEditingController();
   final _table = TextEditingController();
@@ -59,10 +65,13 @@ class _PosPageState extends State<PosPage> {
   StreamSubscription<List<Product>>? _productsSubscription;
   String _payment = 'cash';
   String _catalogQuery = '';
+  String _productSearchQuery = '';
   String _catalogCategory = '';
+  String _mobileProductCategory = '';
   int _mobileDestination = 0;
-  bool _showAllMobileProducts = false;
   bool _showCheckoutDetails = false;
+  bool _scanConfirmationOpen = false;
+  bool _scanBatchActive = false;
   String _lastCode = '';
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
   MobileScannerController? _scanner;
@@ -151,6 +160,7 @@ class _PosPageState extends State<PosPage> {
     _productsSubscription?.cancel();
     _scanner?.dispose();
     _codeCtl.dispose();
+    _productSearchCtl.dispose();
     _codeFocus.dispose();
     _customer.dispose();
     _table.dispose();
@@ -171,12 +181,96 @@ class _PosPageState extends State<PosPage> {
         _scanner = MobileScannerController(
           detectionSpeed: DetectionSpeed.normal,
           detectionTimeoutMs: 600,
+          formats: const [BarcodeFormat.all],
         );
       } else {
         _scanner?.dispose();
         _scanner = null;
       }
     });
+  }
+
+  Future<void> _togglePosTorch() async {
+    final scanner = _scanner;
+    if (scanner == null) return;
+    try {
+      await scanner.toggleTorch();
+    } on MobileScannerException catch (error) {
+      if (!mounted) return;
+      stockToast('stk_error'.tr, stockErrorText(error), error: true);
+    }
+  }
+
+  Widget _scannerPreview({required double height}) {
+    final scanner = _scanner;
+    if (scanner == null) return SizedBox(height: height);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            MobileScanner(
+              controller: scanner,
+              placeholderBuilder: (context) => ScannerLoadingFallback(
+                compact: true,
+                onPhoto: () => _scanPhoto(ImageSource.camera),
+                onUpload: () => _scanPhoto(ImageSource.gallery),
+                onRetry: _retryPosCamera,
+              ),
+              onDetect: (capture) {
+                for (final barcode in capture.barcodes) {
+                  final value = barcode.rawValue;
+                  if (value != null && value.isNotEmpty) {
+                    _onCode(value);
+                    return;
+                  }
+                }
+              },
+            ),
+            IgnorePointer(
+              child: LayoutBuilder(
+                builder: (context, constraints) => Center(
+                  child: ScanFrame(
+                    width: constraints.maxWidth * .62,
+                    height: constraints.maxHeight * .72,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: ValueListenableBuilder<MobileScannerState>(
+                valueListenable: scanner,
+                builder: (context, state, _) {
+                  final torchAvailable =
+                      state.torchState != TorchState.unavailable;
+                  final torchOn = state.torchState == TorchState.on;
+                  return Material(
+                    color: Colors.black.withValues(alpha: .58),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'stk_torch'.tr,
+                      onPressed: torchAvailable ? _togglePosTorch : null,
+                      icon: Icon(
+                        torchOn
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
+                        color: torchOn ? const Color(0xFFFFC629) : Colors.white,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Reads a code from a photo (camera or file); used when live scanning
@@ -199,7 +293,7 @@ class _PosPageState extends State<PosPage> {
 
   Future<void> _onCode(String raw) async {
     final code = raw.trim();
-    if (code.isEmpty) return;
+    if (code.isEmpty || _scanConfirmationOpen) return;
     final now = DateTime.now();
     // The camera sees the same label many times per second.
     if (code == _lastCode &&
@@ -208,30 +302,269 @@ class _PosPageState extends State<PosPage> {
     }
     _lastCode = code;
     _lastScanAt = now;
-    var p = findProductByCode(_products.where((p) => p.active), code);
-    p ??= _products
-        .where(
-          (product) =>
-              product.active &&
-              product.name.trim().toLowerCase() == code.toLowerCase(),
-        )
-        .firstOrNull;
-    p ??= await _service.findProductByCode(code);
-    if (!mounted) return;
-    if (p != null && !p.active) p = null;
-    if (p == null) {
-      HapticFeedback.heavyImpact();
-      stockToast(
-        'stk_error'.tr,
-        fmtText('stk_scan_not_found', {'code': code}),
-        error: true,
-      );
-      return;
-    }
-    if (_add(p, 1)) {
+    _scanConfirmationOpen = true;
+    try {
+      final product = await _findProductByCode(code);
+      if (!mounted) return;
+      if (product == null) {
+        HapticFeedback.heavyImpact();
+        stockToast(
+          'stk_error'.tr,
+          fmtText('stk_scan_not_found', {'code': code}),
+          error: true,
+        );
+        return;
+      }
+
       HapticFeedback.mediumImpact();
       SystemSound.play(SystemSoundType.click);
+      final confirmed = await _confirmScannedProduct(product);
+      if (!mounted || confirmed != _ScanProductAction.add) return;
+      _add(product, 1);
+    } finally {
+      _scanConfirmationOpen = false;
+      _lastScanAt = DateTime.now();
     }
+  }
+
+  Future<Product?> _findProductByCode(String code) async {
+    var product = findProductByCode(
+      _products.where((item) => item.active),
+      code,
+    );
+    product ??= _products
+        .where(
+          (item) =>
+              item.active &&
+              item.name.trim().toLowerCase() == code.toLowerCase(),
+        )
+        .firstOrNull;
+    product ??= await _service.findProductByCode(code);
+    return product?.active == true ? product : null;
+  }
+
+  Future<void> _startBatchScan() async {
+    if (_scanBatchActive) return;
+    setState(() => _scanBatchActive = true);
+    try {
+      while (mounted) {
+        final code = await scanCode(context);
+        if (!mounted || code == null) break;
+        if (code.trim().isEmpty) continue;
+
+        final product = await _findProductByCode(code.trim());
+        if (!mounted) break;
+        if (product == null) {
+          HapticFeedback.heavyImpact();
+          stockToast(
+            'stk_error'.tr,
+            fmtText('stk_scan_not_found', {'code': code.trim()}),
+            error: true,
+          );
+          continue;
+        }
+
+        HapticFeedback.mediumImpact();
+        SystemSound.play(SystemSoundType.click);
+        final action = await _confirmScannedProduct(product, batch: true);
+        if (!mounted || action == null || action == _ScanProductAction.cancel) {
+          break;
+        }
+        _add(product, 1);
+        if (action == _ScanProductAction.finish) {
+          setState(() => _mobileDestination = 3);
+          break;
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        stockToast('stk_error'.tr, stockErrorText(error), error: true);
+      }
+    } finally {
+      if (mounted) setState(() => _scanBatchActive = false);
+    }
+  }
+
+  Future<_ScanProductAction?> _confirmScannedProduct(
+    Product product, {
+    bool batch = false,
+  }) {
+    return showDialog<_ScanProductAction>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E9B70).withValues(alpha: .12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: Color(0xFF1E9B70),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'pos_scan_found_title'.tr,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: kStockNavy,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  ProductImage(url: product.imageUrl, size: 68, radius: 16),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (product.sku.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            product.sku,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.blueGrey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F6FA),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
+                      style: const TextStyle(
+                        color: kStockNavy,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (product.tracked) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        '${'stk_in_stock'.tr}: ${formatQty(product.availableQuantity)} ${unitLabel(product.unit)}',
+                        style: TextStyle(
+                          color: Colors.blueGrey.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                batch ? 'pos_scan_batch_prompt'.tr : 'pos_scan_confirm_add'.tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.blueGrey.shade700),
+              ),
+              const SizedBox(height: 18),
+              if (batch)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          _ScanProductAction.next,
+                        ),
+                        icon: const Icon(Icons.skip_next_rounded, size: 19),
+                        label: Text('pos_scan_next'.tr),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kStockNavy,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          _ScanProductAction.finish,
+                        ),
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: Text('stk_ok'.tr),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          _ScanProductAction.cancel,
+                        ),
+                        child: Text('stk_cancel'.tr),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kStockNavy,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          _ScanProductAction.add,
+                        ),
+                        icon: const Icon(Icons.add_shopping_cart_rounded),
+                        label: Text('pos_add_to_cart'.tr),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Adds [qty] of [p]; false when refused (e.g. not enough stock).
@@ -321,7 +654,7 @@ class _PosPageState extends State<PosPage> {
     return 'POS-${n.year % 100}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}';
   }
 
-  Future<void> _complete({bool printReceipt = false}) async {
+  Future<void> _complete() async {
     if (_saving || _listBusy || _cart.isEmpty) return;
     if (BusinessAccessService.isBarBartender) {
       stockToast('stk_error'.tr, 'stk_err_permission'.tr, error: true);
@@ -365,6 +698,22 @@ class _PosPageState extends State<PosPage> {
         'items': items,
         'total': _total,
       };
+      final receipt = <String, dynamic>{
+        ...data,
+        'company': {
+          'name': BusinessAccessService.businessName.value,
+          'shopNickname': BusinessAccessService.shopNickname.value,
+        },
+        'id': _saleRef.id,
+        'receiptId': _saleRef.id,
+      };
+      final action = await _showDone(number, _total, receipt);
+      if (!mounted) return;
+      if (action == null || action == _PosReceiptAction.cancel) {
+        _reset();
+        return;
+      }
+
       saleStage = 'kuandika invoice na kutoa bidhaa stoo';
       final saleResult = await _service.finalizePosSale(
         saleId: _saleRef.id,
@@ -375,38 +724,75 @@ class _PosPageState extends State<PosPage> {
         ],
       );
       saleStage = 'kutuma taarifa ya mauzo';
-      await NotificationService.notifyOwner(
-        action: 'invoice',
-        summary: 'POS sale $number (TSH ${_total.toStringAsFixed(0)})',
-        amount: _total,
-      );
-      if (!mounted) return;
-      saleStage = 'kuonyesha risiti';
-      final total = _total;
-      final receipt = <String, dynamic>{
-        ...data,
-        'company': saleResult.company,
-        'id': _saleRef.id,
-        'receiptId': _saleRef.id,
-      };
-      _reset();
-      if (printReceipt) {
-        var printed = false;
-        try {
-          final bytes = await buildPosReceiptPdf(receipt);
-          if (!mounted) return;
-          printed = await printThermalReceipt(context, bytes);
-          if (printed && mounted) {
-            stockToast('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
-          }
-        } catch (error) {
-          if (mounted) {
-            stockToast('stk_error'.tr, stockErrorText(error), error: true);
-          }
+      try {
+        await NotificationService.notifyOwner(
+          action: 'invoice',
+          summary: 'POS sale $number (TSH ${_total.toStringAsFixed(0)})',
+          amount: _total,
+        );
+      } catch (error) {
+        debugPrint('POS sale notification failed: $error');
+        if (mounted) {
+          stockToast('stk_error'.tr, stockErrorText(error), error: true);
         }
-        if (printed || !mounted) return;
       }
-      await _showDone(number, total, receipt);
+      if (!mounted) return;
+      receipt['company'] = saleResult.company;
+      _reset();
+      switch (action) {
+        case _PosReceiptAction.print:
+          try {
+            final bytes = await buildPosReceiptPdf(receipt);
+            if (!mounted) return;
+            final printed = await printThermalReceipt(context, bytes);
+            if (printed && mounted) {
+              stockToast('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
+            }
+          } catch (error) {
+            if (mounted) {
+              stockToast('stk_error'.tr, stockErrorText(error), error: true);
+            }
+          }
+          break;
+        case _PosReceiptAction.save:
+        case _PosReceiptAction.share:
+          try {
+            final bytes = await buildPosReceiptPdf(receipt);
+            final fileName =
+                'Receipt_${number.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}.pdf';
+            if (action == _PosReceiptAction.share) {
+              await SharePlus.instance.share(
+                ShareParams(
+                  files: [
+                    XFile.fromData(
+                      bytes,
+                      mimeType: 'application/pdf',
+                      name: fileName,
+                    ),
+                  ],
+                  fileNameOverrides: [fileName],
+                  title: number,
+                  subject: number,
+                ),
+              );
+            } else {
+              await pdf_saver.savePdf(bytes, fileName);
+              if (mounted) {
+                stockToast('stk_saved'.tr, 'pos_receipt_saved'.tr);
+              }
+            }
+          } catch (error) {
+            if (mounted) {
+              stockToast('stk_error'.tr, stockErrorText(error), error: true);
+            }
+          }
+          break;
+        case _PosReceiptAction.done:
+          stockToast('pos_sale_done'.tr, 'pos_receipt_saved'.tr);
+          break;
+        case _PosReceiptAction.cancel:
+          break;
+      }
     } catch (e) {
       if (!mounted) return;
       debugPrint('POS sale failed during: $saleStage: $e');
@@ -931,127 +1317,104 @@ class _PosPageState extends State<PosPage> {
     });
   }
 
-  Future<void> _showDone(
+  Future<_PosReceiptAction?> _showDone(
     String number,
     double total,
     Map<String, dynamic> receipt,
   ) {
-    var busyAction = '';
     final pdfBytes = buildPosReceiptPdf(receipt);
-
-    Future<void> saveOrShare(
-      BuildContext dialogContext,
-      StateSetter setDialogState, {
-      required bool share,
-    }) async {
-      setDialogState(() => busyAction = share ? 'share' : 'save');
-      try {
-        final bytes = await pdfBytes;
-        final fileName =
-            'Receipt_${number.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}.pdf';
-        if (share) {
-          await SharePlus.instance.share(
-            ShareParams(
-              files: [
-                XFile.fromData(
-                  bytes,
-                  mimeType: 'application/pdf',
-                  name: fileName,
-                ),
-              ],
-              fileNameOverrides: [fileName],
-              title: number,
-              subject: number,
-            ),
-          );
-        } else {
-          await pdf_saver.savePdf(bytes, fileName);
-          if (dialogContext.mounted) {
-            stockToast('stk_saved'.tr, 'pos_receipt_saved'.tr);
-          }
-        }
-      } catch (error) {
-        if (dialogContext.mounted) {
-          stockToast('stk_error'.tr, stockErrorText(error), error: true);
-        }
-      } finally {
-        if (dialogContext.mounted) {
-          setDialogState(() => busyAction = '');
-        }
-      }
-    }
-
-    Future<void> printThermal(
-      BuildContext dialogContext,
-      StateSetter setDialogState,
-    ) async {
-      setDialogState(() => busyAction = 'print');
-      try {
-        final bytes = await pdfBytes;
-        if (!dialogContext.mounted) return;
-        final printed = await printThermalReceipt(dialogContext, bytes);
-        if (printed && dialogContext.mounted) {
-          stockToast('pos_thermal_printer'.tr, 'pos_thermal_printed'.tr);
-        }
-      } catch (error) {
-        if (dialogContext.mounted) {
-          stockToast('stk_error'.tr, stockErrorText(error), error: true);
-        }
-      } finally {
-        if (dialogContext.mounted) {
-          setDialogState(() => busyAction = '');
-        }
-      }
-    }
-
-    return showDialog<void>(
+    return showDialog<_PosReceiptAction>(
       context: context,
       builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.all(12),
+        backgroundColor: const Color(0xFFF3F7FB),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         child: SizedBox(
-          width: 520,
+          width: 560,
           height: MediaQuery.sizeOf(dialogContext).height * 0.88,
-          child: StatefulBuilder(
-            builder: (ctx, setDialogState) => Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: [
-                  Row(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF123B70), Color(0xFF0D2748)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
                     children: [
-                      const Icon(Icons.check_circle, color: kStockOk),
-                      const SizedBox(width: 8),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6CE3B0).withValues(alpha: .16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.verified_rounded,
+                          color: Color(0xFF6CE3B0),
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'pos_sale_done'.tr,
+                              'pos_sale_review'.tr,
                               style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                            Text('$number - TZS ${formatMoney(total)}'),
+                            const SizedBox(height: 3),
+                            Text(
+                              '$number  ·  TZS ${formatMoney(total)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFC9D8E9),
+                                fontSize: 14,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       IconButton(
                         tooltip: 'stk_cancel'.tr,
-                        onPressed: busyAction.isEmpty
-                            ? () => Navigator.pop(ctx)
-                            : null,
-                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          _PosReceiptAction.cancel,
+                        ),
+                        color: Colors.white,
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Expanded(
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFDCE6F0)),
+                    ),
                     child: FutureBuilder<Uint8List>(
                       future: pdfBytes,
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Center(
-                            child: Text(stockErrorText(snapshot.error!)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Text(stockErrorText(snapshot.error!)),
+                            ),
                           );
                         }
                         if (!snapshot.hasData) {
@@ -1070,73 +1433,71 @@ class _PosPageState extends State<PosPage> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (!kIsWeb)
-                        OutlinedButton.icon(
-                          onPressed: busyAction.isEmpty
-                              ? () => printThermal(ctx, setDialogState)
-                              : null,
-                          icon: busyAction == 'print'
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.print_outlined),
-                          label: Text('pos_print_thermal'.tr),
+                ),
+                const SizedBox(height: 12),
+                if (!kIsWeb)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFFFC629),
+                        foregroundColor: kStockNavy,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      OutlinedButton.icon(
-                        onPressed: busyAction.isEmpty
-                            ? () =>
-                                  saveOrShare(ctx, setDialogState, share: false)
-                            : null,
-                        icon: busyAction == 'save'
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.download_outlined),
-                        label: Text('pos_save_receipt'.tr),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: busyAction.isEmpty
-                            ? () =>
-                                  saveOrShare(ctx, setDialogState, share: true)
-                            : null,
-                        icon: busyAction == 'share'
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.share_outlined),
-                        label: Text('pos_share_receipt'.tr),
-                      ),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: kStockBlue,
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, _PosReceiptAction.print),
+                      icon: const Icon(Icons.print_rounded, size: 25),
+                      label: Text(
+                        'pos_print_thermal'.tr,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
                         ),
-                        onPressed: busyAction.isEmpty
-                            ? () => Navigator.pop(ctx)
-                            : null,
-                        child: Text('pos_new_sale'.tr),
                       ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
+                const SizedBox(height: 8),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, _PosReceiptAction.save),
+                      icon: const Icon(Icons.download_outlined),
+                      label: Text('pos_save_receipt'.tr),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, _PosReceiptAction.share),
+                      icon: const Icon(Icons.share_outlined),
+                      label: Text('pos_share_receipt'.tr),
+                    ),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      onPressed: () => Navigator.pop(
+                        dialogContext,
+                        _PosReceiptAction.cancel,
+                      ),
+                      child: Text('stk_cancel'.tr),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kStockBlue,
+                      ),
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, _PosReceiptAction.done),
+                      child: Text('pos_done'.tr),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -1148,20 +1509,18 @@ class _PosPageState extends State<PosPage> {
   Widget build(BuildContext context) {
     return Obx(() {
       final wide = MediaQuery.of(context).size.width >= 900;
-      final cartPane = _cartPane(showCatalogWhenEmpty: !wide);
+      final cartPane = _cartPane(showCatalogWhenEmpty: false);
       return StockScaffold(
         title: BusinessAccessService.isBarBartender
             ? 'bar_bartender_title'.tr
             : 'pos_title'.tr,
         maxWidth: 1440,
         centerTitle: !wide,
-        leading: wide
-            ? null
-            : IconButton(
-                tooltip: 'More',
-                onPressed: _showMoreMenu,
-                icon: const Icon(Icons.menu_rounded),
-              ),
+        leading: IconButton(
+          tooltip: 'pos_home'.tr,
+          onPressed: stockGoHome,
+          icon: Icon(Icons.arrow_back_rounded, size: wide ? 23 : 21),
+        ),
         actions: [
           if (!wide)
             IconButton(
@@ -1194,18 +1553,20 @@ class _PosPageState extends State<PosPage> {
         bottomNavigationBar: wide
             ? null
             : NavigationBar(
-                height: 66,
+                height: 76,
                 selectedIndex: _mobileDestination,
                 onDestinationSelected: (index) {
-                  if (index == 3) {
+                  if (index == 4) {
                     _showMoreMenu();
                     setState(() => _mobileDestination = 0);
                     return;
                   }
+                  if (index == 2) {
+                    if (!_scanBatchActive) _startBatchScan();
+                    return;
+                  }
                   setState(() {
                     _mobileDestination = index;
-                    if (index == 0) _showAllMobileProducts = false;
-                    if (index == 1) _showAllMobileProducts = true;
                   });
                 },
                 backgroundColor: Colors.white,
@@ -1220,6 +1581,11 @@ class _PosPageState extends State<PosPage> {
                     icon: Icon(Icons.inventory_2_outlined),
                     selectedIcon: Icon(Icons.inventory_2_rounded),
                     label: 'Products',
+                  ),
+                  NavigationDestination(
+                    icon: _scanNavIcon(),
+                    selectedIcon: _scanNavIcon(),
+                    label: 'pos_scan_batch'.tr,
                   ),
                   NavigationDestination(
                     icon: Badge(
@@ -1257,12 +1623,37 @@ class _PosPageState extends State<PosPage> {
                   SizedBox(width: 430, child: cartPane),
                 ],
               )
-            : _mobileDestination == 2
+            : _mobileDestination == 0
+            ? _mobilePosPane()
+            : _mobileDestination == 1
+            ? _mobileProductsPane()
+            : _mobileDestination == 3
             ? cartPane
-            : _mobileCatalogPane(),
+            : _mobilePosPane(),
       );
     });
   }
+
+  Widget _scanNavIcon() => Container(
+    width: 42,
+    height: 42,
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFC629),
+      shape: BoxShape.circle,
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFFFFC629).withValues(alpha: .3),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: const Icon(
+      Icons.qr_code_scanner_rounded,
+      color: kStockNavy,
+      size: 22,
+    ),
+  );
 
   Future<void> _showMoreMenu() async {
     await showModalBottomSheet<void>(
@@ -1304,7 +1695,208 @@ class _PosPageState extends State<PosPage> {
     );
   }
 
-  Widget _mobileCatalogPane() {
+  Widget _mobilePosPane() {
+    final previewCount = _cart.length > 5 ? 5 : _cart.length;
+    final searchText = _catalogQuery.trim().toLowerCase();
+    final searchResults = searchText.isEmpty
+        ? <Product>[]
+        : _products
+              .where(
+                (product) =>
+                    product.active &&
+                    (product.name.toLowerCase().contains(searchText) ||
+                        product.sku.toLowerCase().contains(searchText) ||
+                        product.barcode.toLowerCase().contains(searchText)),
+              )
+              .toList();
+
+    Widget compactMessage(IconData icon, String message) => Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 32, color: Colors.blueGrey),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, height: 1.15),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _scanPane(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.receipt_long_rounded, color: kStockBlue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      searchText.isEmpty
+                          ? 'pos_current_sale'.tr
+                          : 'stk_products'.tr,
+                      style: const TextStyle(
+                        color: MjasiColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      searchText.isEmpty
+                          ? '${_cart.length} ${'pos_items'.tr}'
+                          : '${searchResults.length} ${'pos_items'.tr}',
+                      style: const TextStyle(
+                        color: MjasiColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: searchText.isNotEmpty
+              ? searchResults.isEmpty
+                    ? compactMessage(
+                        Icons.inventory_2_outlined,
+                        'stk_no_products'.tr,
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        itemCount: searchResults.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 4),
+                        itemBuilder: (context, index) {
+                          final product = searchResults[index];
+                          return Card(
+                            margin: EdgeInsets.zero,
+                            color: Colors.white,
+                            child: ListTile(
+                              dense: true,
+                              onTap: () => _add(product, 1),
+                              leading: ProductImage(
+                                url: product.imageUrl,
+                                size: 40,
+                                radius: 8,
+                              ),
+                              title: Text(
+                                product.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
+                              ),
+                              trailing: IconButton.filledTonal(
+                                tooltip: 'pos_add_to_cart'.tr,
+                                onPressed: () => _add(product, 1),
+                                icon: const Icon(Icons.add_rounded),
+                              ),
+                            ),
+                          );
+                        },
+                      )
+              : _cart.isEmpty
+              ? compactMessage(
+                  Icons.point_of_sale_outlined,
+                  'pos_empty'.tr,
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  itemCount: previewCount,
+                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  itemBuilder: (context, index) {
+                    final line = _cart[index];
+                    return Card(
+                      margin: EdgeInsets.zero,
+                      color: Colors.white,
+                      child: ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFFEAF2FF),
+                          foregroundColor: kStockNavy,
+                          child: Text(formatQty(line.qty)),
+                        ),
+                        title: Text(
+                          line.product.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          'TZS ${formatMoney(line.product.sellPrice)} / ${unitLabel(line.product.unit)}',
+                        ),
+                        trailing: Text(
+                          'TZS ${formatMoney(line.amount)}',
+                          style: const TextStyle(
+                            color: kStockNavy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Color(0xFFE5E9F2))),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'pos_list_total'.tr,
+                      style: const TextStyle(
+                        color: MjasiColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'TZS ${formatMoney(_total)}',
+                      style: const TextStyle(
+                        color: kStockNavy,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: _cart.isEmpty
+                    ? null
+                    : () => setState(() => _mobileDestination = 3),
+                icon: const Icon(Icons.shopping_cart_checkout_rounded),
+                label: Text('pos_review_cart'.tr),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileProductsPane() {
     final categories =
         _products
             .where(
@@ -1314,16 +1906,16 @@ class _PosPageState extends State<PosPage> {
             .toSet()
             .toList()
           ..sort();
-    final query = _catalogQuery.trim().toLowerCase();
+    final query = _productSearchQuery.trim().toLowerCase();
     final products = _products.where((product) {
       if (!product.active) return false;
-      if (_catalogCategory == '__others__') {
+      if (_mobileProductCategory == '__others__') {
         if (product.category.trim().isNotEmpty &&
             product.category.trim().toLowerCase() != 'others') {
           return false;
         }
-      } else if (_catalogCategory.isNotEmpty &&
-          product.category != _catalogCategory) {
+      } else if (_mobileProductCategory.isNotEmpty &&
+          product.category != _mobileProductCategory) {
         return false;
       }
       return query.isEmpty ||
@@ -1331,10 +1923,6 @@ class _PosPageState extends State<PosPage> {
           product.sku.toLowerCase().contains(query) ||
           product.barcode.toLowerCase().contains(query);
     }).toList();
-    final visibleProducts = _showAllMobileProducts
-        ? products
-        : products.take(6).toList();
-
     IconData categoryIcon(String category) {
       final value = category.toLowerCase();
       if (value.contains('drink') ||
@@ -1352,10 +1940,10 @@ class _PosPageState extends State<PosPage> {
     }
 
     Widget categoryItem(String label, IconData icon, String category) {
-      final selected = _catalogCategory == category;
+      final selected = _mobileProductCategory == category;
       return InkWell(
         borderRadius: BorderRadius.circular(13),
-        onTap: () => setState(() => _catalogCategory = category),
+        onTap: () => setState(() => _mobileProductCategory = category),
         child: SizedBox(
           width: 58,
           child: Column(
@@ -1400,29 +1988,25 @@ class _PosPageState extends State<PosPage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
           child: TextField(
-            controller: _codeCtl,
-            focusNode: _codeFocus,
+            controller: _productSearchCtl,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: 'Scan product or search...',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'stk_scan'.tr,
-                    onPressed: cameraScanSupported
-                        ? _toggleCamera
-                        : _codeFocus.requestFocus,
-                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: 'stk_scan_upload'.tr,
-                    onPressed: () => _scanPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined, size: 19),
-                  ),
-                ],
+              hintText: 'pos_search_products'.tr,
+              prefixIcon: IconButton(
+                tooltip: 'pos_search_products'.tr,
+                onPressed: _submitProductSearch,
+                icon: const Icon(Icons.search_rounded, size: 20),
               ),
+              suffixIcon: _productSearchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'pos_clear_search'.tr,
+                      onPressed: () {
+                        _productSearchCtl.clear();
+                        setState(() => _productSearchQuery = '');
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                    ),
               filled: true,
               fillColor: Colors.white,
               isDense: true,
@@ -1436,51 +2020,10 @@ class _PosPageState extends State<PosPage> {
                 borderSide: const BorderSide(color: Color(0xFFDDE5EF)),
               ),
             ),
-            onChanged: (value) => setState(() => _catalogQuery = value),
-            onSubmitted: (value) {
-              _onCode(value);
-              _codeCtl.clear();
-              setState(() => _catalogQuery = '');
-              _codeFocus.requestFocus();
-            },
+            onChanged: (value) => setState(() => _productSearchQuery = value),
+            onSubmitted: (_) => _submitProductSearch(),
           ),
         ),
-        if (!kIsWeb && _cameraOn && _scanner != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 150,
-                child: MobileScanner(
-                  controller: _scanner!,
-                  placeholderBuilder: (context) => ScannerLoadingFallback(
-                    compact: true,
-                    onPhoto: () => _scanPhoto(ImageSource.camera),
-                    onUpload: () => _scanPhoto(ImageSource.gallery),
-                    onRetry: _retryPosCamera,
-                  ),
-                  onDetect: (capture) {
-                    for (final barcode in capture.barcodes) {
-                      final value = barcode.rawValue;
-                      if (value != null && value.isNotEmpty) {
-                        _onCode(value);
-                        break;
-                      }
-                    }
-                  },
-                ),
-              ),
-            ),
-          ),
-        if (BusinessAccessService.isBarBartender)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
-            child: Text(
-              'bar_bartender_help'.tr,
-              style: const TextStyle(color: kStockNavy, fontSize: 12),
-            ),
-          ),
         SizedBox(
           height: 74,
           child: ListView(
@@ -1508,11 +2051,12 @@ class _PosPageState extends State<PosPage> {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: () => setState(
-                  () => _showAllMobileProducts = !_showAllMobileProducts,
+              Text(
+                '${products.length} ${'pos_items'.tr}',
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
                 ),
-                child: Text(_showAllMobileProducts ? 'Show less' : 'See all'),
               ),
             ],
           ),
@@ -1525,10 +2069,10 @@ class _PosPageState extends State<PosPage> {
                 )
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                  itemCount: visibleProducts.length,
+                  itemCount: products.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 5),
                   itemBuilder: (context, index) {
-                    final product = visibleProducts[index];
+                    final product = products[index];
                     return Material(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -1536,7 +2080,7 @@ class _PosPageState extends State<PosPage> {
                         borderRadius: BorderRadius.circular(12),
                         onTap: () => _add(product, 1),
                         child: Container(
-                          height: 66,
+                          height: 82,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 9,
                             vertical: 7,
@@ -1570,11 +2114,28 @@ class _PosPageState extends State<PosPage> {
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
-                                      'TZS ${formatMoney(product.sellPrice)}',
+                                      'TZS ${formatMoney(product.sellPrice)} / ${unitLabel(product.unit)}',
                                       style: const TextStyle(
                                         fontSize: 11,
                                         color: MjasiColors.textSecondary,
                                       ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${formatQty(product.quantity)} ${unitLabel(product.unit)}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: MjasiColors.textSecondary,
+                                            ),
+                                          ),
+                                        ),
+                                        StockStateChip(product: product),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1601,7 +2162,7 @@ class _PosPageState extends State<PosPage> {
           padding: const EdgeInsets.fromLTRB(10, 3, 10, 8),
           child: InkWell(
             borderRadius: BorderRadius.circular(13),
-            onTap: () => setState(() => _mobileDestination = 2),
+            onTap: () => setState(() => _mobileDestination = 3),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
@@ -1651,6 +2212,11 @@ class _PosPageState extends State<PosPage> {
         ),
       ],
     );
+  }
+
+  void _submitProductSearch() {
+    setState(() => _productSearchQuery = _productSearchCtl.text.trim());
+    FocusScope.of(context).unfocus();
   }
 
   Widget _scanPane() {
@@ -1712,31 +2278,7 @@ class _PosPageState extends State<PosPage> {
             ),
             const SizedBox(height: 14),
             if (!kIsWeb && _cameraOn && _scanner != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(13),
-                child: SizedBox(
-                  height: 164,
-                  width: double.infinity,
-                  child: MobileScanner(
-                    controller: _scanner!,
-                    placeholderBuilder: (context) => ScannerLoadingFallback(
-                      compact: true,
-                      onPhoto: () => _scanPhoto(ImageSource.camera),
-                      onUpload: () => _scanPhoto(ImageSource.gallery),
-                      onRetry: _retryPosCamera,
-                    ),
-                    onDetect: (capture) {
-                      for (final barcode in capture.barcodes) {
-                        final value = barcode.rawValue;
-                        if (value != null && value.isNotEmpty) {
-                          _onCode(value);
-                          return;
-                        }
-                      }
-                    },
-                  ),
-                ),
-              ),
+              _scannerPreview(height: 164),
             if (BusinessAccessService.isBarBartender) ...[
               Text(
                 'bar_bartender_help'.tr,
@@ -1790,7 +2332,7 @@ class _PosPageState extends State<PosPage> {
               controller: _codeCtl,
               focusNode: _codeFocus,
               autofocus: !cameraScanSupported,
-              textInputAction: TextInputAction.done,
+              textInputAction: TextInputAction.search,
               decoration:
                   stockInput(
                     'pos_code_hint'.tr,
@@ -1802,11 +2344,30 @@ class _PosPageState extends State<PosPage> {
                       icon: const Icon(Icons.inventory_2_outlined),
                     ),
                   ),
-              // USB / Bluetooth scanners type the code then press Enter.
-              onSubmitted: (v) {
-                _onCode(v);
-                _codeCtl.clear();
-                _codeFocus.requestFocus();
+              // Exact codes are scanned; names and partial codes show matches.
+              onSubmitted: (value) {
+                final query = value.trim().toLowerCase();
+                final exactCode = _products.any(
+                  (product) =>
+                      product.active &&
+                      (product.sku.trim().toLowerCase() == query ||
+                          product.barcode.trim().toLowerCase() == query),
+                );
+                final hasMatches = _products.any(
+                  (product) =>
+                      product.active &&
+                      (product.name.toLowerCase().contains(query) ||
+                          product.sku.toLowerCase().contains(query) ||
+                          product.barcode.toLowerCase().contains(query)),
+                );
+                if (exactCode || !hasMatches) {
+                  _onCode(value);
+                  _codeCtl.clear();
+                  setState(() => _catalogQuery = '');
+                  _codeFocus.requestFocus();
+                } else {
+                  FocusScope.of(context).unfocus();
+                }
               },
               onChanged: (value) => setState(() => _catalogQuery = value),
             ),
@@ -2408,40 +2969,13 @@ class _PosPageState extends State<PosPage> {
                     ),
                   ),
                 );
-                final printButton = !kIsWeb && !isOrderMode
-                    ? SizedBox(
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          onPressed: canComplete
-                              ? () => _complete(printReceipt: true)
-                              : null,
-                          icon: const Icon(Icons.print_outlined),
-                          label: Text('pos_complete_print'.tr),
-                        ),
-                      )
-                    : null;
-
                 if (constraints.maxWidth < 620) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       total,
                       const SizedBox(height: 7),
-                      Row(
-                        children: [
-                          if (printButton != null) ...[
-                            IconButton.outlined(
-                              tooltip: 'pos_complete_print'.tr,
-                              onPressed: canComplete
-                                  ? () => _complete(printReceipt: true)
-                                  : null,
-                              icon: const Icon(Icons.print_outlined),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          Expanded(child: completeButton),
-                        ],
-                      ),
+                      Row(children: [Expanded(child: completeButton)]),
                     ],
                   );
                 }
@@ -2449,10 +2983,6 @@ class _PosPageState extends State<PosPage> {
                 return Row(
                   children: [
                     Expanded(child: total),
-                    if (printButton != null) ...[
-                      printButton,
-                      const SizedBox(width: 8),
-                    ],
                     completeButton,
                   ],
                 );

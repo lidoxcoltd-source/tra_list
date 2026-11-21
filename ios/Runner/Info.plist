@@ -55,5 +55,7 @@
 	<string>Select photos to share with your business team in chat.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Choose a customer contact when sharing an invoice or business document.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Use your approximate location to show today's local weather in the business brief.</string>
 </dict>
 </plist>

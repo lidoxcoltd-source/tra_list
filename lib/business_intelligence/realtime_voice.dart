@@ -31,10 +31,13 @@ import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/business_intelligence/isher_voice_guide_page.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
+import 'package:tra_list/business_intelligence/voice_debt_entry_dialog.dart';
+import 'package:tra_list/jobs/models/debt.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/creative_studio_service.dart';
 import 'package:tra_list/services/pages/creative_design_editor_page.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 String voiceServiceUrl(String configuredUrl, String firebaseProjectId) {
   if (configuredUrl.isNotEmpty) return configuredUrl;
@@ -812,7 +815,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   final _voiceTranscripts = <String>[];
   List<String> _engines = const ['openai'];
   Map<String, String> _providerNicknames = const {};
-  String _engine = 'openai';
+  String _engine = 'gemini';
   bool _engineReady = false;
   bool _enginesLoading = false;
   bool _transactionReviewOpen = false;
@@ -922,6 +925,14 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
 
   Future<void> _selectEngine(String engine) =>
       AiVoiceEngineSelection.select(engine);
+
+  Future<void> _openVoiceDebtEntry() async {
+    final saved = await showVoiceDebtEntryDialog(context);
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('debt_added'.tr)),
+    );
+  }
 
   Future<void> _reviewVoiceTransaction(VoiceTransactionDraft draft) async {
     bool canReview() =>
@@ -1081,6 +1092,81 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         }
       },
     );
+  }
+
+  Future<bool> _reviewVoiceDebtReminder(Debt debt, String message) async {
+    if (!mounted || !_active || !_foreground || !widget.isCurrent() ||
+        debt.isSettled || debt.phone.trim().isEmpty) return false;
+    final generation = _generation;
+    final session = _session;
+    final controller = TextEditingController(text: message);
+    String? approvedMessage;
+    bool? approved;
+    try {
+      approved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('bi_debt_reminder_review_title'.tr),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 5,
+                  maxLength: 1000,
+                  decoration: InputDecoration(
+                    labelText: 'bi_debt_reminder_message'.tr,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                Text('bi_debt_reminder_whatsapp_notice'.tr, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
+            FilledButton.icon(
+              onPressed: () {
+                if (controller.text.trim().isEmpty) return;
+                approvedMessage = controller.text.trim();
+                Navigator.pop(dialogContext, true);
+              },
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: Text('bi_debt_reminder_open_whatsapp'.tr),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+    if (approved != true || !mounted || !widget.visible || !_foreground ||
+        !widget.isCurrent() || generation != _generation || _session != session) {
+      return false;
+    }
+    var phone = debt.phone.replaceAll(RegExp(r'\D'), '');
+    if (phone.startsWith('00')) phone = phone.substring(2);
+    if (phone.startsWith('0')) phone = '255${phone.substring(1)}';
+    if (phone.length == 9) phone = '255$phone';
+    if (phone.length < 8 || phone.length > 15) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
+      return false;
+    }
+    final finalMessage = approvedMessage;
+    if (finalMessage == null || finalMessage.isEmpty) return false;
+    final uri = Uri.https('wa.me', '/$phone', {'text': finalMessage});
+    await _pauseOrStop();
+    if (!mounted || !widget.isCurrent()) return false;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)));
+    }
+    return opened;
   }
 
   Future<void> _showVoiceSummary(Map<String, dynamic> summary) async {
@@ -1968,6 +2054,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         setState(() => _summaryLoading = loading);
       }
     },
+    onDebtReminder: _reviewVoiceDebtReminder,
   );
 
   @override
@@ -2101,6 +2188,14 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                     const SizedBox(height: 14),
                   ],
                   if (!_active && !_paused && !_busy && _engines.length > 1) ...[
+                    Text(
+                      'bi_voice_model_selection'.tr,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     SegmentedButton<String>(
                       showSelectedIcon: false,
                       segments: [
@@ -2116,6 +2211,19 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                       ],
                       selected: {_engine},
                       onSelectionChanged: (value) => _selectEngine(value.first),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (!_active &&
+                      !_paused &&
+                      !_busy &&
+                      !kIsWeb &&
+                      defaultTargetPlatform == TargetPlatform.android &&
+                      BusinessAccessService.can('jobs', 'create')) ...[
+                    OutlinedButton.icon(
+                      onPressed: _openVoiceDebtEntry,
+                      icon: const Icon(Icons.record_voice_over_rounded),
+                      label: Text('bi_voice_record_debt'.tr),
                     ),
                     const SizedBox(height: 14),
                   ],

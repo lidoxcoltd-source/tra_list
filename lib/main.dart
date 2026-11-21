@@ -15,6 +15,7 @@ import 'package:tra_list/services/account_mode_service.dart';
 import 'package:tra_list/services/app_version_gate.dart';
 import 'package:tra_list/services/offline_sync_coordinator.dart';
 import 'package:tra_list/market/market_media_route_observer.dart';
+import 'package:tra_list/stock/daily_brief_route_observer.dart';
 import 'package:tra_list/theme/app_theme.dart';
 
 import 'firebase_options.dart';
@@ -103,7 +104,10 @@ class MyApp extends StatelessWidget {
       theme: MjasiTheme.light,
       initialRoute: initialRoute,
       getPages: AppRoutes.pages, // <-- wire routes
-      navigatorObservers: [marketMediaRouteObserver],
+      navigatorObservers: [
+        marketMediaRouteObserver,
+        dailyBriefRouteObserver,
+      ],
       scrollBehavior: const _AppScrollBehavior(),
       defaultTransition: kIsWeb ? Transition.fadeIn : Transition.rightToLeft,
       transitionDuration: const Duration(milliseconds: 300),

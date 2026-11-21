@@ -221,13 +221,6 @@ class _JobsPageState extends State<JobsPage> {
             ),
         ],
       ),
-      floatingActionButton: BusinessAccessService.can('jobs', 'create')
-          ? FloatingActionButton.extended(
-              onPressed: () => Get.to(() => const AddDebtPage()),
-              icon: const Icon(Icons.add),
-              label: Text('debt_add_title'.tr),
-            )
-          : null,
       body: Obx(() {
         if (_controller.isLoading.value) {
           return const Center(child: CircularProgressIndicator());
@@ -245,37 +238,163 @@ class _JobsPageState extends State<JobsPage> {
         return RefreshIndicator(
           onRefresh: () async => _controller.reload(),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
             children: [
-              _buildSummary(context),
-              const SizedBox(height: 16),
-              _buildSearchAndFilters(),
-              const SizedBox(height: 14),
-              if (debts.isEmpty)
-                _message(
-                  context,
-                  Icons.account_balance_wallet_outlined,
-                  _controller.debts.isEmpty
-                      ? 'debt_empty'.tr
-                      : 'debt_no_filter_results'.tr,
-                )
-              else
-                for (final debt in debts)
-                  _DebtCard(
-                    debt: debt,
-                    currency: _currency,
-                    dateFormat: _dateFormat,
-                    showShopName: BusinessAccessService.isOwner.value,
-                    canEdit: BusinessAccessService.can('jobs', 'edit'),
-                    onEdit: () => Get.to(() => AddDebtPage(debt: debt)),
-                    onPayment: () => _recordPayment(debt),
-                    onHistory: () => _showPaymentHistory(debt),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1380),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildPageHeader(context),
+                      const SizedBox(height: 20),
+                      _buildSummary(context),
+                      const SizedBox(height: 18),
+                      _buildSearchAndFilters(),
+                      const SizedBox(height: 14),
+                      if (debts.isEmpty)
+                        _message(
+                          context,
+                          Icons.account_balance_wallet_outlined,
+                          _controller.debts.isEmpty
+                              ? 'debt_empty'.tr
+                              : 'debt_no_filter_results'.tr,
+                        )
+                      else
+                        LayoutBuilder(
+                          builder: (context, constraints) => constraints.maxWidth >= 940
+                              ? _buildDesktopDebtTable(debts)
+                              : Column(
+                                  children: [
+                                    for (final debt in debts)
+                                      _debtCard(debt),
+                                  ],
+                                ),
+                        ),
+                    ],
                   ),
+                ),
+              ),
             ],
           ),
         );
       }),
     );
+  }
+
+  Widget _buildPageHeader(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF103943), Color(0xFF16717A)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(22),
+      boxShadow: const [
+        BoxShadow(color: Color(0x22103943), blurRadius: 24, offset: Offset(0, 8)),
+      ],
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final intro = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('debts_title'.tr, style: TextStyle(color: Colors.white, fontSize: compact ? 23 : 28, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 5),
+            Text('debt_page_subtitle'.tr, style: const TextStyle(color: Color(0xFFD5ECEC), fontSize: 13)),
+          ],
+        );
+        final Widget? addButton = BusinessAccessService.can('jobs', 'create') ? FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF10515B)),
+          onPressed: () => Get.to(() => const AddDebtPage()),
+          icon: const Icon(Icons.add_rounded),
+          label: Text('debt_add_title'.tr),
+        ) : null;
+        return compact
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [intro, if (addButton != null) ...[const SizedBox(height: 14), addButton]])
+            : Row(children: [Expanded(child: intro), if (addButton != null) addButton]);
+      },
+    ),
+  );
+
+  _DebtCard _debtCard(Debt debt) => _DebtCard(
+    debt: debt,
+    currency: _currency,
+    dateFormat: _dateFormat,
+    showShopName: BusinessAccessService.isOwner.value,
+    canEdit: BusinessAccessService.can('jobs', 'edit'),
+    canDelete: BusinessAccessService.can('jobs', 'delete'),
+    onEdit: () => Get.to(() => AddDebtPage(debt: debt)),
+    onDelete: () => _confirmDelete(debt),
+    onPayment: () => _recordPayment(debt),
+    onHistory: () => _showPaymentHistory(debt),
+    onReminder: () => _sendWhatsAppReminder(debt),
+  );
+
+  Widget _buildDesktopDebtTable(List<Debt> debts) => Card(
+    elevation: 0,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFE2EAEC))),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F6F6)),
+        columns: [
+          DataColumn(label: Text('debt_person_name'.tr)),
+          DataColumn(label: Text('debt_type'.tr)),
+          DataColumn(label: Text('debt_original_amount'.tr), numeric: true),
+          DataColumn(label: Text('debt_balance'.tr), numeric: true),
+          DataColumn(label: Text('due_date'.tr)),
+          DataColumn(label: Text('debt_status'.tr)),
+          DataColumn(label: Text('debt_actions'.tr)),
+        ],
+        rows: [
+          for (final debt in debts)
+            DataRow(cells: [
+              DataCell(SizedBox(width: 170, child: Text(debt.debtorName, style: const TextStyle(fontWeight: FontWeight.w700)))),
+              DataCell(Text(debt.direction == DebtDirection.customerOwesShop ? 'debt_customer_owes_short'.tr : 'debt_shop_owes_short'.tr)),
+              DataCell(Text(_currency.format(debt.principal))),
+              DataCell(Text(_currency.format(debt.balance), style: TextStyle(color: debt.isOverdue ? const Color(0xFFB14444) : const Color(0xFF176C55), fontWeight: FontWeight.w800))),
+              DataCell(Text(debt.dueDate == null ? '—' : _dateFormat.format(debt.dueDate!))),
+              DataCell(Text(debt.isSettled ? 'debt_settled'.tr : debt.isOverdue ? 'debt_overdue'.tr : debt.amountPaid > 0 ? 'debt_partially_paid'.tr : 'debt_unpaid'.tr)),
+              DataCell(Wrap(spacing: 0, children: [
+                if (debt.phone.isNotEmpty && !debt.isSettled) IconButton(tooltip: 'debt_whatsapp_reminder'.tr, onPressed: () => _sendWhatsAppReminder(debt), icon: const Icon(Icons.message_outlined, color: Color(0xFF188A68))),
+                if (BusinessAccessService.can('jobs', 'edit')) IconButton(tooltip: 'edit'.tr, onPressed: () => Get.to(() => AddDebtPage(debt: debt)), icon: const Icon(Icons.edit_outlined)),
+                IconButton(tooltip: 'debt_payment_history'.tr, onPressed: () => _showPaymentHistory(debt), icon: const Icon(Icons.history_rounded)),
+                if (BusinessAccessService.can('jobs', 'delete')) IconButton(tooltip: 'delete'.tr, onPressed: () => _confirmDelete(debt), icon: const Icon(Icons.delete_outline, color: Color(0xFFB14444))),
+              ])),
+            ]),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _sendWhatsAppReminder(Debt debt) async {
+    try {
+      var phone = debt.phone.replaceAll(RegExp(r'\D'), '');
+      if (phone.startsWith('00')) phone = phone.substring(2);
+      if (phone.startsWith('0')) phone = '255${phone.substring(1)}';
+      if (phone.length == 9) phone = '255$phone';
+      if (phone.length < 8 || phone.length > 15) {
+        Get.snackbar('error'.tr, 'debt_whatsapp_invalid'.tr);
+        return;
+      }
+      final message = 'debt_whatsapp_reminder_message'.trParams({
+        'name': debt.debtorName,
+        'balance': _currency.format(debt.balance),
+        'due_date': debt.dueDate == null ? 'debt_due_date_unspecified'.tr : _dateFormat.format(debt.dueDate!),
+      });
+      final uri = Uri.https('wa.me', '/$phone', {'text': message});
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        Get.snackbar('error'.tr, 'debt_whatsapp_open_error'.tr);
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Could not open debt reminder in WhatsApp: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) Get.snackbar('error'.tr, 'debt_whatsapp_open_error'.tr);
+    }
   }
 
   Widget _buildSummary(BuildContext context) {
@@ -543,6 +662,34 @@ class _JobsPageState extends State<JobsPage> {
       ),
       barrierDismissible: false,
     );
+  }
+
+  Future<void> _confirmDelete(Debt debt) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('debt_delete_title'.tr),
+        content: Text('debt_delete_confirm'.trParams({'name': debt.debtorName})),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(Get.context!).colorScheme.error,
+            ),
+            onPressed: () => Get.back(result: true),
+            child: Text('delete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _controller.delete(debt);
+    } catch (_) {
+      // The controller reports the failure.
+    }
   }
 
   Future<void> _showPaymentHistory(Debt debt) async {
@@ -823,9 +970,12 @@ class _DebtCard extends StatelessWidget {
     required this.dateFormat,
     required this.showShopName,
     required this.canEdit,
+    required this.canDelete,
     required this.onEdit,
+    required this.onDelete,
     required this.onPayment,
     required this.onHistory,
+    required this.onReminder,
   });
 
   final Debt debt;
@@ -833,9 +983,12 @@ class _DebtCard extends StatelessWidget {
   final DateFormat dateFormat;
   final bool showShopName;
   final bool canEdit;
+  final bool canDelete;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final VoidCallback onPayment;
   final VoidCallback onHistory;
+  final VoidCallback onReminder;
 
   Color get _statusColor => debt.isSettled
       ? const Color(0xFF267A54)
@@ -886,15 +1039,27 @@ class _DebtCard extends StatelessWidget {
                         launchUrl(Uri(scheme: 'tel', path: debt.phone)),
                     icon: const Icon(Icons.call_outlined),
                   ),
+                if (debt.phone.isNotEmpty && !debt.isSettled)
+                  IconButton(
+                    tooltip: 'debt_whatsapp_reminder'.tr,
+                    onPressed: onReminder,
+                    icon: const Icon(Icons.message_outlined, color: Color(0xFF188A68)),
+                  ),
                 PopupMenuButton<String>(
                   onSelected: (action) {
                     if (action == 'edit') onEdit();
+                    if (action == 'delete') onDelete();
                     if (action == 'payment') onPayment();
                     if (action == 'history') onHistory();
                   },
                   itemBuilder: (context) => [
                     if (canEdit)
                       PopupMenuItem(value: 'edit', child: Text('edit'.tr)),
+                    if (canDelete)
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text('delete'.tr),
+                      ),
                     if (canEdit && !debt.isSettled)
                       PopupMenuItem(
                         value: 'payment',

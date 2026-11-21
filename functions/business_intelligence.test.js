@@ -22,6 +22,51 @@ test("business access checks active membership, scope and bartender restriction"
   assert.equal(bi.scopeFor({ uid: "biz", businessUid: "biz", profileExists: true }).owner, true);
 });
 
+test("daily brief access is owner-only by default and requires its own staff permission", () => {
+  const args = {
+    uid: "employee",
+    businessUid: "biz",
+    profileExists: true,
+  };
+  const member = {
+    businessUid: "biz",
+    employeeUid: "employee",
+    active: true,
+    shopNickname: "shop",
+    permissions: { dailyBrief: { view: true } },
+  };
+  assert.deepEqual(bi.dailyBriefScopeFor({ ...args, modern: member }), {
+    owner: false,
+    shop: "shop",
+  });
+  assert.equal(
+    bi.dailyBriefScopeFor({
+      uid: "biz",
+      businessUid: "biz",
+      profileExists: true,
+    }).owner,
+    true,
+  );
+  assert.throws(() =>
+    bi.dailyBriefScopeFor({
+      ...args,
+      modern: { ...member, permissions: {} },
+    }),
+  );
+  assert.throws(() =>
+    bi.dailyBriefScopeFor({
+      ...args,
+      modern: { ...member, active: false },
+    }),
+  );
+  assert.throws(() =>
+    bi.dailyBriefScopeFor({
+      ...args,
+      modern: { ...member, shopNickname: "" },
+    }),
+  );
+});
+
 test("snapshot is bound to user, business, scope and expiration", () => {
   const scope = { owner: false, shop: "shop", stock: true, debts: false, tasks: true };
   const token = bi.signSnapshot({ uid: "u", businessUid: "b", scope, context: { income: 100 }, expiresAt: 2000 }, "secret");

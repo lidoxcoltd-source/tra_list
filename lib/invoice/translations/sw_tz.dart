@@ -112,7 +112,7 @@ const Map<String, String> swTzTranslations = {
   'bi_chat_edit_replace': 'Badilisha rasimu',
   'bi_chat_review': 'Kagua taarifa zitakazotumwa kwa OpenAI',
   'bi_chat_data_notice':
-      'Ujumbe na muhtasari wa biashara hutumwa kwa AI uliyochagua (OpenAI au Google Gemini). Mmiliki akiuliza invoice au risiti, maelezo na majina ya wateja yanaweza kutumwa.',
+      'Ujumbe na muhtasari wa biashara hutumwa kwa AI uliyochagua (OpenAI au Google Gemini). Ukiuliza wazi kuhusu madeni au tarehe za mwisho, majina ya wadaiwa, salio na tarehe unazoruhusiwa kuona zinaweza pia kutumwa kwa AI. Mmiliki akiuliza invoice au risiti, maelezo na majina ya wateja yanaweza kutumwa.',
   'bi_document_review_title': 'Kagua taarifa za nyaraka',
   'bi_document_review_notice':
       'Taarifa hapa chini, swali lako, mazungumzo ya karibuni na muhtasari wa biashara vitatumwa kwa AI uliyochagua (OpenAI au Google Gemini). Maswali ya wateja yanajumuisha majina yao. Kagua mipaka na taarifa zote kabla ya kutuma.',
@@ -308,6 +308,10 @@ const Map<String, String> swTzTranslations = {
   'isher_test_retry': 'Kagua au rudia malipo ya majaribio yaliyopita',
   'bi_chat_empty':
       'Uliza Isher kuhusu biashara yako, au chagua swali hapa chini.',
+  'bi_question_debts': 'Nani ananidai na madeni gani yanakaribia tarehe ya mwisho?',
+  'bi_debt_ai_review_title': 'Kagua taarifa za madeni kwa AI',
+  'bi_debt_ai_review_notice': 'Majina ya wadaiwa, salio na tarehe za mwisho zitatumwa kwa AI uliyochagua ili kujibu swali lako. Namba za simu hazitatumwa. Uendelee?',
+  'bi_debt_ai_review_limited': 'Inaonyesha hadi madeni 50 ambayo hayajalipwa kati ya rekodi 100 za karibuni.',
   'bi_chat_emoji': 'Ongeza emoji',
   'bi_chat_design_poster': 'Tengeneza muundo',
   'bi_chat_design_poster_hint': 'Anza poster, kipeperushi au chapisho kwa AI',
@@ -331,6 +335,21 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_web_requirements':
       'Fungua app kwa HTTPS na uruhusu matumizi ya kipaza sauti kivinjari kitakapokuuliza.',
   'bi_voice_title': 'Mazungumzo ya sauti moja kwa moja',
+  'bi_voice_model_selection': 'Modeli ya sauti ya AI',
+  'bi_voice_record_debt': 'Sajili deni kwa sauti',
+  'bi_voice_debt_local_privacy':
+      'Maneno yanatambuliwa kwenye simu hii na hayatumiwi kwa mtoa huduma wa AI.',
+  'bi_voice_debt_review_note':
+      'Kagua taarifa. Hakuna kitakachohifadhiwa hadi ubonyeze Hifadhi deni.',
+  'bi_voice_debt_speak_field': 'Tamka sehemu hii kwenye simu hii',
+  'bi_voice_debt_listening': 'Inasikiliza kwenye simu hii. Bonyeza kusitisha.',
+  'bi_voice_debt_local_unavailable':
+      'Utambuzi wa sauti kwenye simu haupatikani. Unaweza kuandika taarifa badala yake.',
+  'bi_voice_debt_amount_hint':
+      'Taja kiasi kwa namba, kisha ukague kabla ya kuhifadhi.',
+  'bi_voice_debt_amount_invalid': 'Weka kiasi sahihi kilicho zaidi ya sifuri.',
+  'bi_voice_debt_save_error':
+      'Imeshindwa kuhifadhi deni. Hakiki intaneti na ruhusa zako.',
   'bi_voice_welcome': 'Zungumza na msaidizi wako wa biashara',
   'bi_voice_session_title': 'Mazungumzo ya sauti',
   'bi_voice_idle_prompt': 'Bonyeza kipaza sauti kukagua na kuanza mazungumzo.',
@@ -339,10 +358,15 @@ const Map<String, String> swTzTranslations = {
       'Ongea na AI kwa Kiswahili au Kiingereza. Angalia matumizi ya AI kuona kikomo chako. Kufungua chat kunasitisha sauti ya Gemini na kumaliza ya OpenAI.',
   'bi_voice_review': 'Kagua na uanze mazungumzo ya sauti',
   'bi_voice_privacy':
-      'Muhtasari wa biashara hapa chini na sauti yako ya moja kwa moja zitatumwa kwa @provider hadi uzime kipaza sauti, usitishe au umalize mazungumzo. Wakati wa simu, muhtasari na undani wa invoice au risiti utakaoomba, pamoja na majina ya wateja ukiyaomba, vinaweza pia kutumwa bila ukaguzi mwingine, ndani ya ruhusa zako za biashara. Sauti hutumwa bila kukagua kila sentensi. Shiriki jina la mteja tu likihitajika na una ruhusa; usiseme nywila, mawasiliano au taarifa binafsi za malipo. Kufungua hati kunasitisha sauti ya Gemini au kumaliza ya OpenAI na hakutaihifadhi. Muunganisho wa Gemini uliositishwa unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Sauti ya majibu imetengenezwa na AI. Matumizi ya mtoa huduma yanaweza kuigharimu MJASI. Mazungumzo ya sauti ni tofauti na chat ya maandishi.',
+      'Muhtasari wa biashara hapa chini na sauti yako ya moja kwa moja zitatumwa kwa @provider hadi uzime kipaza sauti, usitishe au umalize mazungumzo. Wakati wa simu, muhtasari, majina na salio la madeni ya sasa, pamoja na undani wa invoice au risiti utakaoomba, vinaweza kutumwa bila ukaguzi mwingine, ndani ya ruhusa zako. Ujumbe wa WhatsApp utakaguliwa kwenye skrini; WhatsApp itafunguka baada ya uthibitisho na utabonyeza Tuma humo. Sauti hutumwa bila kukagua kila sentensi. Shiriki jina la mteja tu likihitajika na una ruhusa; usiseme nywila, mawasiliano au taarifa binafsi za malipo. Kufungua hati kunasitisha sauti ya Gemini au kumaliza ya OpenAI na hakutaihifadhi. Muunganisho wa Gemini uliositishwa unaendelea hadi muda wake uishe na unaweza kuwa na gharama. Sauti ya majibu imetengenezwa na AI. Matumizi ya mtoa huduma yanaweza kuigharimu MJASI. Mazungumzo ya sauti ni tofauti na chat ya maandishi.',
   'bi_voice_draft_unavailable':
       'Fomu ya hati haikuweza kufunguliwa. Maliza au jaribu tena shughuli ya chat inayoendelea kisha ujaribu tena.',
   'bi_voice_transaction_review': 'Kagua rasimu ya muamala',
+  'bi_debt_reminder_review_title': 'Kagua kikumbusho cha WhatsApp',
+  'bi_debt_reminder_message': 'Ujumbe wa kikumbusho',
+  'bi_debt_reminder_whatsapp_notice': 'Ukithibitisha, WhatsApp itafunguka na ujumbe huu. Bado utahitaji kubonyeza Tuma ndani ya WhatsApp.',
+  'bi_debt_reminder_open_whatsapp': 'Thibitisha na fungua WhatsApp',
+  'bi_debt_reminder_opened_notice': 'WhatsApp imefunguka na rasimu yako. Ikague kisha ubonyeze Tuma humo.',
   'bi_voice_transaction_not_saved':
       'Muamala bado haujahifadhiwa. Ukithibitisha, utatumwa kwenye chat ili kuhifadhiwa. Kundi lazima liwe tayari kwenye biashara; angalia chat kwa matokeo.',
   'bi_voice_transaction_type': 'Aina',
@@ -448,8 +472,11 @@ const Map<String, String> swTzTranslations = {
   'isher_personal_greeting_no_name_3':
       'Habari! Nipo tayari kukusaidia. Tuangalie jambo gani la biashara yako leo?',
   'isher_greeting_voice_error':
-      'Sauti haipatikani. Sakinisha sauti ya Kiswahili ya bila intaneti.',
-  'isher_greeting_voice_unavailable': 'Sauti haipatikani. Jaribu tena baadaye.',
+      'Sauti ya AI haikuweza kutengenezwa sasa. Jaribu tena baada ya muda.',
+  'isher_greeting_voice_unavailable':
+      'Sauti ya AI haikuweza kutengenezwa sasa. Jaribu tena baada ya muda.',
+  'isher_greeting_limit':
+      'Umefikia kikomo cha kila siku cha sauti ya AI. Jaribu tena kesho.',
   'isher_speech_settings': 'Mipangilio ya sauti',
   'bi_models_title': 'Chagua modeli ya AI',
   'bi_models_greeting_provider': 'Sauti ya salamu',
@@ -474,10 +501,14 @@ const Map<String, String> swTzTranslations = {
   'isher_speech_settings_failed':
       'Imeshindikana kufungua mipangilio. Fungua Settings, kisha tafuta Text-to-speech output.',
   'isher_greeting_cloud_disclosure':
-      'Sauti ya AI: jina la biashara hutumwa OpenAI.',
-  'isher_greeting_cloud_fallback':
-      'Sauti ya OpenAI haipatikani au kikomo cha 3 kwa siku kimefikiwa; inatumia sauti ya kifaa.',
-  'isher_greeting_replay': 'Sikiliza salamu',
+      'Muhtasari hutumwa kwa mtoa huduma wa AI uliyemchagua; asipopatikana, mtoa huduma mwingine aliyewezeshwa anaweza kutumiwa.',
+  'isher_greeting_model': 'Modeli ya sauti ya muhtasari',
+  'isher_greeting_model_retry': 'Jaribu kupakia modeli tena',
+  'isher_greeting_model_preference_error':
+      'Imeshindikana kusoma au kuhifadhi chaguo lako la modeli ya sauti.',
+  'isher_greeting_replay': 'Sikiliza muhtasari',
+  'isher_greeting_stop': 'Simamisha',
+  'isher_greeting_listening': 'Muhtasari unasomwa...',
   'isher_welcome_greeting': 'Habari! Mimi ni Isher.',
   'isher_welcome_description':
       'Nipo kukusaidia kusimamia biashara yako, kuelewa takwimu na kufanya maamuzi bora.',
@@ -1358,6 +1389,8 @@ const Map<String, String> swTzTranslations = {
   'staff_module_analytics': 'Ripoti na uchambuzi',
   'staff_module_categories': 'Aina',
   'staff_module_profile': 'Wasifu wa biashara',
+  'staff_module_daily_brief':
+      'Muhtasari wa kila siku (mapato, madeni, stoo na kazi)',
   'staff_action_view': 'Angalia',
   'staff_action_create': 'Ongeza',
   'staff_action_edit': 'Hariri',
@@ -1913,6 +1946,8 @@ const Map<String, String> swTzTranslations = {
   'account_full_name_required': 'Weka jina lako kamili.',
   'account_business_name': 'Jina la biashara',
   'account_phone_optional': 'Namba ya simu (si lazima)',
+  'account_registration_network_error':
+      'Imeshindwa kuunganishwa na huduma ya usajili. Angalia intaneti kisha ujaribu tena.',
   'account_profile_save_failed':
       'Akaunti imefunguliwa, lakini taarifa zako hazijahifadhiwa. Angalia intaneti. Tatizo likiendelea, wasiliana na huduma kwa wateja.',
   'account_confirm_password': 'Thibitisha nenosiri',
@@ -1942,6 +1977,7 @@ const Map<String, String> swTzTranslations = {
   'transactions_all_time': 'Wakati wote',
   'transactions_shop': 'Duka',
   'transactions_shop_not_recorded': 'Duka halijaandikwa',
+  'transactions_recorded_by': 'Aliyehifadhi',
   'transactions_filter_shop': 'Chuja kwa duka',
   'transactions_all_shops': 'Maduka yote',
   'transactions_shops_load_error': 'Imeshindwa kupata majina ya maduka.',
@@ -2115,6 +2151,15 @@ const Map<String, String> swTzTranslations = {
   'jobs_add_new': 'Sajili Kazi Mpya',
 
   'debts_title': 'Madeni',
+  'debt_page_subtitle': 'Fuatilia salio, wakumbushe wateja, na simamia akaunti zote kwa urahisi.',
+  'debt_type': 'Aina',
+  'debt_status': 'Hali',
+  'debt_actions': 'Vitendo',
+  'debt_whatsapp_reminder': 'Tuma kikumbusho WhatsApp',
+  'debt_whatsapp_invalid': 'Weka namba sahihi yenye msimbo wa nchi kwa WhatsApp.',
+  'debt_whatsapp_open_error': 'Imeshindwa kufungua WhatsApp. Hakiki namba kisha ujaribu tena.',
+  'debt_due_date_unspecified': 'hakuna tarehe ya mwisho',
+  'debt_whatsapp_reminder_message': 'Habari @name, tunakukumbusha kwa upole kuhusu salio lako la @balance. Tarehe ya mwisho: @due_date. Tafadhali wasiliana nasi ikiwa tayari umelipa. Asante.',
   'debt_add_title': 'Sajili deni',
   'debt_edit_title': 'Hariri deni',
   'debt_draft_restored_title': 'Rasimu imerejeshwa',
@@ -2217,6 +2262,10 @@ const Map<String, String> swTzTranslations = {
       'Kiasi hakiwezi kuwa chini ya pesa zilizolipwa tayari.',
   'debt_added': 'Deni limehifadhiwa.',
   'debt_updated': 'Taarifa za deni zimebadilishwa.',
+  'debt_delete_title': 'Futa deni',
+  'debt_delete_confirm': 'Ufute deni la "@name" pamoja na historia ya malipo? Huwezi kutendua hatua hii.',
+  'debt_deleted': 'Deni na historia ya malipo vimefutwa.',
+  'debt_delete_error': 'Imeshindwa kufuta deni: @error',
   'debt_payment_saved': 'Malipo yamerekodiwa.',
   'debt_save_error': 'Imeshindwa kuhifadhi deni: @error',
   'debt_payment_save_error': 'Imeshindwa kuhifadhi malipo: @error',

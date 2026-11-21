@@ -1251,7 +1251,8 @@ service cloud.firestore {
             || request.resource.data.attachments.size() > 0
           )
           && request.resource.data.createdAt == request.time;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if false;
       }
     }
 
@@ -1853,7 +1854,9 @@ service cloud.firestore {
           && getAfter(debtPath()).data.get('amountPaid', 0)
             == get(debtPath()).data.get('amountPaid', 0)
               + request.resource.data.amount;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if hasPermission(businessUid, 'jobs', 'delete')
+          && canAccessDebtShop(businessUid, get(debtPath()).data);
       }
     }
 

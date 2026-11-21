@@ -140,9 +140,18 @@ class DownloadCenterService {
 
   static Future<void> _bump(String metric) async {
     try {
-      await _stats.doc(metric).set({
+      final now = DateTime.now();
+      final day = now.toIso8601String().substring(0, 10);
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(_stats.doc(metric), {
         'count': FieldValue.increment(1),
       }, SetOptions(merge: true));
+      batch.set(_stats.doc('daily_$day'), {
+        metric: FieldValue.increment(1),
+        'date': day,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await batch.commit();
     } catch (error) {
       debugPrint('Download stat skipped: $error');
     }
@@ -169,4 +178,28 @@ class DownloadCenterService {
         doc.id: (doc.data()['count'] as num?)?.toInt() ?? 0,
     };
   }
+
+  /// Loads date-bucketed statistics for the inclusive date range.
+  static Future<Map<String, int>> loadStatsForRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final startDay = _dayKey(start);
+    final endDay = _dayKey(end);
+    final snap = await _stats
+        .where('date', isGreaterThanOrEqualTo: startDay)
+        .where('date', isLessThanOrEqualTo: endDay)
+        .get();
+    final totals = <String, int>{};
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      for (final metric in ['visits', ...downloadItemDefs.map((d) => 'click_${d.key}')]) {
+        totals[metric] = (totals[metric] ?? 0) + ((data[metric] as num?)?.toInt() ?? 0);
+      }
+    }
+    return totals;
+  }
+
+  static String _dayKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }

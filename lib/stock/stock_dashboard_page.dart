@@ -9,6 +9,7 @@ import 'stock_operations_pages.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
 import 'bar_orders_page.dart';
+import 'daily_business_brief_card.dart';
 
 class StockDashboardPage extends StatelessWidget {
   const StockDashboardPage({super.key});
@@ -20,7 +21,7 @@ class StockDashboardPage extends StatelessWidget {
     final canCreate = BusinessAccessService.can('stock', 'create');
     final canEdit = BusinessAccessService.can('stock', 'edit');
     return DefaultTabController(
-      length: 2,
+      length: 4,
       child: StockScaffold(
         title: 'stk_title'.tr,
         actions: [
@@ -147,120 +148,10 @@ class StockDashboardPage extends StatelessWidget {
             return LayoutBuilder(
               builder: (context, constraints) {
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [kStockNavy, kStockBlue],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: kStockNavy.withValues(alpha: .14),
-                              blurRadius: 16,
-                              offset: const Offset(0, 7),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .14),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.inventory_2_outlined,
-                                color: Colors.white,
-                                size: 22,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '${'stk_total_products'.tr}\n${'stk_catalog_title'.tr}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: .82),
-                                  fontSize: 11,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '${all.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 30,
-                                height: 1,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              constraints: const BoxConstraints.tightFor(
-                                width: 38,
-                                height: 38,
-                              ),
-                              padding: EdgeInsets.zero,
-                              tooltip: 'stk_products'.tr,
-                              style: IconButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: .14,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              onPressed: () =>
-                                  Get.to(() => const ProductsPage()),
-                              icon: const Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 18,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          for (var i = 0; i < stats.length; i++) ...[
-                            if (i > 0) const SizedBox(width: 8),
-                            Expanded(child: stats[i]),
-                          ],
-                        ],
-                      ),
-                      if (salesActions.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        _StockActionGroup(
-                          title: 'stk_sales_group'.tr,
-                          icon: Icons.point_of_sale_outlined,
-                          actions: salesActions,
-                          columns: 2,
-                        ),
-                      ],
-                      if (inventoryActions.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _StockActionGroup(
-                          title: 'stk_inventory_group'.tr,
-                          icon: Icons.tune_rounded,
-                          actions: inventoryActions,
-                          columns: constraints.maxWidth >= 720 ? 4 : 2,
-                        ),
-                      ],
-                      const SizedBox(height: 10),
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -277,23 +168,190 @@ class StockDashboardPage extends StatelessWidget {
                           labelColor: kStockBlue,
                           unselectedLabelColor: MjasiColors.textSecondary,
                           labelStyle: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
                           tabs: [
-                            Tab(
-                              height: 42,
-                              text:
-                                  '${'stk_needs_attention'.tr} (${attention.length})',
-                            ),
-                            Tab(height: 42, text: 'stk_recent'.tr),
+                            Tab(height: 44, text: 'stk_overview_tab'.tr),
+                            Tab(height: 44, text: 'stk_alerts_tab'.tr),
+                            Tab(height: 44, text: 'stk_sold_items'.tr),
+                            Tab(height: 44, text: 'stk_recent_tab'.tr),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Expanded(
                         child: TabBarView(
                           children: [
+                            ListView(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              children: [
+                                if (BusinessAccessService.can(
+                                  'dailyBrief',
+                                  'view',
+                                )) ...[
+                                  const DailyBusinessBriefCard(),
+                                  const SizedBox(height: 10),
+                                ],
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [kStockNavy, kStockBlue],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: kStockNavy.withValues(
+                                          alpha: .14,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 7),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: .14,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.inventory_2_outlined,
+                                          color: Colors.white,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'stk_catalog_title'.tr,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              fmtText('stk_catalog_summary', {
+                                                'count': '${all.length}',
+                                                'low': '${attention.length}',
+                                              }),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: .82,
+                                                ),
+                                                fontSize: 11,
+                                                height: 1.3,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        '${all.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 30,
+                                          height: 1,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      IconButton(
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                              width: 38,
+                                              height: 38,
+                                            ),
+                                        padding: EdgeInsets.zero,
+                                        tooltip: 'stk_products'.tr,
+                                        style: IconButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          backgroundColor: Colors.white
+                                              .withValues(alpha: .14),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        onPressed: () =>
+                                            Get.to(() => const ProductsPage()),
+                                        icon: const Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                LayoutBuilder(
+                                  builder: (context, statConstraints) {
+                                    final columns =
+                                        statConstraints.maxWidth < 520
+                                        ? 2
+                                        : stats.length;
+                                    const spacing = 8.0;
+                                    final tileWidth =
+                                        (statConstraints.maxWidth -
+                                            spacing * (columns - 1)) /
+                                        columns;
+                                    return Wrap(
+                                      spacing: spacing,
+                                      runSpacing: spacing,
+                                      children: [
+                                        for (final stat in stats)
+                                          SizedBox(
+                                            width: tileWidth,
+                                            child: stat,
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                if (salesActions.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _StockActionGroup(
+                                    title: 'stk_sales_group'.tr,
+                                    icon: Icons.point_of_sale_outlined,
+                                    actions: salesActions,
+                                    columns: 2,
+                                  ),
+                                ],
+                                if (inventoryActions.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _StockActionGroup(
+                                    title: 'stk_inventory_group'.tr,
+                                    icon: Icons.tune_rounded,
+                                    actions: inventoryActions,
+                                    columns: constraints.maxWidth >= 720
+                                        ? 4
+                                        : 2,
+                                  ),
+                                ],
+                              ],
+                            ),
                             attention.isEmpty
                                 ? StockMessage(
                                     icon: Icons.check_circle_outline,
@@ -378,6 +436,10 @@ class StockDashboardPage extends StatelessWidget {
                                       );
                                     },
                                   ),
+                            _StockSalesSummary(
+                              service: service,
+                              products: all,
+                            ),
                             StreamBuilder<List<StockMovement>>(
                               stream: service.watchMovements(limit: 8),
                               builder: (context, movements) {
@@ -421,6 +483,363 @@ class StockDashboardPage extends StatelessWidget {
       ),
     );
   });
+}
+
+enum _SoldProductsSort { mostSold, leastSold, name }
+
+class _StockSalesSummary extends StatefulWidget {
+  const _StockSalesSummary({required this.service, required this.products});
+
+  final StockService service;
+  final List<Product> products;
+
+  @override
+  State<_StockSalesSummary> createState() => _StockSalesSummaryState();
+}
+
+class _StockSalesSummaryState extends State<_StockSalesSummary> {
+  int _days = 30;
+  _SoldProductsSort _sort = _SoldProductsSort.mostSold;
+  late Stream<List<StockMovement>> _movements;
+
+  @override
+  void initState() {
+    super.initState();
+    _movements = _watchMovements();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StockSalesSummary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.service != widget.service) {
+      _movements = _watchMovements();
+    }
+  }
+
+  Stream<List<StockMovement>> _watchMovements() => widget.service
+      .watchMovementsSince(DateTime.now().subtract(Duration(days: _days)));
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<StockMovement>>(
+      stream: _movements,
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return StockMessage(
+            icon: Icons.error_outline,
+            color: kStockBad,
+            text: stockErrorText(snap.error!),
+          );
+        }
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final productsById = {
+          for (final product in widget.products)
+            if (product.id != null) product.id!: product,
+        };
+        final totals = <String, _SoldProductTotal>{};
+        for (final movement in snap.data!) {
+          if (movement.type != MovementType.sale ||
+              movement.quantityChange >= 0) {
+            continue;
+          }
+          final key = movement.productId.isNotEmpty
+              ? movement.productId
+              : movement.productName.trim().toLowerCase();
+          if (key.isEmpty) continue;
+          final current = totals[key];
+          if (current == null) {
+            totals[key] = _SoldProductTotal(
+              productId: movement.productId,
+              name: movement.productName,
+              quantity: movement.quantityChange.abs(),
+            );
+          } else {
+            current.quantity += movement.quantityChange.abs();
+          }
+        }
+
+        final soldProducts = totals.values.toList();
+        switch (_sort) {
+          case _SoldProductsSort.mostSold:
+            soldProducts.sort((a, b) => b.quantity.compareTo(a.quantity));
+            break;
+          case _SoldProductsSort.leastSold:
+            soldProducts.sort((a, b) => a.quantity.compareTo(b.quantity));
+            break;
+          case _SoldProductsSort.name:
+            soldProducts.sort(
+              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+            );
+            break;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StockCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: kStockLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.trending_up_rounded,
+                          color: kStockBlue,
+                          size: 21,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'stk_sold_summary'.tr,
+                              style: const TextStyle(
+                                color: MjasiColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              fmtText('stk_sold_totals', {
+                                'products': '${soldProducts.length}',
+                              }),
+                              style: const TextStyle(
+                                color: MjasiColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _salesDropdown<int>(
+                          label: 'stk_period'.tr,
+                          value: _days,
+                          items: {
+                            7: 'stk_last_days'.trParams({'days': '7'}),
+                            30: 'stk_last_days'.trParams({'days': '30'}),
+                            90: 'stk_last_days'.trParams({'days': '90'}),
+                          },
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _days = value;
+                                _movements = _watchMovements();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _salesDropdown<_SoldProductsSort>(
+                          label: 'stk_sort_by'.tr,
+                          value: _sort,
+                          items: {
+                            _SoldProductsSort.mostSold:
+                                'stk_sort_most_sold'.tr,
+                            _SoldProductsSort.leastSold:
+                                'stk_sort_least_sold'.tr,
+                            _SoldProductsSort.name: 'stk_sort_name'.tr,
+                          },
+                          onChanged: (value) {
+                            if (value != null) setState(() => _sort = value);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (soldProducts.isEmpty)
+              Expanded(
+                child: StockMessage(
+                  icon: Icons.point_of_sale_outlined,
+                  text: 'stk_no_sales_in_period'.tr,
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  itemCount: soldProducts.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final item = soldProducts[index];
+                    final product = productsById[item.productId];
+                    return StockCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: index == 0 &&
+                                      _sort == _SoldProductsSort.mostSold
+                                  ? const Color(0xFFFFF3D6)
+                                  : kStockLight,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(
+                              index == 0 &&
+                                      _sort == _SoldProductsSort.mostSold
+                                  ? Icons.emoji_events_outlined
+                                  : Icons.inventory_2_outlined,
+                              color: index == 0 &&
+                                      _sort == _SoldProductsSort.mostSold
+                                  ? kStockWarn
+                                  : kStockBlue,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: MjasiColors.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (product != null && product.tracked) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    fmtText('stk_current_stock_count', {
+                                      'quantity': formatQty(product.quantity),
+                                      'unit': unitLabel(product.unit),
+                                    }),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: MjasiColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                formatQty(item.quantity),
+                                style: const TextStyle(
+                                  color: MjasiColors.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                product == null
+                                    ? 'stk_sold_quantity_label'.tr
+                                    : '${'stk_sold_quantity_label'.tr} · ${unitLabel(product.unit)}',
+                                style: const TextStyle(
+                                  color: MjasiColors.textSecondary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _salesDropdown<T>({
+    required String label,
+    required T value,
+    required Map<T, String> items,
+    required ValueChanged<T?> onChanged,
+  }) => InputDecorator(
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 2),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: MjasiColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(11),
+        borderSide: const BorderSide(color: MjasiColors.border),
+      ),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        value: value,
+        isExpanded: true,
+        isDense: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+        items: [
+          for (final entry in items.entries)
+            DropdownMenuItem<T>(
+              value: entry.key,
+              child: Text(
+                entry.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+        ],
+        onChanged: onChanged,
+      ),
+    ),
+  );
+}
+
+class _SoldProductTotal {
+  _SoldProductTotal({
+    required this.productId,
+    required this.name,
+    required this.quantity,
+  });
+
+  final String productId;
+  final String name;
+  double quantity;
 }
 
 class StockHistoryPage extends StatefulWidget {

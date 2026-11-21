@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:tra_list/invoice/add_transaction_page.dart';
@@ -38,7 +39,6 @@ import 'package:tra_list/tasks/task_service.dart';
 import 'package:tra_list/services/push_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'services/subscription_controller.dart';
-
 import 'package:tra_list/home/models/home_models.dart';
 import 'package:tra_list/home/widgets/breathing_connectivity_dot.dart';
 import 'package:tra_list/home/widgets/quick_actions_panel.dart';
@@ -48,6 +48,7 @@ import 'package:tra_list/home/widgets/home_staff_summary.dart';
 import 'package:tra_list/home/widgets/bar_sales_live_summary.dart';
 import 'package:tra_list/home/widgets/business_wallet_preview.dart';
 import 'package:tra_list/home/widgets/home_isher_wake_word_control.dart';
+import 'package:tra_list/home/widgets/home_promo_carousel.dart';
 import 'package:tra_list/home/staff_sales_history_page.dart';
 import 'package:tra_list/home/widgets/home_bottom_bar.dart';
 
@@ -228,9 +229,7 @@ class _HomeLoadingViewState extends State<_HomeLoadingView>
           ],
         ),
         const SizedBox(height: 30),
-        Row(
-          children: [_shimmer(180, 24), const Spacer(), _shimmer(120, 36)],
-        ),
+        Row(children: [_shimmer(180, 24), const Spacer(), _shimmer(120, 36)]),
         const SizedBox(height: 18),
         Expanded(
           child: Row(
@@ -1330,9 +1329,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Scaffold(
-        backgroundColor: _AppColors.canvas,
-        body: _HomeLoadingView(),
+      return const AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: _AppColors.canvas,
+          body: _HomeLoadingView(),
+        ),
       );
     }
 
@@ -1345,69 +1347,88 @@ class _HomePageState extends State<HomePage> {
         !_isPersonalMode &&
         _activeDestination == _HomeDestination.dashboard &&
         _isWalletSwipePage;
-    return SupportCenterFabOverlay(
-      onAiAnalysisPressed: _showHomeBusinessSummary,
-      child: Scaffold(
-        backgroundColor: walletSwipePage
-            ? const Color(0xFFF2F5FC)
-            : _activeDestination == _HomeDestination.chat
-            ? const Color(0xFF191D24)
-            : mobileBusinessDashboard
-            ? Colors.white
-            : _AppColors.canvas,
-        bottomNavigationBar: useNavigationRail
-            ? null
-            : _buildMobileNavigation(),
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              if (_activeDestination != _HomeDestination.chat &&
-                  !mobileBusinessDashboard &&
-                  !walletSwipePage)
-                _buildHeader(context),
-              if (_activeDestination == _HomeDestination.dashboard &&
-                  !_isPersonalMode &&
-                  BusinessAccessService.can('analytics', 'view'))
-                HomeIsherWakeWordControl(
-                  onChat: () => unawaited(
-                    Get.toNamed(
-                      AppRoutes.businessIntelligence,
-                      arguments: 'chat',
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _activeDestination == _HomeDestination.chat
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      child: SupportCenterFabOverlay(
+        onAiAnalysisPressed: _showHomeBusinessSummary,
+        child: Scaffold(
+          backgroundColor: walletSwipePage
+              ? const Color(0xFFF2F5FC)
+              : _activeDestination == _HomeDestination.chat
+              ? const Color(0xFF191D24)
+              : mobileBusinessDashboard
+              ? Colors.white
+              : _AppColors.canvas,
+          bottomNavigationBar: useNavigationRail
+              ? null
+              : mobileBusinessDashboard
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+                      child: HomePromoCarousel(
+                        language: Get.locale?.languageCode ?? 'en',
+                        compact: true,
+                      ),
+                    ),
+                    _buildMobileNavigation(),
+                  ],
+                )
+              : _buildMobileNavigation(),
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                if (_activeDestination != _HomeDestination.chat &&
+                    !mobileBusinessDashboard &&
+                    !walletSwipePage)
+                  _buildHeader(context),
+                if (_activeDestination == _HomeDestination.dashboard &&
+                    !_isPersonalMode &&
+                    BusinessAccessService.can('analytics', 'view'))
+                  HomeIsherWakeWordControl(
+                    onChat: () => unawaited(
+                      Get.toNamed(
+                        AppRoutes.businessIntelligence,
+                        arguments: 'chat',
+                      ),
+                    ),
+                    onVoice: () => unawaited(
+                      Get.toNamed(
+                        AppRoutes.businessIntelligence,
+                        arguments: 'voice',
+                      ),
                     ),
                   ),
-                  onVoice: () => unawaited(
-                    Get.toNamed(
-                      AppRoutes.businessIntelligence,
-                      arguments: 'voice',
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final showNavigationRail = constraints.maxWidth >= 900;
-                    return Row(
-                      children: [
-                        if (showNavigationRail)
-                          Container(
-                            decoration: const BoxDecoration(
-                              color: MjasiColors.primaryNavy,
-                              border: Border(
-                                right: BorderSide(color: Color(0xFF263952)),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final showNavigationRail = constraints.maxWidth >= 900;
+                      return Row(
+                        children: [
+                          if (showNavigationRail)
+                            Container(
+                              decoration: const BoxDecoration(
+                                color: MjasiColors.primaryNavy,
+                                border: Border(
+                                  right: BorderSide(color: Color(0xFF263952)),
+                                ),
+                              ),
+                              child: _buildNavigationRail(
+                                extended: _desktopRailExtended,
                               ),
                             ),
-                            child: _buildNavigationRail(
-                              extended: _desktopRailExtended,
-                            ),
-                          ),
-                        Expanded(child: _buildActiveContent(context)),
-                      ],
-                    );
-                  },
+                          Expanded(child: _buildActiveContent(context)),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1502,7 +1523,7 @@ class _HomePageState extends State<HomePage> {
           ],
           const SizedBox(height: _Spacing.md),
           _buildQuickActions(),
-          const SizedBox(height: _Spacing.xl),
+          const SizedBox(height: _Spacing.lg),
           if (BusinessAccessService.can('transactions', 'view')) ...[
             _sectionHeading('home_transactions'.tr, 'home_transactions'.tr),
             const SizedBox(height: _Spacing.md),
@@ -1510,6 +1531,8 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: _Spacing.lg),
           ],
           if (BusinessAccessService.isOwner.value) _buildSubscriptionLink(),
+          const SizedBox(height: _Spacing.md),
+          HomePromoCarousel(language: Get.locale?.languageCode ?? 'en'),
         ];
 
         return RefreshIndicator(
@@ -1895,14 +1918,14 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
         children: [
           _buildMobileHomeHeader(user),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             'mobile_greeting'.trParams({'name': greetingName}),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF10233F),
-              fontSize: 23,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
               letterSpacing: -.55,
             ),
@@ -1972,12 +1995,12 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _buildBusinessBarSwipe(_buildMobileBalanceCard(canViewFinance)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _buildMobilePaymentActions(),
           if (canViewFinance) ...[
-            const SizedBox(height: 28),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
@@ -1996,7 +2019,7 @@ class _HomePageState extends State<HomePage> {
                 _periodPicker(),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildMobileFinanceSummary(),
           ],
           if (BusinessAccessService.isBarWaiter) ...[
@@ -2006,7 +2029,6 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 20),
           _buildMobileShortcuts(),
           const SizedBox(height: 22),
-          _buildMobileMarketBanner(),
           if (BusinessAccessService.isOwner.value) ...[
             const SizedBox(height: 14),
             _buildSubscriptionLink(),
@@ -2082,7 +2104,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMobileBalanceCard(bool canViewFinance) {
     final balance = financeIncome - financeExpense;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 11, 12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF1266D8), Color(0xFF064CB5)],
@@ -2101,19 +2123,19 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: .13),
-              borderRadius: BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(15),
             ),
             child: const Icon(
               Icons.storefront_rounded,
               color: Colors.white,
-              size: 30,
+              size: 25,
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2214,7 +2236,7 @@ class _HomePageState extends State<HomePage> {
       ),
     ];
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 2),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
       decoration: BoxDecoration(
         color: const Color(0xFFF4F7FD),
         border: Border.all(color: const Color(0xFFE6ECF5)),
@@ -2235,9 +2257,9 @@ class _HomePageState extends State<HomePage> {
                       Icon(
                         action.icon,
                         color: const Color(0xFF0759BE),
-                        size: 24,
+                        size: 21,
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 3),
                       Text(
                         action.label,
                         maxLines: 2,
@@ -2445,7 +2467,7 @@ class _HomePageState extends State<HomePage> {
             for (final shortcut in shortcuts)
               SizedBox(
                 width: tileWidth,
-                height: 92,
+                height: 78,
                 child: Material(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
@@ -2455,7 +2477,7 @@ class _HomePageState extends State<HomePage> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 5,
-                        vertical: 9,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
                         border: Border.all(color: const Color(0xFFE5EAF2)),
@@ -2465,14 +2487,14 @@ class _HomePageState extends State<HomePage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (shortcut.icon == Icons.hub_outlined)
-                            const IsherBrandMark(size: 34)
+                            const IsherBrandMark(size: 28)
                           else
                             Icon(
                               shortcut.icon,
                               color: const Color(0xFF0759BE),
-                              size: 30,
+                              size: 26,
                             ),
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 4),
                           Text(
                             shortcut.label,
                             maxLines: 2,
@@ -2494,69 +2516,6 @@ class _HomePageState extends State<HomePage> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildMobileMarketBanner() {
-    return Material(
-      color: const Color(0xFFEAF2FF),
-      borderRadius: BorderRadius.circular(19),
-      child: InkWell(
-        onTap: _openMarket,
-        borderRadius: BorderRadius.circular(19),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D6FEB),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Icon(
-                  Icons.storefront_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'mobile_market_title'.tr,
-                      style: const TextStyle(
-                        color: Color(0xFF10233F),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'mobile_market_subtitle'.tr,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF26364C),
-                        fontSize: 11.5,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF10233F),
-                size: 27,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -3418,6 +3377,12 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(width: _Spacing.sm),
             _buildConnectivityIndicator(),
+            if (kIsWeb)
+              _headerIconButton(
+                icon: Icons.cloud_download_outlined,
+                tooltip: 'hub_view_downloads'.tr,
+                onPressed: () => Get.toNamed(AppRoutes.downloads),
+              ),
             if (!_isPersonalMode && _isSuperAdmin && !compact)
               _headerIconButton(
                 icon: Icons.admin_panel_settings_outlined,
@@ -5530,7 +5495,8 @@ class _HomePageState extends State<HomePage> {
                                   label: FutureBuilder<TrialSettings>(
                                     future: trialSettingsFuture,
                                     builder: (context, snapshot) {
-                                      final days = snapshot.data?.durationDays ??
+                                      final days =
+                                          snapshot.data?.durationDays ??
                                           TrialSettings.defaults.durationDays;
                                       return Text(
                                         'subx_trial_try_first'.trParams({

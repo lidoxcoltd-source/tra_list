@@ -11,6 +11,7 @@ class TransactionModel {
   final String category;
   final String uid;
   final String shopNickname;
+  final String recordedByName;
   final DateTime? deletedAt;
 
   TransactionModel({
@@ -22,6 +23,7 @@ class TransactionModel {
     required this.category,
     required this.uid,
     this.shopNickname = '',
+    this.recordedByName = '',
     this.deletedAt,
   });
 
@@ -38,6 +40,7 @@ class TransactionModel {
       category: data['category'] ?? 'Uncategorized',
       uid: data['uid'] ?? '',
       shopNickname: data['shopNickname']?.toString() ?? '',
+      recordedByName: data['recordedByName']?.toString() ?? '',
       deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
     );
   }
@@ -58,6 +61,7 @@ class TransactionModel {
       category: json['category'] ?? 'Uncategorized',
       uid: json['uid'] ?? '',
       shopNickname: json['shopNickname']?.toString() ?? '',
+      recordedByName: json['recordedByName']?.toString() ?? '',
       deletedAt: json['deletedAt'] is String
           ? DateTime.tryParse(json['deletedAt'] as String)
           : (json['deletedAt'] as Timestamp?)?.toDate(),
@@ -73,6 +77,7 @@ class TransactionModel {
       'category': category,
       'uid': uid,
       'shopNickname': shopNickname,
+      'recordedByName': recordedByName,
       'deletedAt': deletedAt == null ? null : Timestamp.fromDate(deletedAt!),
     };
   }
@@ -88,6 +93,7 @@ class TransactionModel {
       'category': category,
       'uid': uid,
       'shopNickname': shopNickname,
+      'recordedByName': recordedByName,
       'deletedAt': deletedAt?.toIso8601String(),
     };
   }

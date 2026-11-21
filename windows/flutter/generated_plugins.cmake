@@ -12,6 +12,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_pos_printer_platform_image_3
   flutter_tts
   flutter_webrtc
+  geolocator_windows
   printing
   record_windows
   share_plus

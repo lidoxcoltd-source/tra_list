@@ -32,9 +32,13 @@ String isherModelNickname(AiModelOption model, List<AiModelOption> models) {
 }
 
 class AiModelPickerButton extends StatelessWidget {
-  const AiModelPickerButton({super.key, AiModelRepository? repository})
-    : _repository = repository;
+  const AiModelPickerButton({
+    super.key,
+    AiModelRepository? repository,
+    this.onModelSelected,
+  }) : _repository = repository;
   final AiModelRepository? _repository;
+  final VoidCallback? onModelSelected;
 
   Future<void> _open(BuildContext context) async {
     final repository = _repository ?? AiModelRepository();
@@ -79,6 +83,7 @@ class AiModelPickerButton extends StatelessWidget {
             models: catalog.models,
             providerNicknames: catalog.providerNicknames,
             engines: engines,
+            onModelSelected: onModelSelected,
             onDone: () => Navigator.pop(sheet),
           ),
         ),
@@ -99,11 +104,13 @@ class _PickerBody extends StatelessWidget {
     required this.models,
     required this.engines,
     required this.providerNicknames,
+    this.onModelSelected,
     required this.onDone,
   });
   final List<AiModelOption> models;
   final List<String> engines;
   final Map<String, String> providerNicknames;
+  final VoidCallback? onModelSelected;
   final VoidCallback onDone;
 
   static const _accent = Color(0xFFC7A9FF);
@@ -146,8 +153,9 @@ class _PickerBody extends StatelessWidget {
                     }),
                     style: const TextStyle(color: Colors.white60, fontSize: 12),
                   ),
-                  onTap: () {
-                    AiModelSelection.select(model.id);
+                  onTap: () async {
+                    await AiModelSelection.select(model.id);
+                    onModelSelected?.call();
                     onDone();
                   },
                 ),

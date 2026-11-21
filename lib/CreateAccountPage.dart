@@ -306,12 +306,22 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       );
       _showAccountCreated();
     } on FirebaseAuthException catch (e) {
-      final message = switch (e.code) {
-        'email-already-in-use' => 'An account with this email already exists',
-        'invalid-email' => 'Invalid email format',
-        'weak-password' => 'Password is too weak',
-        _ => e.message ?? 'Registration failed',
-      };
+      debugPrint(
+        'Email/password account creation failed (${e.code}): ${e.message}',
+      );
+      final message = e.message?.toLowerCase().contains('connection reset') ==
+              true
+          ? 'account_registration_network_error'
+          : switch (e.code) {
+              'email-already-in-use' =>
+                'An account with this email already exists',
+              'invalid-email' => 'Invalid email format',
+              'weak-password' => 'Password is too weak',
+              'internal-error' =>
+                'An internal authentication error occurred. Try again later. '
+                    'If it continues, contact support with code auth/internal-error.',
+              _ => '${e.message ?? 'Registration failed'} (auth/${e.code})',
+            };
 
       if (mounted) {
         Get.snackbar(
@@ -323,8 +333,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           duration: const Duration(seconds: 4),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Account profile initialization failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
       _showProfileSaveError();
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -490,21 +501,85 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     }
   }
 
+  Widget _stepNavigationButtons(Color accent, {required bool compact}) => Row(
+    children: [
+      if (_step > 0)
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _isLoading ? null : _previousStep,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: Text('Back'.tr),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: .3)),
+              minimumSize: Size.fromHeight(compact ? 42 : 48),
+            ),
+          ),
+        ),
+      if (_step > 0) const SizedBox(width: 10),
+      Expanded(
+        flex: 2,
+        child: ElevatedButton.icon(
+          onPressed: _isLoading
+              ? null
+              : _step == _stepCount - 1
+              ? _createAccount
+              : _nextStep,
+          icon: Icon(
+            _step == _stepCount - 1
+                ? Icons.check_circle_outline_rounded
+                : Icons.arrow_forward_rounded,
+            size: 19,
+          ),
+          label: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  _step == _stepCount - 1
+                      ? 'account_create_button'.tr
+                      : 'Continue'.tr,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accent,
+            foregroundColor: const Color(0xFF06152E),
+            minimumSize: Size.fromHeight(compact ? 42 : 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 4,
+          ),
+        ),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
     final compact = height < 860;
     final tight = height < 720;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final fieldGap = tight ? 5.0 : (compact ? 7.0 : 12.0);
     final isBusiness = _mode == AccountMode.business;
     final accent = isBusiness
         ? AuthBackdrop.businessAccent
         : AuthBackdrop.personalAccent;
+    final backgroundColor = isBusiness
+        ? const Color(0xFF06152E)
+        : const Color(0xFF071B2A);
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: isBusiness
-          ? const Color(0xFF06152E)
-          : const Color(0xFF071B2A),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -515,13 +590,28 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           tooltip: 'Back'.tr,
         ),
       ),
+      bottomNavigationBar: keyboardVisible
+          ? SafeArea(
+              top: false,
+              child: Container(
+                color: backgroundColor,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: _stepNavigationButtons(accent, compact: true),
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           Positioned.fill(child: AuthBackdrop(isBusiness: isBusiness)),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                physics: MediaQuery.viewInsetsOf(context).bottom > 0
+                physics: keyboardVisible
                     ? const ClampingScrollPhysics()
                     : const NeverScrollableScrollPhysics(),
                 child: Padding(
@@ -707,45 +797,11 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                                       ),
                                     ),
                                     SizedBox(height: compact ? 14 : 22),
-                                    Row(
-                                      children: [
-                                        if (_step > 0)
-                                          Expanded(
-                                            child: OutlinedButton.icon(
-                                              onPressed: _isLoading ? null : _previousStep,
-                                              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                                              label: Text('Back'.tr),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.white,
-                                                side: BorderSide(color: Colors.white.withValues(alpha: .3)),
-                                                minimumSize: Size.fromHeight(compact ? 42 : 48),
-                                              ),
-                                            ),
-                                          ),
-                                        if (_step > 0) const SizedBox(width: 10),
-                                        Expanded(
-                                          flex: 2,
-                                          child: ElevatedButton.icon(
-                                            onPressed: _isLoading
-                                                ? null
-                                                : _step == _stepCount - 1
-                                                    ? _createAccount
-                                                    : _nextStep,
-                                            icon: Icon(_step == _stepCount - 1 ? Icons.check_circle_outline_rounded : Icons.arrow_forward_rounded, size: 19),
-                                            label: _isLoading
-                                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                                : Text(_step == _stepCount - 1 ? 'account_create_button'.tr : 'Continue'.tr, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: accent,
-                                              foregroundColor: const Color(0xFF06152E),
-                                              minimumSize: Size.fromHeight(compact ? 42 : 48),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              elevation: 4,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                    if (!keyboardVisible)
+                                      _stepNavigationButtons(
+                                        accent,
+                                        compact: compact,
+                                      ),
                                     if (_step == _stepCount - 1 && _googleSupported) ...[
                                       SizedBox(height: compact ? 4 : 12),
                                       Row(

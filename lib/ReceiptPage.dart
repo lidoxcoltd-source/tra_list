@@ -22,6 +22,16 @@ class CompanyInfo {
   final String uim;
   final String taxOffice;
   final ImageProvider? logo;
+  final String businessType;
+  final String businessDescription;
+  final String shopNickname;
+  final String email;
+  final String website;
+  final String facebookUrl;
+  final String instagramUrl;
+  final String tiktokUrl;
+  final String socialHandle;
+  final String logoUrl;
 
   const CompanyInfo({
     required this.name,
@@ -33,6 +43,16 @@ class CompanyInfo {
     required this.uim,
     required this.taxOffice,
     this.logo,
+    this.businessType = '',
+    this.businessDescription = '',
+    this.shopNickname = '',
+    this.email = '',
+    this.website = '',
+    this.facebookUrl = '',
+    this.instagramUrl = '',
+    this.tiktokUrl = '',
+    this.socialHandle = '',
+    this.logoUrl = '',
   });
 
   CompanyInfo copyWith({ImageProvider? logo}) => CompanyInfo(
@@ -45,6 +65,16 @@ class CompanyInfo {
     uim: uim,
     taxOffice: taxOffice,
     logo: logo ?? this.logo,
+    businessType: businessType,
+    businessDescription: businessDescription,
+    shopNickname: shopNickname,
+    email: email,
+    website: website,
+    facebookUrl: facebookUrl,
+    instagramUrl: instagramUrl,
+    tiktokUrl: tiktokUrl,
+    socialHandle: socialHandle,
+    logoUrl: logoUrl,
   );
 }
 

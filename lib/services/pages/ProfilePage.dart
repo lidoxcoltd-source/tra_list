@@ -40,6 +40,9 @@ class _ProfilePageState extends State<ProfilePage> {
   final secondaryPhoneC = TextEditingController();
   final emailC = TextEditingController();
   final websiteC = TextEditingController();
+  final facebookUrlC = TextEditingController();
+  final instagramUrlC = TextEditingController();
+  final tiktokUrlC = TextEditingController();
   final taxIdC = TextEditingController();
   final handleC = TextEditingController();
 
@@ -110,6 +113,9 @@ class _ProfilePageState extends State<ProfilePage> {
       phoneC.text = data['phone']?.toString() ?? '';
       emailC.text = data['email']?.toString() ?? '';
       websiteC.text = data['website']?.toString() ?? '';
+      facebookUrlC.text = data['facebookUrl']?.toString() ?? '';
+      instagramUrlC.text = data['instagramUrl']?.toString() ?? '';
+      tiktokUrlC.text = data['tiktokUrl']?.toString() ?? '';
       taxIdC.text = data['taxId']?.toString() ?? '';
       handleC.text = data['handle']?.toString() ?? '';
 
@@ -170,6 +176,9 @@ class _ProfilePageState extends State<ProfilePage> {
     secondaryPhoneC.dispose();
     emailC.dispose();
     websiteC.dispose();
+    facebookUrlC.dispose();
+    instagramUrlC.dispose();
+    tiktokUrlC.dispose();
     taxIdC.dispose();
     handleC.dispose();
     beneficiaryC.dispose();
@@ -664,6 +673,24 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildTextField(phoneC, 'Phone', Icons.phone_outlined),
             _buildTextField(emailC, 'Email', Icons.email_outlined),
             _buildTextField(websiteC, 'Website', Icons.language_outlined),
+            _buildTextField(
+              facebookUrlC,
+              'Facebook URL',
+              Icons.public_rounded,
+              keyboardType: TextInputType.url,
+            ),
+            _buildTextField(
+              instagramUrlC,
+              'Instagram URL',
+              Icons.camera_alt_outlined,
+              keyboardType: TextInputType.url,
+            ),
+            _buildTextField(
+              tiktokUrlC,
+              'TikTok URL',
+              Icons.music_note_rounded,
+              keyboardType: TextInputType.url,
+            ),
             _buildTextField(taxIdC, 'Tax ID / TIN', Icons.badge_outlined),
             _buildTextField(handleC, 'Social Handle', Icons.alternate_email),
           ],
@@ -1536,6 +1563,9 @@ class _ProfilePageState extends State<ProfilePage> {
         'phone': phoneC.text.trim(),
         'email': emailC.text.trim(),
         'website': websiteC.text.trim(),
+        'facebookUrl': facebookUrlC.text.trim(),
+        'instagramUrl': instagramUrlC.text.trim(),
+        'tiktokUrl': tiktokUrlC.text.trim(),
         'taxId': taxIdC.text.trim(),
         'handle': handleC.text.trim(),
         'beneficiary': beneficiaryC.text.trim(),

@@ -6,7 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:zxing_lib/common.dart';
-import 'package:zxing_lib/zxing.dart';
+import 'package:zxing_lib/zxing.dart' hide BarcodeFormat;
 import 'package:tra_list/services/business_access_service.dart';
 import 'scan_frame.dart';
 import 'stock_models.dart';
@@ -247,6 +247,7 @@ class _ScannerPage extends StatefulWidget {
 class _ScannerPageState extends State<_ScannerPage> {
   final _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [BarcodeFormat.all],
   );
   bool _done = false;
 

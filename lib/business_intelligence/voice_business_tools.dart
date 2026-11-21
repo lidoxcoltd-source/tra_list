@@ -4,6 +4,8 @@ import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
+import 'package:tra_list/jobs/models/debt.dart';
+import 'package:tra_list/jobs/services/debt_service.dart';
 
 typedef VoiceToolHandler =
     Future<Map<String, dynamic>> Function(
@@ -22,6 +24,7 @@ class VoiceBusinessTools {
     this.onNavigate,
     this.onSummary,
     this.onSummaryLoading,
+    this.onDebtReminder,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
@@ -34,6 +37,7 @@ class VoiceBusinessTools {
   final Future<bool> Function(IsherDestination destination)? onNavigate;
   final void Function(Map<String, dynamic> summary)? onSummary;
   final void Function(bool loading)? onSummaryLoading;
+  final Future<bool> Function(Debt debt, String message)? onDebtReminder;
   final DateTime Function() _clock;
   bool _documentRequested = false;
 
@@ -47,6 +51,66 @@ class VoiceBusinessTools {
       }
       if (name == 'get_document_details') {
         return {'details': await documentDetails(args)};
+      }
+      if (name == 'get_current_debts') {
+        if (!isCurrent()) throw StateError('Business access changed');
+        if (args.keys.any((key) => key != 'due_within_days' && key != 'overdue_only')) {
+          throw const FormatException('Unsupported debt filter');
+        }
+        final days = args['due_within_days'];
+        final overdueOnly = args['overdue_only'] ?? false;
+        if ((days != null && (days is! int || days < 0 || days > 365)) || overdueOnly is! bool) {
+          throw const FormatException('Invalid debt filter');
+        }
+        final now = _clock();
+        final today = DateTime(now.year, now.month, now.day);
+        final lookAheadDays = days == null ? 365 : days as int;
+        final end = today.add(Duration(days: lookAheadDays));
+        final debts = await DebtService.loadForAssistant();
+        final matchingDebts = debts.where((debt) {
+          if (debt.isSettled) return false;
+          if (overdueOnly) return debt.isOverdue;
+          if (days != null) {
+            return debt.dueDate != null &&
+                !DateTime(debt.dueDate!.year, debt.dueDate!.month, debt.dueDate!.day).isBefore(today) &&
+                !DateTime(debt.dueDate!.year, debt.dueDate!.month, debt.dueDate!.day).isAfter(end);
+          }
+          return true;
+        }).toList(growable: false);
+        final results = matchingDebts.take(50).map((debt) => {
+          'id': debt.id,
+          'name': debt.debtorName,
+          'balance': debt.balance,
+          'direction': debt.direction.name,
+          'dueDate': debt.dueDate?.toIso8601String().substring(0, 10),
+          'overdue': debt.isOverdue,
+        }).toList(growable: false);
+        return {
+          'debts': results,
+          'count': results.length,
+          'truncated': matchingDebts.length > results.length || debts.length >= 100,
+        };
+      }
+      if (name == 'review_whatsapp_debt_reminder') {
+        if (!isCurrent() || onDebtReminder == null ||
+            args.keys.any((key) => key != 'debt_id' && key != 'message')) {
+          throw StateError('Reminder review unavailable');
+        }
+        final id = args['debt_id'];
+        final message = args['message'];
+        if (id is! String || id.isEmpty || id.length > 128 ||
+            message is! String || message.trim().isEmpty || message.length > 1000) {
+          throw const FormatException('Invalid reminder draft');
+        }
+        final debt = await DebtService.loadAssistantDebt(id);
+        if (debt == null || debt.isSettled || debt.phone.trim().isEmpty ||
+            debt.direction != DebtDirection.customerOwesShop) {
+          throw StateError('Debtor or WhatsApp number is unavailable');
+        }
+        final approved = await onDebtReminder!(debt, message.trim());
+        return {'status': approved
+            ? 'The approved message was opened in WhatsApp. The user must press Send there; do not say it was sent.'
+            : 'The user cancelled. Do not claim WhatsApp opened or the message was sent.'};
       }
       if (name == 'review_transaction_draft') {
         if (!isCurrent() || onTransaction == null) {

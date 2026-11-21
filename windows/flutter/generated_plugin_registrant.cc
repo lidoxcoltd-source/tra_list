@@ -15,6 +15,7 @@
 #include <flutter_pos_printer_platform_image_3/flutter_pos_printer_platform_plugin.h>
 #include <flutter_tts/flutter_tts_plugin.h>
 #include <flutter_webrtc/flutter_web_r_t_c_plugin.h>
+#include <geolocator_windows/geolocator_windows.h>
 #include <printing/printing_plugin.h>
 #include <record_windows/record_windows_plugin_c_api.h>
 #include <share_plus/share_plus_windows_plugin_c_api.h>
@@ -40,6 +41,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FlutterTtsPlugin"));
   FlutterWebRTCPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterWebRTCPlugin"));
+  GeolocatorWindowsRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("GeolocatorWindows"));
   PrintingPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PrintingPlugin"));
   RecordWindowsPluginCApiRegisterWithRegistrar(

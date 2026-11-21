@@ -157,4 +157,16 @@ class DebtController extends GetxController {
       rethrow;
     }
   }
+
+  Future<void> delete(Debt debt) async {
+    try {
+      await DebtService.delete(debt.id);
+      Get.snackbar('success'.tr, 'debt_deleted'.tr);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to delete debt: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      Get.snackbar('error'.tr, 'debt_delete_error'.trParams({'error': '$error'}));
+      rethrow;
+    }
+  }
 }

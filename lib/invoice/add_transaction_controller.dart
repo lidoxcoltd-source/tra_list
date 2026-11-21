@@ -295,6 +295,12 @@ class AddTransactionController extends GetxController {
       } else if (shopNickname.isEmpty) {
         shopNickname = _cachedShopNickname;
       }
+      final existingRecorder = _originalTransaction?.recordedByName.trim() ?? '';
+      final recordedByName = existingRecorder.isNotEmpty
+          ? existingRecorder
+          : (user.displayName?.trim().isNotEmpty == true
+                ? user.displayName!.trim()
+                : user.email ?? '');
       final transaction = TransactionModel(
         id: _originalTransaction?.id ?? OfflineService.newLocalId(),
         uid: user.uid,
@@ -306,6 +312,7 @@ class AddTransactionController extends GetxController {
         category: selectedCategory.value,
         date: selectedDate.value,
         shopNickname: shopNickname,
+        recordedByName: recordedByName,
       );
       transactionToSave = transaction;
 

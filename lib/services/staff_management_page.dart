@@ -2587,11 +2587,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           ),
         ),
         children: [
-          for (final action in BusinessAccessService.actions.entries.where(
-            (action) => module == 'staff'
-                ? action.key == 'manage'
-                : action.key != 'manage',
-          ))
+          for (final action in BusinessAccessService.actionsFor(module))
             SwitchListTile.adaptive(
               dense: true,
               title: Text(action.value.tr),
@@ -2824,9 +2820,7 @@ class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
                     title: Text(entry.value.tr),
                     children: [
                       for (final action
-                          in BusinessAccessService.actions.entries.where(
-                            (action) => action.key != 'manage',
-                          ))
+                          in BusinessAccessService.actionsFor(entry.key))
                         SwitchListTile.adaptive(
                           dense: true,
                           title: Text(action.value.tr),

@@ -111,7 +111,7 @@ const Map<String, String> enUsTranslations = {
   'bi_chat_edit_replace': 'Replace draft',
   'bi_chat_review': 'Review what will be sent to OpenAI',
   'bi_chat_data_notice':
-      'Messages and business summaries are sent to the selected AI provider (OpenAI or Google Gemini). Owner requests may include invoice or receipt details and customer names.',
+      'Messages and business summaries are sent to the selected AI provider (OpenAI or Google Gemini). If you explicitly ask about debts or deadlines, current debtor names, balances and due dates you are allowed to view may also be sent to AI. Owner requests may include invoice or receipt details and customer names.',
   'bi_document_review_title': 'Review document data',
   'bi_document_review_notice':
       'The data below, your question, recent conversation and business summary will be sent to the selected AI provider (OpenAI or Google Gemini). Customer names are included for customer questions. Check the coverage and all details before sending.',
@@ -307,6 +307,10 @@ const Map<String, String> enUsTranslations = {
       'Retry the previous test payment for the same business and package before choosing another.',
   'isher_test_retry': 'Check or retry previous test payment',
   'bi_chat_empty': 'Ask Isher about your business, or choose a question below.',
+  'bi_question_debts': 'Who owes me and what debts are due soon?',
+  'bi_debt_ai_review_title': 'Review debt details for AI',
+  'bi_debt_ai_review_notice': 'These current debtor names, balances, and due dates will be shared with the selected AI provider to answer your question. Phone numbers are never shared. Continue?',
+  'bi_debt_ai_review_limited': 'Showing up to 50 open debts from the latest 100 records.',
   'bi_chat_emoji': 'Add emoji',
   'bi_chat_design_poster': 'Create a design',
   'bi_chat_design_poster_hint': 'Start a poster, flyer or social post with AI',
@@ -330,6 +334,22 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_web_requirements':
       'Open this app over HTTPS and allow microphone access when your browser asks.',
   'bi_voice_title': 'Live voice conversation',
+  'bi_voice_model_selection': 'Voice AI model',
+  'bi_voice_record_debt': 'Record a debt by voice',
+  'bi_voice_debt_local_privacy':
+      'Dictation stays on this device and is not sent to the AI provider.',
+  'bi_voice_debt_review_note':
+      'Review the details. Nothing is saved until you tap Save debt.',
+  'bi_voice_debt_speak_field': 'Dictate this field on this device',
+  'bi_voice_debt_listening': 'Listening on this device. Tap to stop.',
+  'bi_voice_debt_local_unavailable':
+      'On-device speech recognition is unavailable. You can type the details instead.',
+  'bi_voice_debt_amount_hint':
+      'Speak the amount as digits, then check it before saving.',
+  'bi_voice_debt_amount_invalid':
+      'Enter a valid amount greater than zero.',
+  'bi_voice_debt_save_error':
+      'Could not save the debt. Check your connection and permissions.',
   'bi_voice_welcome': 'Talk to your business assistant',
   'bi_voice_session_title': 'Voice conversation',
   'bi_voice_idle_prompt':
@@ -339,10 +359,15 @@ const Map<String, String> enUsTranslations = {
       'Talk to the AI in English or Swahili. Check AI usage for your limits. Switching to chat pauses Gemini voice and ends OpenAI voice.',
   'bi_voice_review': 'Review and start voice conversation',
   'bi_voice_privacy':
-      'The business summary below and your live microphone audio will be sent to @provider until you mute, pause or end the session. During the session, requested summaries and invoice or receipt details, including customer names when requested, may also be sent without another review, within your business permissions. Speech is sent without reviewing each sentence. Only share customer names when necessary and authorized; do not speak passwords, contact details or private payment information. Opening a document pauses Gemini voice or ends OpenAI voice and does not save it. A paused Gemini connection remains open until its time limit and may incur charges. The voice is AI-generated. Provider usage may incur service charges for MJASI. Voice conversations are separate from text chat.',
+      'The business summary below and your live microphone audio will be sent to @provider until you mute, pause or end the session. During the session, requested summaries, current debt names and balances, and invoice or receipt details may also be sent without another review, within your business permissions. WhatsApp reminder text is reviewed on screen; WhatsApp opens only after approval and you press Send there. Speech is sent without reviewing each sentence. Only share customer names when necessary and authorized; do not speak passwords, contact details or private payment information. Opening a document pauses Gemini voice or ends OpenAI voice and does not save it. A paused Gemini connection remains open until its time limit and may incur charges. The voice is AI-generated. Provider usage may incur service charges for MJASI. Voice conversations are separate from text chat.',
   'bi_voice_draft_unavailable':
       'The document form could not be opened. Finish or retry the current chat operation and try again.',
   'bi_voice_transaction_review': 'Review transaction draft',
+  'bi_debt_reminder_review_title': 'Review WhatsApp reminder',
+  'bi_debt_reminder_message': 'Reminder message',
+  'bi_debt_reminder_whatsapp_notice': 'Approving opens WhatsApp with this text. You still need to press Send in WhatsApp.',
+  'bi_debt_reminder_open_whatsapp': 'Approve and open WhatsApp',
+  'bi_debt_reminder_opened_notice': 'WhatsApp opened with your draft. Review it and press Send there.',
   'bi_voice_transaction_not_saved':
       'The transaction is not saved yet. Confirm to send it through chat for saving. The category must already exist in the business; check chat for the result.',
   'bi_voice_transaction_type': 'Type',
@@ -449,9 +474,11 @@ const Map<String, String> enUsTranslations = {
   'isher_personal_greeting_no_name_3':
       "Hi! I'm here to help. What would you like to work on in your business today?",
   'isher_greeting_voice_error':
-      'Voice unavailable. Install an offline voice in speech settings.',
+      'AI voice could not be generated. Try again shortly.',
   'isher_greeting_voice_unavailable':
-      'Voice unavailable. Please try again later.',
+      'AI voice could not be generated. Try again shortly.',
+  'isher_greeting_limit':
+      'The daily AI voice limit has been reached. Try again tomorrow.',
   'isher_speech_settings': 'Speech settings',
   'bi_models_title': 'Choose AI model',
   'bi_models_greeting_provider': 'Greeting voice',
@@ -476,10 +503,14 @@ const Map<String, String> enUsTranslations = {
   'isher_speech_settings_failed':
       'Could not open settings. Open Settings and search for Text-to-speech output.',
   'isher_greeting_cloud_disclosure':
-      'AI voice: business name is sent to OpenAI.',
-  'isher_greeting_cloud_fallback':
-      'OpenAI voice unavailable or daily limit of 3 reached; using device voice.',
-  'isher_greeting_replay': 'Play greeting',
+      'The summary is sent to your selected AI provider; if it is unavailable, another enabled provider may be used.',
+  'isher_greeting_model': 'Summary voice model',
+  'isher_greeting_model_retry': 'Retry loading voice models',
+  'isher_greeting_model_preference_error':
+      'Could not load or save your voice model preference.',
+  'isher_greeting_replay': 'Listen to summary',
+  'isher_greeting_stop': 'Stop',
+  'isher_greeting_listening': 'Playing business summary...',
   'isher_welcome_greeting': "Hello! I'm Isher.",
   'isher_welcome_description':
       "I'm here to help you manage your business, understand your numbers and make smarter decisions.",
@@ -1352,6 +1383,8 @@ const Map<String, String> enUsTranslations = {
   'staff_module_analytics': 'Reports & analytics',
   'staff_module_categories': 'Categories',
   'staff_module_profile': 'Business profile',
+  'staff_module_daily_brief':
+      'Daily brief (income, debts, stock and tasks)',
   'staff_action_view': 'View',
   'staff_action_create': 'Add',
   'staff_action_edit': 'Edit',
@@ -1901,6 +1934,8 @@ const Map<String, String> enUsTranslations = {
   'account_full_name_required': 'Enter your full name.',
   'account_business_name': 'Business name',
   'account_phone_optional': 'Phone number (optional)',
+  'account_registration_network_error':
+      'Could not reach the sign-up service. Check your internet connection and try again.',
   'account_profile_save_failed':
       'Your account was created, but your profile details could not be saved. Check your connection and contact support if the issue continues.',
   'account_confirm_password': 'Confirm Password',
@@ -1929,6 +1964,7 @@ const Map<String, String> enUsTranslations = {
   'transactions_all_time': 'All Time',
   'transactions_shop': 'Shop',
   'transactions_shop_not_recorded': 'Not recorded',
+  'transactions_recorded_by': 'Recorded by',
   'transactions_filter_shop': 'Filter by shop',
   'transactions_all_shops': 'All shops',
   'transactions_shops_load_error': 'Could not load shop names.',
@@ -2105,6 +2141,15 @@ const Map<String, String> enUsTranslations = {
   'jobs_add_new': 'Add New Job',
 
   'debts_title': 'Debts',
+  'debt_page_subtitle': 'Track balances, follow up with customers, and keep every account in view.',
+  'debt_type': 'Type',
+  'debt_status': 'Status',
+  'debt_actions': 'Actions',
+  'debt_whatsapp_reminder': 'Send WhatsApp reminder',
+  'debt_whatsapp_invalid': 'Enter a valid phone number with country code to use WhatsApp.',
+  'debt_whatsapp_open_error': 'Could not open WhatsApp. Check the number and try again.',
+  'debt_due_date_unspecified': 'no due date set',
+  'debt_whatsapp_reminder_message': 'Hello @name, this is a friendly reminder about your outstanding balance of @balance. Due date: @due_date. Please contact us if you have already paid. Thank you.',
   'debt_add_title': 'Add debt',
   'debt_edit_title': 'Edit debt',
   'debt_draft_restored_title': 'Draft restored',
@@ -2204,6 +2249,10 @@ const Map<String, String> enUsTranslations = {
   'debt_amount_below_paid': 'Amount cannot be less than payments already made.',
   'debt_added': 'Debt saved.',
   'debt_updated': 'Debt details updated.',
+  'debt_delete_title': 'Delete debt',
+  'debt_delete_confirm': 'Delete the debt for "@name" and its payment history? This cannot be undone.',
+  'debt_deleted': 'Debt and payment history deleted.',
+  'debt_delete_error': 'Could not delete debt: @error',
   'debt_payment_saved': 'Payment recorded.',
   'debt_save_error': 'Could not save debt: @error',
   'debt_payment_save_error': 'Could not record payment: @error',
