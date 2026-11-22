@@ -1701,6 +1701,56 @@ service cloud.firestore {
       allow delete: if hasPermission(businessUid, 'stock', 'delete');
     }
 
+    match /users/{businessUid}/suppliers/{supplierId} {
+      function validSupplierData(data) {
+        return data.keys().hasOnly([
+            'businessId', 'name', 'phone', 'location',
+            'createdBy', 'createdAt', 'updatedBy', 'updatedAt'
+          ])
+          && data.keys().hasAll([
+            'businessId', 'name', 'phone', 'location',
+            'createdBy', 'createdAt', 'updatedBy', 'updatedAt'
+          ])
+          && data.businessId == businessUid
+          && data.name is string
+          && data.name.size() > 0
+          && data.name.size() <= 120
+          && data.phone is string
+          && data.phone.size() > 0
+          && data.phone.size() <= 40
+          && data.location is string
+          && data.location.size() > 0
+          && data.location.size() <= 240
+          && data.createdBy is string
+          && data.updatedBy is string
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      allow get, list: if hasPermission(businessUid, 'stock', 'view')
+        || hasPermission(businessUid, 'stock', 'create')
+        || hasPermission(businessUid, 'stock', 'edit')
+        || hasPermission(businessUid, 'stock', 'delete');
+      allow create: if hasPermission(businessUid, 'stock', 'create')
+        && validSupplierData(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if hasPermission(businessUid, 'stock', 'edit')
+        && validSupplierData(request.resource.data)
+        && resource.data.businessId == businessUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'location', 'updatedBy', 'updatedAt'
+        ])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if hasPermission(businessUid, 'stock', 'delete')
+        && resource.data.businessId == businessUid;
+    }
+
     match /users/{businessUid}/productCodes/{codeId} {
       allow read: if hasPermission(businessUid, 'stock', 'view')
         || hasPermission(businessUid, 'stock', 'create')

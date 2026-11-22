@@ -2224,7 +2224,6 @@ class _PosPageState extends State<PosPage> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       child: StockCard(
         padding: const EdgeInsets.all(18),
-        borderColor: const Color(0xFFDCE5F2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2695,7 +2694,6 @@ class _PosPageState extends State<PosPage> {
       onDismissed: (_) => setState(() => _cart.remove(l)),
       child: StockCard(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-        borderColor: const Color(0xFFE1E9F3),
         child: Row(
           children: [
             ProductImage(url: p.imageUrl, size: 54, radius: 13),

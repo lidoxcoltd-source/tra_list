@@ -1,7 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:tra_list/business_intelligence/ai_models.dart';
 import 'package:tra_list/services/business_access_service.dart';
-import 'daily_brief_weather_service.dart';
 
 class DailyBusinessBrief {
   const DailyBusinessBrief({
@@ -24,7 +23,6 @@ class DailyBusinessBriefService {
   Future<DailyBusinessBrief> generate({
     required DateTime now,
     required String language,
-    required DailyBriefWeather? weather,
   }) async {
     await AiModelSelection.load();
     final start = DateTime(now.year, now.month, now.day);
@@ -45,7 +43,6 @@ class DailyBusinessBriefService {
           'language': language,
           'timeOfDay': timeOfDay,
           if (model != null) 'model': model,
-          if (weather != null) 'weather': weather.toBriefMap(),
         });
     final data = Map<String, dynamic>.from(response.data as Map);
     return DailyBusinessBrief(

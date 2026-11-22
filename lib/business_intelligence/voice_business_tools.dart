@@ -3,6 +3,7 @@ import 'package:tra_list/business_intelligence/ai_provider.dart';
 import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/voice_transaction_draft.dart';
+import 'package:tra_list/business_intelligence/voice_debt_draft.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/jobs/models/debt.dart';
 import 'package:tra_list/jobs/services/debt_service.dart';
@@ -21,6 +22,7 @@ class VoiceBusinessTools {
     this.initialSnapshot,
     this.onDocument,
     this.onTransaction,
+    this.onRecordDebt,
     this.onNavigate,
     this.onSummary,
     this.onSummaryLoading,
@@ -34,6 +36,7 @@ class VoiceBusinessTools {
   final AiSnapshot? initialSnapshot;
   final void Function(AiDocumentDraft draft)? onDocument;
   final Future<void> Function(VoiceTransactionDraft draft)? onTransaction;
+  final Future<void> Function(VoiceDebtDraft draft)? onRecordDebt;
   final Future<bool> Function(IsherDestination destination)? onNavigate;
   final void Function(Map<String, dynamic> summary)? onSummary;
   final void Function(bool loading)? onSummaryLoading;
@@ -121,6 +124,17 @@ class VoiceBusinessTools {
         return {
           'status':
               'Review closed. The transaction is not saved by voice. If confirmed, the request proceeds in chat; check chat for the result.',
+        };
+      }
+      if (name == 'record_debt') {
+        if (!isCurrent() || onRecordDebt == null) {
+          throw StateError('Debt registration unavailable');
+        }
+        final draft = VoiceDebtDraft.fromArguments(args);
+        await onRecordDebt!(draft);
+        return {
+          'status':
+              'The confirmed debt was saved successfully. Tell the user it was saved.',
         };
       }
       if (name == 'open_app_page') {

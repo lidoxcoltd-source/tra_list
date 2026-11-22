@@ -31,10 +31,12 @@ import 'package:tra_list/business_intelligence/isher_navigation.dart';
 import 'package:tra_list/business_intelligence/isher_package_quota_notice.dart';
 import 'package:tra_list/business_intelligence/isher_voice_guide_page.dart';
 import 'package:tra_list/business_intelligence/isher_avatar.dart';
-import 'package:tra_list/business_intelligence/voice_debt_entry_dialog.dart';
+import 'package:tra_list/business_intelligence/voice_debt_draft.dart';
 import 'package:tra_list/jobs/models/debt.dart';
+import 'package:tra_list/jobs/services/debt_service.dart';
 import 'package:tra_list/services/business_access_service.dart';
 import 'package:tra_list/services/creative_studio_service.dart';
+import 'package:tra_list/services/profile_service.dart';
 import 'package:tra_list/services/pages/creative_design_editor_page.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -926,11 +928,47 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   Future<void> _selectEngine(String engine) =>
       AiVoiceEngineSelection.select(engine);
 
-  Future<void> _openVoiceDebtEntry() async {
-    final saved = await showVoiceDebtEntryDialog(context);
-    if (!mounted || saved != true) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('debt_added'.tr)),
+  Future<void> _recordVoiceDebt(VoiceDebtDraft draft) async {
+    bool canRecord() =>
+        mounted &&
+        widget.visible &&
+        _foreground &&
+        _active &&
+        !_paused &&
+        widget.isCurrent() &&
+        BusinessAccessService.hasBusinessAccess &&
+        BusinessAccessService.can('jobs', 'create') &&
+        BusinessAccessService.businessId == widget.businessContext.businessId;
+    if (!canRecord()) throw StateError('Debt registration unavailable');
+
+    final generation = _generation;
+    var shopNickname = DebtService.assignedShop;
+    if (BusinessAccessService.isOwner.value) {
+      final profile = await ProfileService.loadOrCreate();
+      shopNickname = profile['shopNickname']?.toString().trim() ?? '';
+      if (shopNickname.isEmpty) {
+        shopNickname = profile['name']?.toString().trim() ?? '';
+      }
+      if (shopNickname.isEmpty) {
+        shopNickname = BusinessAccessService.shopNickname.value.trim();
+      }
+    }
+    if (!canRecord() || generation != _generation || shopNickname.isEmpty) {
+      throw StateError('Debt registration unavailable');
+    }
+
+    await DebtService.save(
+      Debt(
+        debtorName: draft.debtorName,
+        phone: '',
+        direction: draft.direction,
+        reason: draft.reason,
+        notes: draft.notes,
+        principal: draft.amount,
+        dueDate: draft.dueDate,
+        shopNickname: shopNickname,
+      ),
+      isEditing: false,
     );
   }
 
@@ -2044,6 +2082,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
         widget.isCurrent(),
     onDocument: widget.onOpenDocument,
     onTransaction: _reviewVoiceTransaction,
+    onRecordDebt: _recordVoiceDebt,
     onNavigate: _openVoicePage,
     onSummary: (summary) {
       _hasVoiceReport = true;
@@ -2211,19 +2250,6 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                       ],
                       selected: {_engine},
                       onSelectionChanged: (value) => _selectEngine(value.first),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-                  if (!_active &&
-                      !_paused &&
-                      !_busy &&
-                      !kIsWeb &&
-                      defaultTargetPlatform == TargetPlatform.android &&
-                      BusinessAccessService.can('jobs', 'create')) ...[
-                    OutlinedButton.icon(
-                      onPressed: _openVoiceDebtEntry,
-                      icon: const Icon(Icons.record_voice_over_rounded),
-                      label: Text('bi_voice_record_debt'.tr),
                     ),
                     const SizedBox(height: 14),
                   ],

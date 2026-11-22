@@ -99,6 +99,8 @@ class StockService {
       _business.collection('stockMovements');
   CollectionReference<Map<String, dynamic>> get purchases =>
       _business.collection('purchases');
+  CollectionReference<Map<String, dynamic>> get suppliers =>
+      _business.collection('suppliers');
   CollectionReference<Map<String, dynamic>> get barOrders =>
       _business.collection('barOrders');
   CollectionReference<Map<String, dynamic>> get _codes =>
@@ -161,6 +163,51 @@ class StockService {
       .orderBy('name')
       .snapshots()
       .map((s) => s.docs.map(Product.fromDoc).toList());
+
+  Stream<List<StockSupplier>> watchSuppliers() => suppliers
+      .orderBy('name')
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map(StockSupplier.fromDoc).toList());
+
+  Future<String> createSupplier(StockSupplier supplier) async {
+    _require('create');
+    _validateSupplier(supplier);
+    final ref = suppliers.doc();
+    await ref.set({
+      'businessId': businessId,
+      'name': supplier.name.trim(),
+      'phone': supplier.phone.trim(),
+      'location': supplier.location.trim(),
+      'createdBy': uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedBy': uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  Future<void> updateSupplier(StockSupplier supplier) async {
+    _require('edit');
+    _validateSupplier(supplier);
+    if (supplier.id.trim().isEmpty) {
+      throw StockException('stk_err_required');
+    }
+    await suppliers.doc(supplier.id).update({
+      'name': supplier.name.trim(),
+      'phone': supplier.phone.trim(),
+      'location': supplier.location.trim(),
+      'updatedBy': uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteSupplier(String supplierId) async {
+    _require('delete');
+    if (supplierId.trim().isEmpty) {
+      throw StockException('stk_err_required');
+    }
+    await suppliers.doc(supplierId).delete();
+  }
 
   /// Resolves a scanned SKU or barcode using the per-business indexes. The
   /// barcode index can contain more than one code for the same product.
@@ -225,13 +272,79 @@ class StockService {
       .map((s) => s.docs.map(StockMovement.fromDoc).toList());
 
   Stream<List<StockMovement>> watchMovementsSince(DateTime since) => movements
-      .where(
-        'createdAt',
-        isGreaterThanOrEqualTo: Timestamp.fromDate(since),
-      )
+      .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
       .orderBy('createdAt', descending: true)
       .snapshots()
       .map((s) => s.docs.map(StockMovement.fromDoc).toList());
+
+  Stream<List<ProductSaleRecord>> watchProductSalesSince(
+    DateTime since,
+  ) => _business
+      .collection('invoices')
+      .where('kind', isEqualTo: 'invoice')
+      .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .map((snapshot) {
+        final records = <ProductSaleRecord>[];
+        for (final document in snapshot.docs) {
+          final data = document.data();
+          final invoice = data['invoice'] is Map
+              ? data['invoice'] as Map
+              : const <String, dynamic>{};
+          final client = data['client'] is Map
+              ? data['client'] as Map
+              : const <String, dynamic>{};
+          final timestamp = data['createdAt'];
+          final createdAt = timestamp is Timestamp ? timestamp.toDate() : null;
+          final items = data['items'];
+          if (items is! List) continue;
+
+          for (final rawItem in items) {
+            if (rawItem is! Map) continue;
+            final item = Map<String, dynamic>.from(rawItem);
+            final productId = item['productId']?.toString() ?? '';
+            final quantityValue = item['qty'] ?? item['quantity'];
+            final priceValue = item['unit'] ?? item['unitPrice'];
+            if (productId.isEmpty ||
+                quantityValue is! num ||
+                !quantityValue.isFinite ||
+                quantityValue <= 0 ||
+                priceValue is! num ||
+                !priceValue.isFinite ||
+                priceValue < 0) {
+              continue;
+            }
+
+            final quantity = quantityValue.toDouble();
+            final unitPrice = priceValue.toDouble();
+            final amountValue = item['amount'];
+            final amount =
+                amountValue is num && amountValue.isFinite && amountValue >= 0
+                ? amountValue.toDouble()
+                : roundMoney(quantity * unitPrice);
+            final productName =
+                item['description']?.toString() ??
+                item['desc']?.toString() ??
+                item['name']?.toString() ??
+                '';
+            records.add(
+              ProductSaleRecord(
+                invoiceId: document.id,
+                invoiceNumber: invoice['number']?.toString() ?? document.id,
+                productId: productId,
+                productName: productName.isEmpty ? productId : productName,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                amount: amount,
+                createdAt: createdAt,
+                customerName: client['name']?.toString() ?? '',
+              ),
+            );
+          }
+        }
+        return records;
+      });
 
   Stream<List<StockMovement>> watchProductMovements(
     String productId, {
@@ -428,6 +541,19 @@ class StockService {
     if (p.sku.trim().isEmpty) throw StockException('stk_err_sku');
     if (p.sellPrice < 0 || p.lowStockThreshold < 0) {
       throw StockException('stk_err_qty');
+    }
+  }
+
+  void _validateSupplier(StockSupplier supplier) {
+    if (supplier.name.trim().isEmpty || supplier.name.trim().length > 120) {
+      throw StockException('stk_err_supplier_name');
+    }
+    if (supplier.phone.trim().isEmpty || supplier.phone.trim().length > 40) {
+      throw StockException('stk_err_supplier_phone');
+    }
+    if (supplier.location.trim().isEmpty ||
+        supplier.location.trim().length > 240) {
+      throw StockException('stk_err_supplier_location');
     }
   }
 

@@ -335,21 +335,6 @@ const Map<String, String> enUsTranslations = {
       'Open this app over HTTPS and allow microphone access when your browser asks.',
   'bi_voice_title': 'Live voice conversation',
   'bi_voice_model_selection': 'Voice AI model',
-  'bi_voice_record_debt': 'Record a debt by voice',
-  'bi_voice_debt_local_privacy':
-      'Dictation stays on this device and is not sent to the AI provider.',
-  'bi_voice_debt_review_note':
-      'Review the details. Nothing is saved until you tap Save debt.',
-  'bi_voice_debt_speak_field': 'Dictate this field on this device',
-  'bi_voice_debt_listening': 'Listening on this device. Tap to stop.',
-  'bi_voice_debt_local_unavailable':
-      'On-device speech recognition is unavailable. You can type the details instead.',
-  'bi_voice_debt_amount_hint':
-      'Speak the amount as digits, then check it before saving.',
-  'bi_voice_debt_amount_invalid':
-      'Enter a valid amount greater than zero.',
-  'bi_voice_debt_save_error':
-      'Could not save the debt. Check your connection and permissions.',
   'bi_voice_welcome': 'Talk to your business assistant',
   'bi_voice_session_title': 'Voice conversation',
   'bi_voice_idle_prompt':

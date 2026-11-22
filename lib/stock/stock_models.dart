@@ -156,8 +156,9 @@ class Product {
 
   double get stockCostValue => tracked ? quantity * costPrice : 0;
   double get stockSellValue => tracked ? quantity * sellPrice : 0;
-  double get availableQuantity =>
-      tracked ? (quantity - reservedQuantity).clamp(0, double.infinity).toDouble() : 0;
+  double get availableQuantity => tracked
+      ? (quantity - reservedQuantity).clamp(0, double.infinity).toDouble()
+      : 0;
   bool get isLow => tracked && stockState == StockState.low;
   bool get isOut => tracked && stockState == StockState.out;
 
@@ -214,6 +215,30 @@ class Product {
   /// Lower-case letters and digits only, for duplicate-name detection.
   static String nameKey(String name) =>
       name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\u00C0-\uFFFF]'), '');
+}
+
+class StockSupplier {
+  const StockSupplier({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.location,
+  });
+
+  final String id;
+  final String name;
+  final String phone;
+  final String location;
+
+  factory StockSupplier.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? const {};
+    return StockSupplier(
+      id: doc.id,
+      name: data['name']?.toString() ?? '',
+      phone: data['phone']?.toString() ?? '',
+      location: data['location']?.toString() ?? '',
+    );
+  }
 }
 
 /// Existing products whose name looks the same as [name] (equal, or one name
@@ -291,6 +316,30 @@ class StockMovement {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }
+}
+
+class ProductSaleRecord {
+  const ProductSaleRecord({
+    required this.invoiceId,
+    required this.invoiceNumber,
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.amount,
+    required this.createdAt,
+    this.customerName = '',
+  });
+
+  final String invoiceId;
+  final String invoiceNumber;
+  final String productId;
+  final String productName;
+  final double quantity;
+  final double unitPrice;
+  final double amount;
+  final DateTime? createdAt;
+  final String customerName;
 }
 
 class PurchaseLine {

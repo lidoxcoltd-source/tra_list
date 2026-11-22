@@ -5,7 +5,9 @@ import 'package:tra_list/business_intelligence/ai_document_draft.dart';
 import 'package:tra_list/business_intelligence/ai_provider.dart';
 import 'package:tra_list/business_intelligence/business_context.dart';
 import 'package:tra_list/business_intelligence/voice_business_tools.dart';
+import 'package:tra_list/business_intelligence/voice_debt_draft.dart';
 import 'package:tra_list/business_intelligence/isher_navigation.dart';
+import 'package:tra_list/jobs/models/debt.dart';
 
 class _Provider implements AIProvider {
   BusinessContext? requested;
@@ -357,6 +359,81 @@ void main() {
     });
     expect(denied['error'], isNotNull);
     expect(reviewCount, 1);
+  });
+
+  test('confirmed voice debt is saved through the registration callback', () async {
+    VoiceDebtDraft? savedDraft;
+    tools = VoiceBusinessTools(
+      provider: provider,
+      business: business,
+      isCurrent: () => current,
+      onRecordDebt: (draft) async {
+        savedDraft = draft;
+      },
+    );
+    final result = await tools.call('record_debt', {
+      'debtor_name': 'Asha',
+      'amount': 45000,
+      'direction': 'customerOwesShop',
+      'reason': 'goods_credit',
+      'due_date': '2026-11-30',
+      'notes': 'Atalipa mwisho wa mwezi',
+    });
+
+    expect(result['status'], contains('saved successfully'));
+    expect(savedDraft!.debtorName, 'Asha');
+    expect(savedDraft!.amount, 45000);
+    expect(savedDraft!.direction, DebtDirection.customerOwesShop);
+    expect(savedDraft!.reason, 'goods_credit');
+    expect(savedDraft!.dueDate, DateTime(2026, 11, 30));
+    expect(savedDraft!.notes, 'Atalipa mwisho wa mwezi');
+  });
+
+  test('invalid or stale voice debt requests are not saved', () async {
+    var saves = 0;
+    tools = VoiceBusinessTools(
+      provider: provider,
+      business: business,
+      isCurrent: () => current,
+      onRecordDebt: (_) async {
+        saves++;
+      },
+    );
+    for (final args in [
+      {
+        'debtor_name': 'Asha',
+        'amount': 0,
+        'direction': 'customerOwesShop',
+        'reason': 'other',
+      },
+      {
+        'debtor_name': 'Asha',
+        'amount': 45000,
+        'direction': 'unknown',
+        'reason': 'other',
+      },
+      {
+        'debtor_name': 'Asha',
+        'amount': 45000,
+        'direction': 'customerOwesShop',
+        'reason': 'other',
+        'due_date': '2026-02-30',
+      },
+    ]) {
+      expect((await tools.call('record_debt', args))['error'], isNotNull);
+    }
+
+    current = false;
+    expect(
+      (await tools.call('record_debt', {
+        'debtor_name': 'Asha',
+        'amount': 45000,
+        'direction': 'customerOwesShop',
+        'reason': 'other',
+      }))['error'],
+      isNotNull,
+    );
+    expect(saves, 0);
   });
 
   test(

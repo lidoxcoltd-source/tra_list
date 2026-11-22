@@ -14,8 +14,6 @@ const kStockOk = MjasiColors.success;
 const kStockWarn = MjasiColors.warning;
 const kStockBad = MjasiColors.error;
 
-const double _stockRadius = 16;
-
 String fmtText(String key, Map<String, String> values) {
   var text = key.tr;
   values.forEach((key, value) {
@@ -227,47 +225,32 @@ class StockSectionHeading extends StatelessWidget {
   }
 }
 
-/// Neutral surface card. Keeps the existing StockCard API intact.
+/// Layout wrapper that preserves stock content spacing and tap behavior.
 class StockCard extends StatelessWidget {
   const StockCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(14),
     this.onTap,
-    this.borderColor,
     this.height,
   });
 
   final Widget child;
   final EdgeInsets padding;
   final VoidCallback? onTap;
-  final Color? borderColor;
   final double? height;
 
   @override
   Widget build(BuildContext context) {
+    final content = SizedBox(
+      height: height,
+      child: Padding(padding: padding, child: child),
+    );
+    if (onTap == null) return content;
+
     return Material(
-      color: Colors.white,
-      clipBehavior: Clip.antiAlias,
-      borderRadius: BorderRadius.circular(_stockRadius),
-      elevation: onTap == null ? 0 : 1,
-      shadowColor: kStockNavy.withValues(alpha: .08),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(_stockRadius),
-        child: Container(
-          padding: padding,
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_stockRadius),
-            border: Border.all(
-              color: borderColor ?? MjasiColors.border,
-              width: onTap == null ? 1 : 1.2,
-            ),
-          ),
-          child: child,
-        ),
-      ),
+      type: MaterialType.transparency,
+      child: InkWell(onTap: onTap, child: content),
     );
   }
 }

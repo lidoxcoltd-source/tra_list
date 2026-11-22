@@ -37,6 +37,22 @@ const transaction = {
     required: ["type", "amount", "category", "description"],
   },
 };
+const debtRegistration = {
+  name: "record_debt",
+  description: "For an explicit request to register a debt, collect the debtor name, exact amount in TZS, and who owes whom by asking one detail at a time. Ask for the reason; due date and notes are optional. Repeat all supplied details and obtain a clear spoken confirmation before calling this tool. Call it only after confirmation; it saves the debt directly without opening any dialog or form. Never invent or round details, and never collect a phone number for this action.",
+  parameters: {
+    type: "object",
+    properties: {
+      debtor_name: { type: "string", description: "The debtor's name provided by the user." },
+      amount: { type: "number", description: "Exact positive debt amount in TZS." },
+      direction: { type: "string", enum: ["customerOwesShop", "shopOwesOther"], description: "Whether the customer owes the shop or the shop owes another person." },
+      reason: { type: "string", enum: ["advance", "goods_credit", "service", "other"] },
+      due_date: { type: "string", description: "Optional due date in YYYY-MM-DD format; omit if none." },
+      notes: { type: "string", description: "Optional notes, at most 300 characters." },
+    },
+    required: ["debtor_name", "amount", "direction", "reason"],
+  },
+};
 const navigation = {
   name: "open_app_page",
   description: "Only when the user explicitly asks to open an app page, request that page. The user must confirm on screen. Never claim a page opened without confirmation; never use this to create or change records.",
@@ -123,6 +139,6 @@ function geminiDeclaration(tool) {
 }
 
 module.exports = {
-  geminiTools: [{ functionDeclarations: [summary, details, document, transaction, navigation, debts, debtReminder].map(geminiDeclaration) }],
-  openAiTools: [summary, details, document, transaction, navigation, debts, debtReminder].map((tool) => ({ type: "function", ...tool })),
+  geminiTools: [{ functionDeclarations: [summary, details, document, transaction, debtRegistration, navigation, debts, debtReminder].map(geminiDeclaration) }],
+  openAiTools: [summary, details, document, transaction, debtRegistration, navigation, debts, debtReminder].map((tool) => ({ type: "function", ...tool })),
 };

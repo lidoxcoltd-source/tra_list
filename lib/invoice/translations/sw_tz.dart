@@ -336,20 +336,6 @@ const Map<String, String> swTzTranslations = {
       'Fungua app kwa HTTPS na uruhusu matumizi ya kipaza sauti kivinjari kitakapokuuliza.',
   'bi_voice_title': 'Mazungumzo ya sauti moja kwa moja',
   'bi_voice_model_selection': 'Modeli ya sauti ya AI',
-  'bi_voice_record_debt': 'Sajili deni kwa sauti',
-  'bi_voice_debt_local_privacy':
-      'Maneno yanatambuliwa kwenye simu hii na hayatumiwi kwa mtoa huduma wa AI.',
-  'bi_voice_debt_review_note':
-      'Kagua taarifa. Hakuna kitakachohifadhiwa hadi ubonyeze Hifadhi deni.',
-  'bi_voice_debt_speak_field': 'Tamka sehemu hii kwenye simu hii',
-  'bi_voice_debt_listening': 'Inasikiliza kwenye simu hii. Bonyeza kusitisha.',
-  'bi_voice_debt_local_unavailable':
-      'Utambuzi wa sauti kwenye simu haupatikani. Unaweza kuandika taarifa badala yake.',
-  'bi_voice_debt_amount_hint':
-      'Taja kiasi kwa namba, kisha ukague kabla ya kuhifadhi.',
-  'bi_voice_debt_amount_invalid': 'Weka kiasi sahihi kilicho zaidi ya sifuri.',
-  'bi_voice_debt_save_error':
-      'Imeshindwa kuhifadhi deni. Hakiki intaneti na ruhusa zako.',
   'bi_voice_welcome': 'Zungumza na msaidizi wako wa biashara',
   'bi_voice_session_title': 'Mazungumzo ya sauti',
   'bi_voice_idle_prompt': 'Bonyeza kipaza sauti kukagua na kuanza mazungumzo.',

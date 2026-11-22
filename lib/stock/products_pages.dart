@@ -10,6 +10,7 @@ import 'stock_models.dart';
 import 'stock_media.dart';
 import 'stock_service.dart';
 import 'stock_ui.dart';
+import 'suppliers_page.dart';
 import 'pos_page.dart';
 import 'stock_operations_pages.dart';
 import 'product_label_print_service.dart';
@@ -37,6 +38,7 @@ class _ProductsPageState extends State<ProductsPage> {
     final canCreate = BusinessAccessService.can('stock', 'create');
     return StockScaffold(
       title: 'stk_products'.tr,
+      maxWidth: 1160,
       fab: canCreate
           ? FloatingActionButton.extended(
               backgroundColor: kStockBlue,
@@ -94,6 +96,13 @@ class _ProductsPageState extends State<ProductsPage> {
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kStockNavy.withValues(alpha: .13),
+                        blurRadius: 18,
+                        offset: const Offset(0, 7),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
@@ -236,6 +245,14 @@ class _ProductsPageState extends State<ProductsPage> {
                     ? StockMessage(
                         icon: Icons.inventory_2_outlined,
                         text: 'stk_no_products'.tr,
+                        action: canCreate
+                            ? OutlinedButton.icon(
+                                onPressed: () =>
+                                    Get.to(() => const ProductFormPage()),
+                                icon: const Icon(Icons.add_rounded),
+                                label: Text('stk_add_product'.tr),
+                              )
+                            : null,
                       )
                     : LayoutBuilder(
                         builder: (context, c) {
@@ -275,100 +292,118 @@ class _ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = product;
-    return StockCard(
-      onTap: () => Get.to(() => ProductDetailsPage(productId: p.id!)),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      child: Row(
-        children: [
-          ProductImage(url: p.imageUrl, size: 64, radius: 15),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        p.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: MjasiColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: MjasiColors.textSecondary.withValues(alpha: .8),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${p.sku}${p.category.isEmpty ? '' : ' · ${p.category}'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MjasiColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: StockStateChip(product: p),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                p.tracked ? formatQty(p.quantity) : '—',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 19,
-                  color: MjasiColors.textPrimary,
-                ),
-              ),
-              Text(
-                unitLabel(p.unit),
-                style: const TextStyle(
-                  color: MjasiColors.textSecondary,
-                  fontSize: 10,
-                ),
-              ),
-              if (p.reservedQuantity > 0) ...[
-                const SizedBox(height: 3),
-                Text(
-                  '${'bar_reserved'.tr}: ${formatQty(p.reservedQuantity)}',
-                  style: const TextStyle(
-                    color: MjasiColors.textSecondary,
-                    fontSize: 9,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Text(
-                'TZS ${formatMoney(p.sellPrice)}',
-                style: const TextStyle(
-                  color: kStockBlue,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+    final metadata = [
+      if (p.sku.isNotEmpty) p.sku,
+      if (p.category.isNotEmpty) p.category,
+    ].join(' · ');
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => Get.to(() => ProductDetailsPage(productId: p.id!)),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            border: Border.all(color: MjasiColors.border),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: kStockNavy.withValues(alpha: .045),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-        ],
+          child: Row(
+            children: [
+              ProductImage(url: p.imageUrl, size: 62, radius: 15),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: MjasiColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      metadata.isEmpty ? 'stk_product'.tr : metadata,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MjasiColors.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    StockStateChip(product: p),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 1,
+                height: 56,
+                color: MjasiColors.border,
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 84,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      p.tracked ? formatQty(p.quantity) : '—',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: MjasiColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      p.tracked ? unitLabel(p.unit) : 'stk_not_tracked'.tr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: MjasiColors.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'TZS ${formatMoney(p.sellPrice)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kStockBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 19,
+                color: MjasiColors.textSecondary.withValues(alpha: .8),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -384,6 +419,7 @@ class ProductFormPage extends StatefulWidget {
 
 class _ProductFormPageState extends State<ProductFormPage> {
   final _service = StockService.current();
+  late final _suppliers = _service.watchSuppliers();
   final _key = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.product?.name);
   late final _sku = TextEditingController(text: widget.product?.sku);
@@ -411,6 +447,130 @@ class _ProductFormPageState extends State<ProductFormPage> {
   String? _barcodeError;
 
   bool get _editing => widget.product != null;
+
+  Widget _supplierPicker() => StreamBuilder<List<StockSupplier>>(
+    stream: _suppliers,
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return TextFormField(
+          controller: _supplier,
+          decoration:
+              stockInput(
+                'stk_supplier'.tr,
+                icon: Icons.local_shipping_outlined,
+              ).copyWith(
+                helperText: stockErrorText(snapshot.error!),
+                helperMaxLines: 2,
+              ),
+        );
+      }
+      if (!snapshot.hasData) {
+        return InputDecorator(
+          decoration: stockInput(
+            'stk_supplier'.tr,
+            icon: Icons.local_shipping_outlined,
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'stk_loading_suppliers'.tr,
+                style: const TextStyle(
+                  color: MjasiColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      const noSupplier = '__no_supplier__';
+      const currentSupplier = '__current_supplier__';
+      final suppliers = snapshot.data!;
+      final selectedSupplier = suppliers
+          .where(
+            (supplier) =>
+                supplier.name.toLowerCase() ==
+                _supplier.text.trim().toLowerCase(),
+          )
+          .firstOrNull;
+      final selectedValue =
+          selectedSupplier?.id ??
+          (_supplier.text.trim().isEmpty ? noSupplier : currentSupplier);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: selectedValue,
+            decoration: stockInput(
+              'stk_supplier'.tr,
+              icon: Icons.local_shipping_outlined,
+            ),
+            items: [
+              DropdownMenuItem(
+                value: noSupplier,
+                child: Text('stk_supplier_none'.tr),
+              ),
+              if (selectedValue == currentSupplier)
+                DropdownMenuItem(
+                  value: currentSupplier,
+                  child: Text(
+                    fmtText('stk_supplier_current', {
+                      'name': _supplier.text.trim(),
+                    }),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              for (final supplier in suppliers)
+                DropdownMenuItem(
+                  value: supplier.id,
+                  child: Text(
+                    '${supplier.name} · ${supplier.phone}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() {
+                if (value == noSupplier) {
+                  _supplier.clear();
+                } else if (value != currentSupplier) {
+                  _supplier.text =
+                      suppliers
+                          .where((supplier) => supplier.id == value)
+                          .firstOrNull
+                          ?.name ??
+                      '';
+                }
+              });
+            },
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => Get.to(() => const SuppliersPage()),
+              icon: const Icon(Icons.manage_accounts_outlined, size: 17),
+              label: Text(
+                suppliers.isEmpty
+                    ? 'stk_add_supplier'.tr
+                    : 'stk_manage_suppliers'.tr,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 
   Future<void> _pickImage() async {
     if (_uploading) return;
@@ -578,32 +738,115 @@ class _ProductFormPageState extends State<ProductFormPage> {
     return StockScaffold(
       title: _editing ? 'stk_edit_product'.tr : 'stk_add_product'.tr,
       maxWidth: 900,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: const Border(top: BorderSide(color: MjasiColors.border)),
+            boxShadow: [
+              BoxShadow(
+                color: kStockNavy.withValues(alpha: .06),
+                blurRadius: 12,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 868),
+              child: SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kStockBlue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded),
+                  label: Text('stk_save'.tr),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
       body: Form(
         key: _key,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            StockCard(
-              child: Column(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [kStockNavy, kStockBlue],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: kStockNavy.withValues(alpha: .12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
                 children: [
-                  Row(
+                  Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          ProductImage(url: _imageUrl, size: 88, radius: 14),
-                          if (_uploading) const CircularProgressIndicator(),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Wrap(
+                      ProductImage(url: _imageUrl, size: 76, radius: 17),
+                      if (_uploading) const CircularProgressIndicator(),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _editing
+                              ? 'stk_edit_product'.tr
+                              : 'stk_add_product'.tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        Wrap(
                           spacing: 8,
-                          runSpacing: 8,
+                          runSpacing: 6,
                           children: [
                             OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: .5),
+                                ),
+                              ),
                               onPressed: _uploading ? null : _pickImage,
-                              icon: const Icon(Icons.add_a_photo_outlined),
+                              icon: const Icon(
+                                Icons.add_a_photo_outlined,
+                                size: 17,
+                              ),
                               label: Text(
                                 _imageUrl.isEmpty
                                     ? 'stk_add_photo'.tr
@@ -612,19 +855,32 @@ class _ProductFormPageState extends State<ProductFormPage> {
                             ),
                             if (_imageUrl.isNotEmpty)
                               TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                ),
                                 onPressed: _uploading
                                     ? null
                                     : () => setState(() => _imageUrl = ''),
-                                icon: const Icon(Icons.delete_outline),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 17,
+                                ),
                                 label: Text('stk_remove_photo'.tr),
                               ),
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  StockSectionHeading(title: 'stk_product_information'.tr),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ProductFormSection(
+              title: 'stk_product_information'.tr,
+              icon: Icons.inventory_2_outlined,
+              child: Column(
+                children: [
                   row([
                     TextFormField(
                       controller: _name,
@@ -634,6 +890,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       ),
                       validator: required,
                     ),
+                    TextFormField(
+                      controller: _category,
+                      decoration: stockInput(
+                        'stk_category'.tr,
+                        icon: Icons.category_outlined,
+                      ),
+                    ),
+                  ]),
+                  if (twoCol) const SizedBox(height: 12),
+                  row([
                     TextFormField(
                       controller: _sku,
                       decoration:
@@ -650,9 +916,6 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       validator: (v) => required(v) ?? _skuError,
                       onChanged: (_) => _skuError = null,
                     ),
-                  ]),
-                  if (twoCol) const SizedBox(height: 12),
-                  row([
                     TextFormField(
                       controller: _barcode,
                       decoration:
@@ -669,183 +932,288 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       validator: (_) => _barcodeError,
                       onChanged: (_) => _barcodeError = null,
                     ),
-                    TextFormField(
-                      controller: _category,
-                      decoration: stockInput(
-                        'stk_category'.tr,
-                        icon: Icons.category_outlined,
-                      ),
-                    ),
                   ]),
-                  if (twoCol) const SizedBox(height: 12),
-                  StockSectionHeading(title: 'stk_pricing_stock'.tr),
-                  row([
-                    DropdownButtonFormField<String>(
-                      initialValue: stockUnits.contains(_unit)
-                          ? _unit
-                          : 'piece',
-                      decoration: stockInput(
-                        'stk_unit'.tr,
-                        icon: Icons.straighten,
-                      ),
-                      items: [
-                        for (final u in stockUnits)
-                          DropdownMenuItem(value: u, child: Text(unitLabel(u))),
-                      ],
-                      onChanged: _editing
-                          ? null
-                          : (v) => setState(() => _unit = v ?? 'piece'),
-                    ),
-                    TextFormField(
-                      controller: _sell,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: dec,
-                      decoration: stockInput(
-                        'stk_sell_price'.tr,
-                        icon: Icons.sell_outlined,
-                        suffix: 'TZS',
-                      ),
-                      validator: money,
-                    ),
-                    TextFormField(
-                      controller: _threshold,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: dec,
-                      decoration: stockInput(
-                        'stk_threshold'.tr,
-                        icon: Icons.notifications_active_outlined,
-                      ),
-                      validator: money,
-                    ),
-                  ]),
-                  if (twoCol) const SizedBox(height: 12),
-                  StockSectionHeading(title: 'stk_additional_details'.tr),
-                  row([
-                    TextFormField(
-                      controller: _supplier,
-                      decoration: stockInput(
-                        'stk_supplier'.tr,
-                        icon: Icons.local_shipping_outlined,
-                      ),
-                    ),
-                  ]),
+                ],
+              ),
+            ),
+            _ProductFormSection(
+              title: 'stk_pricing_stock'.tr,
+              icon: Icons.sell_outlined,
+              child: row([
+                DropdownButtonFormField<String>(
+                  initialValue: stockUnits.contains(_unit) ? _unit : 'piece',
+                  decoration: stockInput(
+                    'stk_unit'.tr,
+                    icon: Icons.straighten,
+                  ),
+                  items: [
+                    for (final u in stockUnits)
+                      DropdownMenuItem(value: u, child: Text(unitLabel(u))),
+                  ],
+                  onChanged: _editing
+                      ? null
+                      : (v) => setState(() => _unit = v ?? 'piece'),
+                ),
+                TextFormField(
+                  controller: _sell,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: dec,
+                  decoration: stockInput(
+                    'stk_sell_price'.tr,
+                    icon: Icons.sell_outlined,
+                    suffix: 'TZS',
+                  ),
+                  validator: money,
+                ),
+                TextFormField(
+                  controller: _threshold,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: dec,
+                  decoration: stockInput(
+                    'stk_threshold'.tr,
+                    icon: Icons.notifications_active_outlined,
+                  ),
+                  validator: money,
+                ),
+              ]),
+            ),
+            _ProductFormSection(
+              title: 'stk_additional_details'.tr,
+              icon: Icons.tune_rounded,
+              child: Column(
+                children: [
+                  _supplierPicker(),
                   TextFormField(
                     controller: _desc,
-                    maxLines: 2,
+                    maxLines: 3,
                     decoration: stockInput(
                       'stk_description'.tr,
                       icon: Icons.notes,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('stk_track'.tr),
-                    subtitle: Text('stk_track_hint'.tr),
+                  const SizedBox(height: 4),
+                  _ProductSwitchTile(
+                    title: 'stk_track'.tr,
+                    subtitle: 'stk_track_hint'.tr,
                     value: _tracked,
                     onChanged: (v) => setState(() => _tracked = v),
                   ),
-                  if (_tracked)
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('stk_allow_negative'.tr),
-                      subtitle: Text('stk_allow_negative_hint'.tr),
+                  if (_tracked) ...[
+                    const SizedBox(height: 8),
+                    _ProductSwitchTile(
+                      title: 'stk_allow_negative'.tr,
+                      subtitle: 'stk_allow_negative_hint'.tr,
                       value: _allowNegative,
                       onChanged: (v) => setState(() => _allowNegative = v),
                     ),
+                  ],
                 ],
               ),
             ),
             if (!_editing && _tracked) ...[
-              const SizedBox(height: 16),
-              StockCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'stk_opening_stock'.tr,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: kStockNavy,
-                      ),
+              _ProductFormSection(
+                title: 'stk_opening_stock'.tr,
+                icon: Icons.inventory_2_outlined,
+                subtitle: 'stk_opening_help'.tr,
+                child: row([
+                  TextFormField(
+                    controller: _openQty,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'stk_opening_help'.tr,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    row([
-                      TextFormField(
-                        controller: _openQty,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                    inputFormatters: dec,
+                    decoration:
+                        stockInput(
+                          'stk_quantity'.tr,
+                          icon: Icons.inventory_2_outlined,
+                        ).copyWith(
+                          helperText: 'stk_quantity_help'.tr,
+                          helperMaxLines: 2,
                         ),
-                        inputFormatters: dec,
-                        decoration:
-                            stockInput(
-                              'stk_quantity'.tr,
-                              icon: Icons.inventory_2_outlined,
-                            ).copyWith(
-                              helperText: 'stk_quantity_help'.tr,
-                              helperMaxLines: 2,
-                            ),
-                        validator: money,
+                    validator: money,
+                  ),
+                  if (_canSeeCost)
+                    TextFormField(
+                      controller: _openCost,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      if (_canSeeCost)
-                        TextFormField(
-                          controller: _openCost,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
+                      inputFormatters: dec,
+                      decoration:
+                          stockInput(
+                            'stk_unit_cost'.tr,
+                            icon: Icons.payments_outlined,
+                            suffix: 'TZS',
+                          ).copyWith(
+                            helperText: 'stk_unit_cost_help'.tr,
+                            helperMaxLines: 2,
                           ),
-                          inputFormatters: dec,
-                          decoration:
-                              stockInput(
-                                'stk_unit_cost'.tr,
-                                icon: Icons.payments_outlined,
-                                suffix: 'TZS',
-                              ).copyWith(
-                                helperText: 'stk_unit_cost_help'.tr,
-                                helperMaxLines: 2,
-                              ),
-                          validator: money,
-                        ),
-                    ]),
-                  ],
-                ),
+                      validator: money,
+                    ),
+                ]),
               ),
             ],
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 48,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: kStockBlue),
-                onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.check),
-                label: Text('stk_save'.tr),
-              ),
-            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
     );
   }
+}
+
+class _ProductFormSection extends StatelessWidget {
+  const _ProductFormSection({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.subtitle,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: MjasiColors.border),
+      boxShadow: [
+        BoxShadow(
+          color: kStockNavy.withValues(alpha: .035),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: kStockLight,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: kStockBlue, size: 19),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: MjasiColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        color: MjasiColors.textSecondary,
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        child,
+      ],
+    ),
+  );
+}
+
+class _ProductSwitchTile extends StatelessWidget {
+  const _ProductSwitchTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: kStockBg,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: MjasiColors.textPrimary,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          color: MjasiColors.textSecondary,
+          fontSize: 11,
+          height: 1.3,
+        ),
+      ),
+      value: value,
+      onChanged: onChanged,
+    ),
+  );
+}
+
+class _ProductSurface extends StatelessWidget {
+  const _ProductSurface({
+    required this.child,
+    this.padding = const EdgeInsets.all(15),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: MjasiColors.border),
+      boxShadow: [
+        BoxShadow(
+          color: kStockNavy.withValues(alpha: .04),
+          blurRadius: 13,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: child,
+  );
 }
 
 class ProductDetailsPage extends StatelessWidget {
@@ -969,7 +1337,7 @@ class ProductDetailsPage extends StatelessWidget {
                   : const SizedBox.shrink();
 
               return SingleChildScrollView(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: wide
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1026,12 +1394,34 @@ class _ProductOverviewCard extends StatelessWidget {
   final Product product;
 
   @override
-  Widget build(BuildContext context) => StockCard(
-    padding: const EdgeInsets.all(14),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [kStockNavy, kStockBlue],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(21),
+      boxShadow: [
+        BoxShadow(
+          color: kStockNavy.withValues(alpha: .14),
+          blurRadius: 18,
+          offset: const Offset(0, 7),
+        ),
+      ],
+    ),
     child: Row(
       children: [
-        ProductImage(url: product.imageUrl, size: 58, radius: 15),
-        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .15),
+            borderRadius: BorderRadius.circular(19),
+          ),
+          child: ProductImage(url: product.imageUrl, size: 78, radius: 16),
+        ),
+        const SizedBox(width: 15),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1041,27 +1431,28 @@ class _ProductOverviewCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: kStockNavy,
-                  fontSize: 17,
+                  color: Colors.white,
+                  fontSize: 19,
+                  height: 1.15,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               if (product.category.isNotEmpty) ...[
-                const SizedBox(height: 3),
+                const SizedBox(height: 5),
                 Text(
                   product.category,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MjasiColors.textSecondary,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .78),
                     fontSize: 12,
                   ),
                 ),
               ],
-              const SizedBox(height: 7),
+              const SizedBox(height: 10),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 7,
+                runSpacing: 7,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   StockStateChip(product: product),
@@ -1158,12 +1549,15 @@ class _ProductMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: width,
-    child: StatTile(
-      icon: icon,
-      label: label,
-      value: value,
-      color: color,
-      caption: caption,
+    child: _ProductSurface(
+      padding: EdgeInsets.zero,
+      child: StatTile(
+        icon: icon,
+        label: label,
+        value: value,
+        color: color,
+        caption: caption,
+      ),
     ),
   );
 }
@@ -1182,7 +1576,7 @@ class _ProductQuickActions extends StatelessWidget {
   final bool canEdit;
 
   @override
-  Widget build(BuildContext context) => StockCard(
+  Widget build(BuildContext context) => _ProductSurface(
     padding: const EdgeInsets.all(12),
     child: Wrap(
       spacing: 8,
@@ -1255,7 +1649,7 @@ class _ProductInformationCard extends StatelessWidget {
           Icons.payments_outlined,
         ),
     ];
-    return StockCard(
+    return _ProductSurface(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1350,12 +1744,12 @@ class _ProductHistoryCard extends StatelessWidget {
   final Product product;
 
   @override
-  Widget build(BuildContext context) => StockCard(
+  Widget build(BuildContext context) => _ProductSurface(
     padding: EdgeInsets.zero,
     child: Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
         leading: const Icon(Icons.history, color: kStockBlue),
         title: Text(
@@ -1392,7 +1786,11 @@ class _ProductHistoryCard extends StatelessWidget {
               return Column(
                 children: [
                   for (final movement in snapshot.data!)
-                    MovementTile(movement: movement, showProduct: false),
+                    MovementTile(
+                      movement: movement,
+                      showProduct: false,
+                      showSurface: true,
+                    ),
                 ],
               );
             },
@@ -1685,9 +2083,11 @@ class MovementTile extends StatelessWidget {
     super.key,
     required this.movement,
     this.showProduct = true,
+    this.showSurface = false,
   });
   final StockMovement movement;
   final bool showProduct;
+  final bool showSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -1699,54 +2099,67 @@ class MovementTile extends StatelessWidget {
       if (m.userName.isNotEmpty) m.userName,
       formatDateTime(m.createdAt),
     ].join(' · ');
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: StockCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Icon(
-              up ? Icons.south_west_rounded : Icons.north_east_rounded,
-              color: color,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    showProduct
-                        ? '${m.productName} · ${m.type.labelKey.tr}'
-                        : m.type.labelKey.tr,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    detail,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+    final card = StockCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Icon(
+            up ? Icons.south_west_rounded : Icons.north_east_rounded,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${up ? '+' : ''}${formatQty(m.quantityChange)}',
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
+                  showProduct
+                      ? '${m.productName} · ${m.type.labelKey.tr}'
+                      : m.type.labelKey.tr,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 Text(
-                  '→ ${formatQty(m.resultingQuantity)}',
+                  detail,
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${up ? '+' : ''}${formatQty(m.quantityChange)}',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                '→ ${formatQty(m.resultingQuantity)}',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+          ),
+        ],
       ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: showSurface
+          ? Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: MjasiColors.border),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: card,
+              ),
+            )
+          : card,
     );
   }
 }
