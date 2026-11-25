@@ -79,6 +79,11 @@ class StockDashboardPage extends StatelessWidget {
         ),
         actions: [
           IconButton(
+            tooltip: 'stk_products'.tr,
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () => Get.to(() => const ProductsPage()),
+          ),
+          IconButton(
             tooltip: 'stk_history'.tr,
             icon: const Icon(Icons.history),
             onPressed: () => Get.to(() => const StockHistoryPage()),
@@ -170,15 +175,15 @@ class StockDashboardPage extends StatelessWidget {
                   })
                 >[
                   (
-                    label: 'stk_suppliers'.tr,
-                    icon: Icons.local_shipping_outlined,
-                    onTap: () => Get.to(() => const SuppliersPage()),
-                    primary: false,
-                  ),
-                  (
                     label: 'stk_products'.tr,
                     icon: Icons.inventory_2_outlined,
                     onTap: () => Get.to(() => const ProductsPage()),
+                    primary: true,
+                  ),
+                  (
+                    label: 'stk_suppliers'.tr,
+                    icon: Icons.local_shipping_outlined,
+                    onTap: () => Get.to(() => const SuppliersPage()),
                     primary: false,
                   ),
                   if (canCreate)
@@ -225,119 +230,124 @@ class StockDashboardPage extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Colors.white, Color(0xFFF2F7FF)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: const Color(0xFFDCE7F5),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: kStockNavy.withValues(
-                                          alpha: .05,
-                                        ),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 5),
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(18),
+                                  onTap: () =>
+                                      Get.to(() => const ProductsPage()),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Colors.white, Color(0xFFF2F7FF)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 42,
-                                        height: 42,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: kStockLight,
-                                          borderRadius: BorderRadius.circular(
-                                            13,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: const Color(0xFFDCE7F5),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: kStockNavy.withValues(
+                                            alpha: .05,
                                           ),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
                                         ),
-                                        child: const Icon(
-                                          Icons.inventory_2_outlined,
-                                          color: kStockBlue,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'stk_catalog_title'.tr,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: MjasiColors.textPrimary,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              fmtText('stk_catalog_summary', {
-                                                'count': '${all.length}',
-                                                'low': '${attention.length}',
-                                              }),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color:
-                                                    MjasiColors.textSecondary,
-                                                fontSize: 11,
-                                                height: 1.3,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        '${all.length}',
-                                        style: const TextStyle(
-                                          color: kStockNavy,
-                                          fontSize: 30,
-                                          height: 1,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      IconButton(
-                                        constraints:
-                                            const BoxConstraints.tightFor(
-                                              width: 38,
-                                              height: 38,
-                                            ),
-                                        padding: EdgeInsets.zero,
-                                        tooltip: 'stk_products'.tr,
-                                        style: IconButton.styleFrom(
-                                          foregroundColor: kStockBlue,
-                                          backgroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 42,
+                                          height: 42,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            color: kStockLight,
                                             borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            side: const BorderSide(
-                                              color: MjasiColors.border,
+                                              13,
                                             ),
                                           ),
+                                          child: const Icon(
+                                            Icons.inventory_2_outlined,
+                                            color: kStockBlue,
+                                            size: 22,
+                                          ),
                                         ),
-                                        onPressed: () =>
-                                            Get.to(() => const ProductsPage()),
-                                        icon: const Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 18,
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'stk_catalog_title'.tr,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: MjasiColors.textPrimary,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                fmtText('stk_catalog_summary', {
+                                                  'count': '${all.length}',
+                                                  'low': '${attention.length}',
+                                                }),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color:
+                                                      MjasiColors.textSecondary,
+                                                  fontSize: 11,
+                                                  height: 1.3,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                        Text(
+                                          '${all.length}',
+                                          style: const TextStyle(
+                                            color: kStockNavy,
+                                            fontSize: 30,
+                                            height: 1,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        IconButton(
+                                          constraints:
+                                              const BoxConstraints.tightFor(
+                                                width: 38,
+                                                height: 38,
+                                              ),
+                                          padding: EdgeInsets.zero,
+                                          tooltip: 'stk_products'.tr,
+                                          style: IconButton.styleFrom(
+                                            foregroundColor: kStockBlue,
+                                            backgroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(
+                                                12,
+                                              ),
+                                              side: const BorderSide(
+                                                color: MjasiColors.border,
+                                              ),
+                                            ),
+                                          ),
+                                          onPressed: () =>
+                                              Get.to(() => const ProductsPage()),
+                                          icon: const Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -403,6 +413,28 @@ class StockDashboardPage extends StatelessWidget {
                                   _StockActionGroup(
                                     title: 'stk_inventory_group'.tr,
                                     icon: Icons.tune_rounded,
+                                    trailing: TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                        foregroundColor: kStockBlue,
+                                      ),
+                                      onPressed: () =>
+                                          Get.to(() => const ProductsPage()),
+                                      icon: const Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 14,
+                                      ),
+                                      label: Text(
+                                        'stk_products'.tr,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
                                     actions: inventoryActions,
                                     columns: constraints.maxWidth >= 720
                                         ? 4
@@ -530,7 +562,7 @@ class StockDashboardPage extends StatelessWidget {
                                       );
                                     },
                                   ),
-                            _StockSalesSummary(
+                            StockSalesSummary(
                               service: service,
                               products: all,
                               canViewStockValue: canEdit,
@@ -924,10 +956,11 @@ class _RecentMovementCard extends StatelessWidget {
   );
 }
 
-enum _SoldProductsSort { newestSale, oldestSale, mostSold, leastSold, name }
+enum SoldProductsSort { newestSale, oldestSale, mostSold, leastSold, name }
 
-class _StockSalesSummary extends StatefulWidget {
-  const _StockSalesSummary({
+class StockSalesSummary extends StatefulWidget {
+  const StockSalesSummary({
+    super.key,
     required this.service,
     required this.products,
     required this.canViewStockValue,
@@ -940,12 +973,12 @@ class _StockSalesSummary extends StatefulWidget {
   final bool canViewSalesHistory;
 
   @override
-  State<_StockSalesSummary> createState() => _StockSalesSummaryState();
+  State<StockSalesSummary> createState() => StockSalesSummaryState();
 }
 
-class _StockSalesSummaryState extends State<_StockSalesSummary> {
+class StockSalesSummaryState extends State<StockSalesSummary> {
   int _days = 30;
-  _SoldProductsSort _sort = _SoldProductsSort.newestSale;
+  SoldProductsSort _sort = SoldProductsSort.newestSale;
   late Stream<List<StockMovement>> _movements;
   Stream<List<ProductSaleRecord>>? _sales;
 
@@ -956,7 +989,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
   }
 
   @override
-  void didUpdateWidget(covariant _StockSalesSummary oldWidget) {
+  void didUpdateWidget(covariant StockSalesSummary oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.service != widget.service ||
         oldWidget.canViewStockValue != widget.canViewStockValue ||
@@ -1051,11 +1084,11 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final totals = <String, _SoldProductTotal>{};
+          final totals = <String, SoldProductTotal>{};
           for (final sale in snap.data!) {
             final current = totals.putIfAbsent(
               sale.productId,
-              () => _SoldProductTotal(
+              () => SoldProductTotal(
                 productId: sale.productId,
                 name: sale.productName,
                 quantity: 0,
@@ -1121,7 +1154,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final totals = <String, _SoldProductTotal>{};
+        final totals = <String, SoldProductTotal>{};
         for (final movement in snap.data!) {
           if (movement.type != MovementType.sale ||
               movement.quantityChange >= 0) {
@@ -1133,7 +1166,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
           if (key.isEmpty) continue;
           final current = totals.putIfAbsent(
             key,
-            () => _SoldProductTotal(
+            () => SoldProductTotal(
               productId: movement.productId,
               name: movement.productName,
               quantity: 0,
@@ -1151,7 +1184,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
     );
   }
 
-  void _updateLastSold(_SoldProductTotal total, DateTime? date) {
+  void _updateLastSold(SoldProductTotal total, DateTime? date) {
     if (date != null &&
         (total.lastSoldAt == null || date.isAfter(total.lastSoldAt!))) {
       total.lastSoldAt = date;
@@ -1159,7 +1192,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
   }
 
   Widget _buildSummary(
-    List<_SoldProductTotal> soldProducts,
+    List<SoldProductTotal> soldProducts,
     Map<String, Product> productsById, {
     required bool canOpenHistory,
     double? totalSoldAmount,
@@ -1195,7 +1228,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
         continue;
       }
       rankedProducts.add(
-        _SoldProductTotal(productId: id, name: product.name, quantity: 0),
+        SoldProductTotal(productId: id, name: product.name, quantity: 0),
       );
     }
 
@@ -1217,19 +1250,19 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
     final leastSold = leastSoldProducts.firstOrNull;
 
     switch (_sort) {
-      case _SoldProductsSort.newestSale:
+      case SoldProductsSort.newestSale:
         soldProducts.sort(_compareSaleDate);
         break;
-      case _SoldProductsSort.oldestSale:
+      case SoldProductsSort.oldestSale:
         soldProducts.sort((a, b) => _compareSaleDate(a, b, newestFirst: false));
         break;
-      case _SoldProductsSort.mostSold:
+      case SoldProductsSort.mostSold:
         soldProducts.sort((a, b) => b.quantity.compareTo(a.quantity));
         break;
-      case _SoldProductsSort.leastSold:
+      case SoldProductsSort.leastSold:
         soldProducts.sort((a, b) => a.quantity.compareTo(b.quantity));
         break;
-      case _SoldProductsSort.name:
+      case SoldProductsSort.name:
         soldProducts.sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
@@ -1385,17 +1418,17 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _salesDropdown<_SoldProductsSort>(
+                      child: _salesDropdown<SoldProductsSort>(
                         label: 'stk_sort_by'.tr,
                         value: _sort,
                         items: {
-                          _SoldProductsSort.newestSale:
+                          SoldProductsSort.newestSale:
                               'stk_sort_newest_sale'.tr,
-                          _SoldProductsSort.oldestSale:
+                          SoldProductsSort.oldestSale:
                               'stk_sort_oldest_sale'.tr,
-                          _SoldProductsSort.mostSold: 'stk_sort_most_sold'.tr,
-                          _SoldProductsSort.leastSold: 'stk_sort_least_sold'.tr,
-                          _SoldProductsSort.name: 'stk_sort_name'.tr,
+                          SoldProductsSort.mostSold: 'stk_sort_most_sold'.tr,
+                          SoldProductsSort.leastSold: 'stk_sort_least_sold'.tr,
+                          SoldProductsSort.name: 'stk_sort_name'.tr,
                         },
                         onChanged: (value) {
                           if (value != null) setState(() => _sort = value);
@@ -1436,7 +1469,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
                 final item = soldProducts[index];
                 final product = productsById[item.productId];
                 final isTopSeller =
-                    index == 0 && _sort == _SoldProductsSort.mostSold;
+                    index == 0 && _sort == SoldProductsSort.mostSold;
                 return Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -1740,7 +1773,7 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
 
   Widget _salesRankTile({
     required String title,
-    required _SoldProductTotal? product,
+    required SoldProductTotal? product,
     required IconData icon,
     required Color color,
     required Color background,
@@ -1803,8 +1836,8 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
   );
 
   int _compareSaleDate(
-    _SoldProductTotal a,
-    _SoldProductTotal b, {
+    SoldProductTotal a,
+    SoldProductTotal b, {
     bool newestFirst = true,
   }) {
     final aDate = a.lastSoldAt;
@@ -1857,8 +1890,8 @@ class _StockSalesSummaryState extends State<_StockSalesSummary> {
   );
 }
 
-class _SoldProductTotal {
-  _SoldProductTotal({
+class SoldProductTotal {
+  SoldProductTotal({
     required this.productId,
     required this.name,
     required this.quantity,
@@ -1942,6 +1975,7 @@ class _StockActionGroup extends StatelessWidget {
     required this.icon,
     required this.actions,
     required this.columns,
+    this.trailing,
   });
 
   final String title;
@@ -1949,6 +1983,7 @@ class _StockActionGroup extends StatelessWidget {
   final List<({String label, IconData icon, VoidCallback onTap, bool primary})>
   actions;
   final int columns;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1972,14 +2007,17 @@ class _StockActionGroup extends StatelessWidget {
           children: [
             Icon(icon, size: 17, color: kStockBlue),
             const SizedBox(width: 7),
-            Text(
-              title,
-              style: const TextStyle(
-                color: MjasiColors.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: MjasiColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
+            if (trailing != null) trailing!,
           ],
         ),
         const SizedBox(height: 8),
@@ -2024,6 +2062,13 @@ class _StockHistoryPageState extends State<StockHistoryPage> {
       child: StockScaffold(
         title: 'stk_history'.tr,
         maxWidth: 900,
+        actions: [
+          IconButton(
+            tooltip: 'stk_products'.tr,
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () => Get.to(() => const ProductsPage()),
+          ),
+        ],
         bottom: TabBar(
           indicatorColor: Colors.white,
           labelColor: Colors.white,

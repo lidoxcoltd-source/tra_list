@@ -96,8 +96,7 @@ class TransactionsController extends GetxController {
       fetchFirstPage(),
       _fetchAndSetTotals(),
       loadShopNames(),
-      loadCategoryNames(),
-    ]);
+    ]).then((_) => loadCategoryNames());
 
     scrollController.addListener(() {
       if (scrollController.position.pixels >=
@@ -149,30 +148,48 @@ class TransactionsController extends GetxController {
 
   Future<void> loadCategoryNames() async {
     final names = <String>{};
+    var loadFailed = false;
     try {
       final categories = await CategoryService.getCategoriesFromServer();
+      final categoryModels = categories.docs
+          .map((category) => category.data())
+          .toList();
       names.addAll(
-        categories.docs
-            .map((category) => category.data().name.trim())
+        categoryModels
+            .map((category) => category.name.trim())
             .where((name) => name.isNotEmpty),
       );
-      names.addAll(
-        allFetchedTransactions
-            .map((transaction) => transaction.category.trim())
-            .where((name) => name.isNotEmpty),
-      );
-      availableCategories.assignAll(names.toList()..sort());
+      try {
+        await OfflineService.cacheCategories(categoryModels);
+      } catch (error, stackTrace) {
+        debugPrint('Could not cache transaction category names: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
     } catch (error, stackTrace) {
+      loadFailed = true;
       debugPrint('Failed to load transaction category names: $error');
       debugPrintStack(stackTrace: stackTrace);
-      final transactionCategories =
-          allFetchedTransactions
-              .map((transaction) => transaction.category.trim())
-              .where((name) => name.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-      availableCategories.assignAll(transactionCategories);
+      try {
+        final cachedCategories = await OfflineService.getCachedCategories();
+        final pendingCategories = await OfflineService.getPendingCategories();
+        names.addAll(
+          [...cachedCategories, ...pendingCategories]
+              .map((category) => category.name.trim())
+              .where((name) => name.isNotEmpty),
+        );
+      } catch (cacheError, cacheStackTrace) {
+        debugPrint('Could not read cached transaction categories: $cacheError');
+        debugPrintStack(stackTrace: cacheStackTrace);
+      }
+    }
+
+    names.addAll(
+      allFetchedTransactions
+          .map((transaction) => transaction.category.trim())
+          .where((name) => name.isNotEmpty),
+    );
+    availableCategories.assignAll(names.toList()..sort());
+    if (loadFailed && names.isEmpty) {
       Get.snackbar('error'.tr, 'transactions_categories_load_error'.tr);
     }
   }

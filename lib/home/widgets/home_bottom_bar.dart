@@ -8,26 +8,28 @@ class HomeBottomBar extends StatelessWidget {
     super.key,
     required this.canOpenReports,
     required this.canOpenChat,
+    required this.canSell,
     required this.lightStyle,
     required this.activeDestination,
-    required this.quickActionsOpen,
     required this.onSelectDestination,
     required this.onOpenMarket,
     required this.onOpenChat,
     required this.onOpenReports,
     required this.onShowQuickActions,
+    required this.onScanSell,
   });
 
   final bool canOpenReports;
   final bool canOpenChat;
+  final bool canSell;
   final bool lightStyle;
   final HomeDestination activeDestination;
-  final bool quickActionsOpen;
   final ValueChanged<HomeDestination> onSelectDestination;
   final VoidCallback onOpenMarket;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenReports;
   final VoidCallback onShowQuickActions;
+  final VoidCallback onScanSell;
 
   Widget _mobileNavigationItem({
     required IconData icon,
@@ -95,9 +97,9 @@ class HomeBottomBar extends StatelessWidget {
   Widget _quickNavigationAction() {
     return Semantics(
       button: true,
-      label: 'home_quick_access'.tr,
+      label: canSell ? 'nav_scan'.tr : 'home_more'.tr,
       child: InkWell(
-        onTap: onShowQuickActions,
+        onTap: canSell ? onScanSell : onShowQuickActions,
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
           height: 70,
@@ -120,20 +122,15 @@ class HomeBottomBar extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: AnimatedRotation(
-                  turns: quickActionsOpen ? .125 : 0,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutBack,
-                  child: const Icon(
-                    Icons.add_rounded,
-                    color: Colors.white,
-                    size: 25,
-                  ),
+                child: Icon(
+                  canSell ? Icons.qr_code_scanner_rounded : Icons.more_horiz,
+                  color: Colors.white,
+                  size: 25,
                 ),
               ),
               const SizedBox(height: 3),
               Text(
-                'nav_add'.tr,
+                canSell ? 'nav_scan'.tr : 'home_more'.tr,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -219,13 +216,21 @@ class HomeBottomBar extends StatelessWidget {
                       selected: activeDestination == HomeDestination.chat,
                     ),
                   ),
-                if (canOpenReports)
+                if (canOpenReports && !canSell)
                   Expanded(
                     child: _mobileNavigationItem(
                       icon: Icons.insert_chart_outlined,
                       label: 'nav_reports'.tr,
                       onTap: onOpenReports,
                       selected: activeDestination == HomeDestination.reports,
+                    ),
+                  ),
+                if (canSell)
+                  Expanded(
+                    child: _mobileNavigationItem(
+                      icon: Icons.more_horiz_rounded,
+                      label: 'home_more'.tr,
+                      onTap: onShowQuickActions,
                     ),
                   ),
               ],

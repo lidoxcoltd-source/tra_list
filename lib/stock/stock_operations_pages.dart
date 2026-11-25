@@ -41,8 +41,8 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
   DateTime _date = DateTime.now();
   bool _expense = false;
   bool _saving = false;
-  // Generated once per form so a retry after a timeout cannot double-receive.
-  final String _purchaseId = StockService.current().products.doc().id;
+  // Generated once per form or refreshed on save
+  String _purchaseId = StockService.current().products.doc().id;
 
   @override
   void initState() {
@@ -95,7 +95,13 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
 
   Future<void> _save() async {
     if (_saving) return;
+    final validLines = _lines.where((l) => _num(l.qty.text) > 0).toList();
+    if (validLines.isEmpty) {
+      stockToast('stk_error'.tr, 'stk_err_no_lines'.tr, error: true);
+      return;
+    }
     setState(() => _saving = true);
+    _purchaseId = StockService.current().products.doc().id;
     try {
       await _service.receiveStock(
         purchaseId: _purchaseId,
@@ -104,8 +110,9 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
         date: _date,
         note: _note.text.trim(),
         recordExpense: _expense,
+        shopNickname: BusinessAccessService.shopNickname.value,
         lines: [
-          for (final l in _lines)
+          for (final l in validLines)
             PurchaseLine(
               productId: l.product.id!,
               productName: l.product.name,
@@ -115,7 +122,7 @@ class _ReceiveStockPageState extends State<ReceiveStockPage> {
         ],
       );
       stockToast('stk_saved'.tr, 'stk_received_ok'.tr);
-      Get.back();
+      if (mounted) stockGoBack(context);
     } catch (e) {
       stockToast('stk_error'.tr, stockErrorText(e), error: true);
     } finally {
@@ -332,9 +339,9 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
   final _note = TextEditingController();
   List<Product> _products = [];
   Product? _product;
-  MovementType _type = MovementType.adjustmentOut;
+  MovementType _type = MovementType.correction;
   bool _saving = false;
-  final String _operationId = StockService.current().products.doc().id;
+  String _operationId = StockService.current().products.doc().id;
 
   @override
   void initState() {
@@ -361,18 +368,27 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
     if (_saving) return;
     final p = _product;
     if (p == null) return;
+    final qty = _num(_qty.text);
+    if (_type == MovementType.correction ? qty < 0 : qty <= 0) {
+      stockToast('stk_error'.tr, 'stk_err_qty'.tr, error: true);
+      return;
+    }
     setState(() => _saving = true);
+    _operationId = StockService.current().products.doc().id;
+    final reason = _reason.text.trim().isNotEmpty
+        ? _reason.text.trim()
+        : _type.labelKey.tr;
     try {
       await _service.adjustStock(
         productId: p.id!,
         type: _type,
-        quantity: _num(_qty.text),
-        reason: _reason.text.trim(),
+        quantity: qty,
+        reason: reason,
         note: _note.text.trim(),
         operationId: _operationId,
       );
       stockToast('stk_saved'.tr, p.name);
-      Get.back();
+      if (mounted) stockGoBack(context);
     } catch (e) {
       stockToast('stk_error'.tr, stockErrorText(e), error: true);
     } finally {
@@ -485,7 +501,16 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
                 ),
               ),
               onPressed: _saving || p == null ? null : _save,
-              icon: const Icon(Icons.check),
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check),
               label: Text('stk_save'.tr),
             ),
           ),

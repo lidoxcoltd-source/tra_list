@@ -25,6 +25,7 @@ class CreateAccountPage extends StatefulWidget {
 
 class _CreateAccountPageState extends State<CreateAccountPage> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
   final _nameKey = GlobalKey<FormFieldState<String>>();
   final _businessNameKey = GlobalKey<FormFieldState<String>>();
   final _phoneKey = GlobalKey<FormFieldState<String>>();
@@ -52,9 +53,10 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   bool _validateCurrentStep() {
     final keys = switch (_step) {
       0 => [_nameKey],
-      1 => _mode == AccountMode.business
-          ? [_businessNameKey, _phoneKey]
-          : [_phoneKey],
+      1 =>
+        _mode == AccountMode.business
+            ? [_businessNameKey, _phoneKey]
+            : [_phoneKey],
       2 => [_emailKey],
       3 => [_passwordKey],
       _ => [_confirmPasswordKey],
@@ -68,11 +70,30 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
   void _nextStep() {
     if (!_validateCurrentStep()) return;
-    if (_step < _stepCount - 1) setState(() => _step++);
+    if (_step < _stepCount - 1) {
+      setState(() => _step++);
+      _scrollStepToTop();
+    }
   }
 
   void _previousStep() {
-    if (_step > 0) setState(() => _step--);
+    if (_step > 0) {
+      setState(() => _step--);
+      _scrollStepToTop();
+    }
+  }
+
+  void _scrollStepToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   Widget _buildStepFields(double fieldGap) {
@@ -81,7 +102,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         return TextFormField(
           key: _nameKey,
           controller: _nameController,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+          textInputAction: TextInputAction.next,
+          onFieldSubmitted: (_) => _nextStep(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w400,
+          ),
           textCapitalization: TextCapitalization.words,
           autofillHints: const [AutofillHints.name],
           decoration: _inputDecoration(
@@ -91,8 +118,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           validator: (value) => _isGoogleSignUpAttempt
               ? null
               : value == null || value.trim().isEmpty
-                  ? 'account_full_name_required'.tr
-                  : null,
+              ? 'account_full_name_required'.tr
+              : null,
         );
       case 1:
         return Column(
@@ -102,7 +129,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
               TextFormField(
                 key: _businessNameKey,
                 controller: _businessNameController,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+                scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w400,
+                ),
                 textCapitalization: TextCapitalization.words,
                 decoration: _inputDecoration(
                   label: 'account_business_name'.tr,
@@ -117,7 +150,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             TextFormField(
               key: _phoneKey,
               controller: _phoneController,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+              scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) => _nextStep(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w400,
+              ),
               keyboardType: TextInputType.phone,
               autofillHints: const [AutofillHints.telephoneNumber],
               decoration: _inputDecoration(
@@ -138,7 +177,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         return TextFormField(
           key: _emailKey,
           controller: _emailController,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+          textInputAction: TextInputAction.next,
+          onFieldSubmitted: (_) => _nextStep(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w400,
+          ),
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
           decoration: _inputDecoration(
@@ -157,7 +202,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         return TextFormField(
           key: _passwordKey,
           controller: _passwordController,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+          textInputAction: TextInputAction.next,
+          onFieldSubmitted: (_) => _nextStep(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w400,
+          ),
           obscureText: _hidePassword,
           autofillHints: const [AutofillHints.newPassword],
           decoration: _inputDecoration(
@@ -165,15 +216,19 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             icon: Icons.lock_outline,
             suffix: IconButton(
               onPressed: () => setState(() => _hidePassword = !_hidePassword),
-              icon: Icon(_hidePassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined),
+              icon: Icon(
+                _hidePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
             ),
           ),
           validator: (value) {
             if (_isGoogleSignUpAttempt) return null;
-            if (value == null || value.isEmpty) return 'Please enter a password'.tr;
-            if (value.length < 6) return 'Password must be at least 6 characters'.tr;
+            if (value == null || value.isEmpty)
+              return 'Please enter a password'.tr;
+            if (value.length < 6)
+              return 'Password must be at least 6 characters'.tr;
             return null;
           },
         );
@@ -181,18 +236,25 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         return TextFormField(
           key: _confirmPasswordKey,
           controller: _confirmPasswordController,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          scrollPadding: const EdgeInsets.only(top: 120, bottom: 260),
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => _createAccount(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w400,
+          ),
           obscureText: _hideConfirmPassword,
           decoration: _inputDecoration(
             label: 'account_confirm_password'.tr,
             icon: Icons.lock_outline,
             suffix: IconButton(
-              onPressed: () => setState(
-                () => _hideConfirmPassword = !_hideConfirmPassword,
+              onPressed: () =>
+                  setState(() => _hideConfirmPassword = !_hideConfirmPassword),
+              icon: Icon(
+                _hideConfirmPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
               ),
-              icon: Icon(_hideConfirmPassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined),
             ),
           ),
           validator: (value) {
@@ -247,7 +309,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             child: Text(
               '${index + 1}',
               style: TextStyle(
-                color: active ? const Color(0xFF06152E) : const Color(0xFFC0D7EA),
+                color: active
+                    ? const Color(0xFF06152E)
+                    : const Color(0xFFC0D7EA),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -275,6 +339,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameController.dispose();
     _businessNameController.dispose();
     _phoneController.dispose();
@@ -309,8 +374,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       debugPrint(
         'Email/password account creation failed (${e.code}): ${e.message}',
       );
-      final message = e.message?.toLowerCase().contains('connection reset') ==
-              true
+      final message =
+          e.message?.toLowerCase().contains('connection reset') == true
           ? 'account_registration_network_error'
           : switch (e.code) {
               'email-already-in-use' =>
@@ -579,6 +644,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         : const Color(0xFF071B2A);
     return Scaffold(
       extendBodyBehindAppBar: true,
+      resizeToAvoidBottomInset: true,
       backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -590,27 +656,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           tooltip: 'Back'.tr,
         ),
       ),
-      bottomNavigationBar: keyboardVisible
-          ? SafeArea(
-              top: false,
-              child: Container(
-                color: backgroundColor,
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 400),
-                    child: _stepNavigationButtons(accent, compact: true),
-                  ),
-                ),
-              ),
-            )
-          : null,
       body: Stack(
         children: [
           Positioned.fill(child: AuthBackdrop(isBusiness: isBusiness)),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
+                controller: _scrollController,
                 physics: keyboardVisible
                     ? const ClampingScrollPhysics()
                     : const NeverScrollableScrollPhysics(),
@@ -700,18 +752,28 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             data: Theme.of(context).copyWith(
                               segmentedButtonTheme: SegmentedButtonThemeData(
                                 style: ButtonStyle(
-                                  foregroundColor: WidgetStateProperty.resolveWith(
-                                    (states) => states.contains(WidgetState.selected)
-                                        ? const Color(0xFF06152E)
-                                        : const Color(0xFFE2F0FF),
-                                  ),
-                                  backgroundColor: WidgetStateProperty.resolveWith(
-                                    (states) => states.contains(WidgetState.selected)
-                                        ? accent
-                                        : const Color(0xFF102C50),
-                                  ),
+                                  foregroundColor:
+                                      WidgetStateProperty.resolveWith(
+                                        (states) =>
+                                            states.contains(
+                                              WidgetState.selected,
+                                            )
+                                            ? const Color(0xFF06152E)
+                                            : const Color(0xFFE2F0FF),
+                                      ),
+                                  backgroundColor:
+                                      WidgetStateProperty.resolveWith(
+                                        (states) =>
+                                            states.contains(
+                                              WidgetState.selected,
+                                            )
+                                            ? accent
+                                            : const Color(0xFF102C50),
+                                      ),
                                   side: WidgetStateProperty.all(
-                                    BorderSide(color: accent.withValues(alpha: .45)),
+                                    BorderSide(
+                                      color: accent.withValues(alpha: .45),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -730,7 +792,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                           constraints: const BoxConstraints(maxWidth: 400),
                           child: Card(
                             elevation: 12,
-                            color: const Color(0xFF0D2747).withValues(alpha: .97),
+                            color: const Color(
+                              0xFF0D2747,
+                            ).withValues(alpha: .97),
                             shadowColor: Colors.black.withValues(alpha: .4),
                             surfaceTintColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
@@ -738,92 +802,171 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             ),
                             child: Padding(
                               padding: EdgeInsets.all(
-                              tight ? 14 : (compact ? 20 : 28),
+                                tight ? 14 : (compact ? 20 : 28),
                               ),
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
                                   minHeight: compact ? 330 : 430,
                                 ),
                                 child: Form(
-                                key: _formKey,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _buildStepProgress(accent),
-                                    const SizedBox(height: 18),
-                                    AnimatedSwitcher(
-                                      duration: const Duration(milliseconds: 460),
-                                      reverseDuration: const Duration(milliseconds: 360),
-                                      transitionBuilder: (child, animation) => FadeTransition(
-                                        opacity: animation,
-                                        child: SlideTransition(
-                                          position: Tween<Offset>(
-                                            begin: const Offset(.035, 0),
-                                            end: Offset.zero,
-                                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic)),
-                                          child: child,
+                                  key: _formKey,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildStepProgress(accent),
+                                      const SizedBox(height: 18),
+                                      AnimatedSwitcher(
+                                        duration: const Duration(
+                                          milliseconds: 460,
                                         ),
-                                      ),
-                                      child: Column(
-                                        key: ValueKey('registration-step-$_step-$_mode'),
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text(
-                                            'Step ${_step + 1} of $_stepCount',
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 1.1),
+                                        reverseDuration: const Duration(
+                                          milliseconds: 360,
+                                        ),
+                                        transitionBuilder: (child, animation) =>
+                                            FadeTransition(
+                                              opacity: animation,
+                                              child: SlideTransition(
+                                                position:
+                                                    Tween<Offset>(
+                                                      begin: const Offset(
+                                                        .035,
+                                                        0,
+                                                      ),
+                                                      end: Offset.zero,
+                                                    ).animate(
+                                                      CurvedAnimation(
+                                                        parent: animation,
+                                                        curve: Curves
+                                                            .easeInOutCubic,
+                                                      ),
+                                                    ),
+                                                child: child,
+                                              ),
+                                            ),
+                                        child: Column(
+                                          key: ValueKey(
+                                            'registration-step-$_step-$_mode',
                                           ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            switch (_step) {
-                                              0 => 'account_full_name'.tr,
-                                              1 => _mode == AccountMode.business ? 'account_business_name'.tr : 'account_phone_optional'.tr,
-                                              2 => 'login_email'.tr,
-                                              3 => 'login_password'.tr,
-                                              _ => 'account_confirm_password'.tr,
-                                            },
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Text(
+                                              'Step ${_step + 1} of $_stepCount',
                                               textAlign: TextAlign.center,
-                                              style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w500),
-                                          ),
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                letterSpacing: 1.1,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              switch (_step) {
+                                                0 => 'account_full_name'.tr,
+                                                1 =>
+                                                  _mode == AccountMode.business
+                                                      ? 'account_business_name'
+                                                            .tr
+                                                      : 'account_phone_optional'
+                                                            .tr,
+                                                2 => 'login_email'.tr,
+                                                3 => 'login_password'.tr,
+                                                _ =>
+                                                  'account_confirm_password'.tr,
+                                              },
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 19,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
                                             const SizedBox(height: 24),
                                             Center(
                                               child: ConstrainedBox(
-                                                constraints: const BoxConstraints(maxWidth: 340),
-                                                child: _buildStepFields(fieldGap),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      maxWidth: 340,
+                                                    ),
+                                                child: _buildStepFields(
+                                                  fieldGap,
+                                                ),
                                               ),
                                             ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    SizedBox(height: compact ? 14 : 22),
-                                    if (!keyboardVisible)
+                                      SizedBox(height: compact ? 14 : 22),
                                       _stepNavigationButtons(
                                         accent,
                                         compact: compact,
                                       ),
-                                    if (_step == _stepCount - 1 && _googleSupported) ...[
-                                      SizedBox(height: compact ? 4 : 12),
-                                      Row(
-                                        children: [
-                                          Expanded(child: Divider(color: Colors.white.withValues(alpha: .2))),
-                                          Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('login_or'.tr, style: const TextStyle(color: Color(0xFFC0D7EA)))),
-                                          Expanded(child: Divider(color: Colors.white.withValues(alpha: .2))),
-                                        ],
-                                      ),
-                                      TextButton.icon(
-                                        onPressed: _isLoading ? null : _createAccountWithGoogle,
-                                        icon: const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFFDB4437))),
-                                        label: Text('login_google'.tr, style: const TextStyle(color: Color(0xFFE2F0FF), fontWeight: FontWeight.w600)),
+                                      if (_step == _stepCount - 1 &&
+                                          _googleSupported) ...[
+                                        SizedBox(height: compact ? 4 : 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Divider(
+                                                color: Colors.white.withValues(
+                                                  alpha: .2,
+                                                ),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                  ),
+                                              child: Text(
+                                                'login_or'.tr,
+                                                style: const TextStyle(
+                                                  color: Color(0xFFC0D7EA),
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Divider(
+                                                color: Colors.white.withValues(
+                                                  alpha: .2,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: _isLoading
+                                              ? null
+                                              : _createAccountWithGoogle,
+                                          icon: const Text(
+                                            'G',
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFDB4437),
+                                            ),
+                                          ),
+                                          label: Text(
+                                            'login_google'.tr,
+                                            style: const TextStyle(
+                                              color: Color(0xFFE2F0FF),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      SizedBox(height: compact ? 2 : 8),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Get.offNamed(AppRoutes.login),
+                                        child: Text('account_already_have'.tr),
                                       ),
                                     ],
-                                    SizedBox(height: compact ? 2 : 8),
-                                    TextButton(
-                                      onPressed: () => Get.offNamed(AppRoutes.login),
-                                      child: Text('account_already_have'.tr),
-                                    ),
-                                  ],
-                                ),
+                                  ),
                                 ),
                               ),
                             ),

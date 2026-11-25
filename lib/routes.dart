@@ -28,6 +28,7 @@ import 'package:tra_list/services/admin_announcements_page.dart';
 import 'package:tra_list/services/super_admin_hub_page.dart';
 import 'package:tra_list/services/notifications_page.dart';
 import 'package:tra_list/services/download_center_management_page.dart';
+import 'package:tra_list/services/shop_locations_dialog.dart';
 import 'package:tra_list/services/support_center_admin_page.dart';
 import 'package:tra_list/services/legal_admin_page.dart';
 import 'package:tra_list/services/chat_page.dart';
@@ -179,6 +180,7 @@ class AppRoutes {
   static const String clientCredit = '/client-credit';
   static const String subscription = '/subscription';
   static const String staff = '/staff';
+  static const String shops = '/shops';
   static const String tasks = '/tasks';
   static const String adminSubscriptions = '/admin-subscriptions';
   static const String adminAiQuota = '/admin-ai-quota';
@@ -507,6 +509,12 @@ class AppRoutes {
       name: staff,
       page: () => const StaffManagementPage(),
       middlewares: [AuthMiddleware(), BusinessPermissionMiddleware()],
+    ),
+    GetPage(
+      name: shops,
+      page: () => const ShopLocationsPage(),
+      middlewares: [AuthMiddleware(), BusinessOwnerMiddleware()],
+      transition: Transition.rightToLeft,
     ),
     GetPage(
       name: tasks,

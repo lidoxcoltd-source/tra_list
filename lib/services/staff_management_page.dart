@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -10,9 +11,23 @@ import 'profile_service.dart';
 import 'staff_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
 import 'package:tra_list/routes.dart';
+import 'shop_locations_dialog.dart';
 import 'package:tra_list/tasks/task_editor_page.dart';
 import 'chat_service.dart';
 import 'branch_service.dart';
+
+const _staffPositionOptions = <String, String>{
+  'cashier': 'staff_position_cashier',
+  'waiter': 'staff_position_waiter',
+  'bar_counter_attendant': 'staff_position_bar_counter_attendant',
+  'bartender': 'staff_position_bartender',
+  'bar_manager': 'staff_position_bar_manager',
+  'shop_attendant': 'staff_position_shop_attendant',
+  'store_manager': 'staff_position_store_manager',
+  'accountant': 'staff_position_accountant',
+  'security_guard': 'staff_position_security_guard',
+};
+const _customStaffPositionPrefix = 'custom:';
 
 class _BarModeSettingsCard extends StatefulWidget {
   const _BarModeSettingsCard();
@@ -139,7 +154,7 @@ class StaffManagementPage extends StatelessWidget {
             ),
           if (BusinessAccessService.isOwner.value)
             IconButton(
-              onPressed: () => _showShopLocationsDialog(context),
+              onPressed: () => Get.toNamed(AppRoutes.shops),
               tooltip: 'staff_shop_locations'.tr,
               icon: const Icon(Icons.store_mall_directory_outlined),
             ),
@@ -352,6 +367,7 @@ class StaffManagementPage extends StatelessWidget {
     final name = data['name']?.toString() ?? '';
     final email = data['email']?.toString() ?? '';
     final phone = data['phone']?.toString() ?? '';
+    final staffPosition = data['staffPosition']?.toString();
     final shopNickname = data['shopNickname']?.toString() ?? '';
     final dailyExpenseLimit =
         (data['dailyExpenseLimit'] as num?)?.toDouble() ?? 0;
@@ -442,6 +458,23 @@ class StaffManagementPage extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: _muted, fontSize: 10),
                       ),
+                      if (staffPosition != null && staffPosition.isNotEmpty)
+                        Text(
+                          staffPosition.startsWith(_customStaffPositionPrefix)
+                              ? staffPosition.substring(
+                                  _customStaffPositionPrefix.length,
+                                )
+                              : _staffPositionOptions.containsKey(staffPosition)
+                              ? _staffPositionOptions[staffPosition]!.tr
+                              : staffPosition,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _muted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -888,13 +921,6 @@ class StaffManagementPage extends StatelessWidget {
       Get.snackbar('error'.tr, '${'staff_invitation_create_error'.tr}: $error');
     }
   }
-
-  Future<void> _showShopLocationsDialog(BuildContext context) async {
-    await Get.dialog<void>(
-      const _ShopLocationsDialog(),
-      barrierDismissible: false,
-    );
-  }
 }
 
 class _Perf {
@@ -1201,7 +1227,7 @@ class _StaffInsights extends StatefulWidget {
   const _StaffInsights({required this.staff, required this.cardBuilder});
 
   final List<StaffMember> staff;
-  final Widget Function(StaffMember member, _Perf perf) cardBuilder;
+  final Widget Function(StaffMember member, _Perf? perf) cardBuilder;
 
   @override
   State<_StaffInsights> createState() => _StaffInsightsState();
@@ -1217,6 +1243,11 @@ class _StaffInsightsState extends State<_StaffInsights> {
   bool _loading = true;
   bool _failed = false;
   int _request = 0;
+
+  bool get _canViewTeamTransactions =>
+      BusinessAccessService.isOwner.value ||
+      BusinessAccessService.can('transactions', 'view') ||
+      BusinessAccessService.can('analytics', 'view');
 
   @override
   void initState() {
@@ -1254,10 +1285,18 @@ class _StaffInsightsState extends State<_StaffInsights> {
       ),
     };
     try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final ownTransactionsOnly = !_canViewTeamTransactions;
+      if (ownTransactionsOnly &&
+          (currentUid == null ||
+              !BusinessAccessService.can('transactions', 'create'))) {
+        throw StateError('You do not have permission to view staff activity.');
+      }
       final snap = await TransactionService.getTransactions(
         limit: 2000,
         startDate: start,
         endDate: end,
+        uid: ownTransactionsOnly ? currentUid : null,
       );
       final result = <String, _Perf>{};
       for (final doc in snap.docs) {
@@ -1354,7 +1393,13 @@ class _StaffInsightsState extends State<_StaffInsights> {
           )
         else ...[
           for (final m in members)
-            widget.cardBuilder(m, _perf[m.id] ?? _Perf()),
+            widget.cardBuilder(
+              m,
+              _canViewTeamTransactions ||
+                      m.id == FirebaseAuth.instance.currentUser?.uid
+                  ? _perf[m.id] ?? _Perf()
+                  : null,
+            ),
         ],
       ],
     );
@@ -1749,175 +1794,6 @@ class _StaffDailyExpenseLimitDialogState
   }
 }
 
-class _ShopLocationsDialog extends StatelessWidget {
-  const _ShopLocationsDialog();
-
-  Future<void> _editBranch(
-    BuildContext context, {
-    BusinessBranch? branch,
-  }) async {
-    final result = await Get.dialog<Map<String, String>>(
-      _ShopLocationEditor(branch: branch),
-      barrierDismissible: false,
-    );
-    if (result == null) return;
-    try {
-      if (branch == null) {
-        await BranchService.createBranch(
-          name: result['name']!,
-          location: result['location']!,
-        );
-      } else {
-        await BranchService.updateBranch(
-          branchId: branch.id,
-          name: result['name']!,
-          location: result['location']!,
-        );
-      }
-      Get.snackbar('success'.tr, 'staff_shop_location_saved'.tr);
-    } catch (error) {
-      final message =
-          error is StateError && error.message == 'staff_shop_location_assigned'
-          ? 'staff_shop_location_assigned'.tr
-          : '$error';
-      Get.snackbar('error'.tr, message);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text('staff_shop_locations'.tr),
-    content: SizedBox(
-      width: 460,
-      height: 360,
-      child: StreamBuilder<List<BusinessBranch>>(
-        stream: BranchService.watchBranches(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Text('${snapshot.error}');
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final branches = snapshot.data!;
-          return ListView(
-            shrinkWrap: true,
-            children: [
-              if (branches.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: Text('staff_shop_location_empty'.tr),
-                ),
-              for (final branch in branches)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.storefront_outlined),
-                  title: Text(branch.name),
-                  subtitle: Text(branch.location),
-                  trailing: IconButton(
-                    tooltip: 'edit'.tr,
-                    onPressed: () => _editBranch(context, branch: branch),
-                    icon: const Icon(Icons.edit_outlined),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () => _editBranch(context),
-                icon: const Icon(Icons.add_business_outlined),
-                label: Text('staff_shop_location_add'.tr),
-              ),
-            ],
-          );
-        },
-      ),
-    ),
-    actions: [TextButton(onPressed: Get.back, child: Text('done'.tr))],
-  );
-}
-
-class _ShopLocationEditor extends StatefulWidget {
-  const _ShopLocationEditor({this.branch});
-
-  final BusinessBranch? branch;
-
-  @override
-  State<_ShopLocationEditor> createState() => _ShopLocationEditorState();
-}
-
-class _ShopLocationEditorState extends State<_ShopLocationEditor> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name;
-  late final TextEditingController _location;
-
-  @override
-  void initState() {
-    super.initState();
-    _name = TextEditingController(text: widget.branch?.name ?? '');
-    _location = TextEditingController(text: widget.branch?.location ?? '');
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _location.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.branch == null ? 'staff_shop_location_add'.tr : 'edit'.tr,
-    ),
-    content: SizedBox(
-      width: 400,
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: 'staff_shop_location_name'.tr,
-                prefixIcon: const Icon(Icons.storefront_outlined),
-              ),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'required_field'.tr
-                  : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _location,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: 'staff_shop_location_address'.tr,
-                prefixIcon: const Icon(Icons.location_on_outlined),
-              ),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'required_field'.tr
-                  : null,
-            ),
-          ],
-        ),
-      ),
-    ),
-    actions: [
-      TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
-      FilledButton(
-        onPressed: () {
-          if (!_formKey.currentState!.validate()) return;
-          Get.back<Map<String, String>>(
-            result: {
-              'name': _name.text.trim(),
-              'location': _location.text.trim(),
-            },
-          );
-        },
-        child: Text('save'.tr),
-      ),
-    ],
-  );
-}
-
 class _StaffEditorDialog extends StatefulWidget {
   const _StaffEditorDialog({this.employeeUid, this.memberData});
 
@@ -1936,12 +1812,14 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   late final TextEditingController _shopNicknameController;
   late final TextEditingController _usernameController;
   late final TextEditingController _dailyExpenseLimitController;
+  late final TextEditingController _customStaffPositionController;
   final _passwordController = TextEditingController();
   late final Future<Map<String, dynamic>> _businessProfile;
-  late final Future<List<BusinessBranch>> _branches;
+  late Future<List<BusinessBranch>> _branches;
   String? _selectedBranchId;
   late final Map<String, Map<String, bool>> _permissions;
   late String _barRole;
+  late String _staffPosition;
   bool _saving = false;
 
   bool get _isEditing => widget.employeeUid != null;
@@ -1950,10 +1828,29 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   void initState() {
     super.initState();
     final savedBarRole = widget.memberData?['barRole']?.toString();
-    _barRole =
-        const {'staff', 'waiter', 'bartender', 'manager'}.contains(savedBarRole)
-        ? savedBarRole!
-        : 'staff';
+    final savedStaffPosition = widget.memberData?['staffPosition']?.toString();
+    final barRolePosition = switch (savedBarRole) {
+      'waiter' => 'bar_counter_attendant',
+      'bartender' => 'bartender',
+      'manager' => 'bar_manager',
+      _ => null,
+    };
+    final initialStaffPosition =
+        barRolePosition ?? savedStaffPosition ?? 'shop_attendant';
+    final isCustomStaffPosition =
+        initialStaffPosition.isNotEmpty &&
+        (initialStaffPosition.startsWith(_customStaffPositionPrefix) ||
+            !_staffPositionOptions.containsKey(initialStaffPosition));
+    _staffPosition = isCustomStaffPosition ? 'custom' : initialStaffPosition;
+    _customStaffPositionController = TextEditingController(
+      text: isCustomStaffPosition
+          ? initialStaffPosition.startsWith(_customStaffPositionPrefix)
+                ? initialStaffPosition.substring(
+                    _customStaffPositionPrefix.length,
+                  )
+                : initialStaffPosition
+          : '',
+    );
     _nameController = TextEditingController(
       text: widget.memberData?['name']?.toString() ?? '',
     );
@@ -1986,6 +1883,10 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     _businessProfile = ProfileService.loadOrCreate();
     _branches = BranchService.fetchBranches();
     _permissions = _readPermissions(widget.memberData?['permissions']);
+    _barRole = _barRoleForStaffPosition(_staffPosition);
+    if (_barRole == 'manager') {
+      _permissions['staff']!['manage'] = true;
+    }
     if (BusinessAccessService.barModeEnabled.value &&
         (_barRole == 'waiter' || _barRole == 'bartender')) {
       _permissions['invoices']!['create'] = true;
@@ -2001,6 +1902,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     _shopNicknameController.dispose();
     _usernameController.dispose();
     _dailyExpenseLimitController.dispose();
+    _customStaffPositionController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -2020,7 +1922,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: SizedBox(
-        width: 600,
+        width: media.size.width > 632 ? 600 : media.size.width - 32,
         height: dialogHeight,
         child: Column(
           children: [
@@ -2129,37 +2031,31 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                           },
                         ),
                         const SizedBox(height: 14),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.info_outline_rounded,
-                                size: 17,
-                                color: StaffManagementPage._brand,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'staff_login_credentials_note'.tr,
-                                  style: const TextStyle(
-                                    color: StaffManagementPage._muted,
-                                    fontSize: 12,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ],
+                      ],
+                      _formSectionHeading(
+                        title: 'staff_section_personal'.tr,
+                        subtitle: 'staff_section_personal_help'.tr,
+                        icon: Icons.person_outline_rounded,
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 2, top: 6),
+                          child: Text(
+                            'staff_required_fields_note'.tr,
+                            style: const TextStyle(
+                              color: StaffManagementPage._muted,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 14),
-                      ],
+                      ),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _nameController,
                         textCapitalization: TextCapitalization.words,
                         decoration: InputDecoration(
-                          labelText: 'staff_name'.tr,
+                          labelText: '${'staff_name'.tr} *',
                           prefixIcon: const Icon(Icons.person_outline),
                         ),
                         validator: (value) =>
@@ -2167,6 +2063,58 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                             ? 'required_field'.tr
                             : null,
                       ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _staffPosition,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: '${'staff_position'.tr} *',
+                          prefixIcon: const Icon(Icons.badge_outlined),
+                          helperText: BusinessAccessService.barModeEnabled.value
+                              ? 'staff_bar_role_follows_position'.tr
+                              : null,
+                        ),
+                        items: [
+                          for (final entry in _staffPositionOptions.entries)
+                            if (entry.key != 'bar_manager' ||
+                                BusinessAccessService.isOwner.value ||
+                                _staffPosition == entry.key)
+                              DropdownMenuItem(
+                                value: entry.key,
+                                child: Text(entry.value.tr),
+                              ),
+                          DropdownMenuItem(
+                            value: 'custom',
+                            child: Text('staff_position_custom'.tr),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            _selectStaffPosition(value);
+                          }
+                        },
+                        validator: (value) =>
+                            value == null ? 'required_field'.tr : null,
+                      ),
+                      if (_staffPosition == 'custom') ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _customStaffPositionController,
+                          textCapitalization: TextCapitalization.words,
+                          maxLength: 50,
+                          decoration: InputDecoration(
+                            labelText: '${'staff_position_custom_name'.tr} *',
+                            prefixIcon: const Icon(Icons.edit_outlined),
+                          ),
+                          validator: (value) {
+                            if (_staffPosition != 'custom') return null;
+                            final position = value?.trim() ?? '';
+                            return position.isEmpty || position.length > 50
+                                ? 'staff_position_custom_required'.tr
+                                : null;
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       TextFormField(
                         controller: _emailController,
@@ -2199,7 +2147,13 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                           prefixIcon: const Icon(Icons.phone_outlined),
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
+                      _formSectionHeading(
+                        title: 'staff_section_workplace'.tr,
+                        subtitle: 'staff_section_workplace_help'.tr,
+                        icon: Icons.store_mall_directory_outlined,
+                      ),
+                      const SizedBox(height: 12),
                       FutureBuilder<List<BusinessBranch>>(
                         future: _branches,
                         builder: (context, snapshot) {
@@ -2231,53 +2185,95 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                               _selectedBranchId = match.first.id;
                             }
                           }
-                          return DropdownButtonFormField<String>(
-                            initialValue:
-                                branches.any(
-                                  (branch) => branch.id == _selectedBranchId,
-                                )
-                                ? _selectedBranchId
-                                : null,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'staff_shop_location'.tr,
-                              prefixIcon: const Icon(
-                                Icons.store_mall_directory_outlined,
-                              ),
-                              helperText: branches.isEmpty
-                                  ? 'staff_shop_location_empty'.tr
-                                  : null,
-                            ),
-                            items: [
-                              for (final branch in branches)
-                                DropdownMenuItem(
-                                  value: branch.id,
-                                  child: Text(
-                                    '${branch.name} - ${branch.location}',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              DropdownButtonFormField<String>(
+                                key: ValueKey(
+                                  '$_selectedBranchId-${branches.any((branch) => branch.id == _selectedBranchId)}',
                                 ),
-                            ],
-                            onChanged: (id) =>
-                                setState(() => _selectedBranchId = id),
-                            validator: (value) =>
-                                value == null ||
-                                    !branches.any(
-                                      (branch) => branch.id == value,
+                                initialValue:
+                                    branches.any(
+                                      (branch) =>
+                                          branch.id == _selectedBranchId,
                                     )
-                                ? 'staff_shop_location_required'.tr
-                                : null,
+                                    ? _selectedBranchId
+                                    : null,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: '${'staff_shop_location'.tr} *',
+                                  prefixIcon: const Icon(
+                                    Icons.store_mall_directory_outlined,
+                                  ),
+                                  helperText: branches.isEmpty
+                                      ? 'staff_shop_location_empty'.tr
+                                      : null,
+                                ),
+                                items: [
+                                  for (final branch in branches)
+                                    DropdownMenuItem(
+                                      value: branch.id,
+                                      child: Text(
+                                        '${branch.name} - ${branch.location}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                                onChanged: (id) =>
+                                    setState(() => _selectedBranchId = id),
+                                validator: (value) =>
+                                    value == null ||
+                                        !branches.any(
+                                          (branch) => branch.id == value,
+                                        )
+                                    ? 'staff_shop_location_required'.tr
+                                    : null,
+                              ),
+                              if (branches.isEmpty &&
+                                  BusinessAccessService.isOwner.value) ...[
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _saving
+                                      ? null
+                                      : _createShopLocation,
+                                  icon: const Icon(Icons.add_business_outlined),
+                                  label: Text('staff_shop_location_add'.tr),
+                                ),
+                              ],
+                            ],
                           );
                         },
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
+                      _formSectionHeading(
+                        title: 'staff_section_login'.tr,
+                        subtitle: 'staff_section_login_help'.tr,
+                        icon: Icons.lock_outline_rounded,
+                      ),
+                      if (!_isEditing) ...[
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'staff_login_credentials_note'.tr,
+                            style: const TextStyle(
+                              color: StaffManagementPage._muted,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _usernameController,
                         autocorrect: false,
                         enableSuggestions: false,
                         readOnly: _isEditing,
                         decoration: InputDecoration(
-                          labelText: 'staff_username'.tr,
+                          labelText: _isEditing
+                              ? 'staff_username'.tr
+                              : '${'staff_username'.tr} *',
                           prefixIcon: const Icon(Icons.alternate_email_rounded),
                           helperText: 'staff_username_hint'.tr,
                         ),
@@ -2291,7 +2287,27 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                               : 'staff_username_required'.tr;
                         },
                       ),
-                      const SizedBox(height: 10),
+                      if (!_isEditing) ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: '${'staff_password'.tr} *',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                          ),
+                          validator: (value) => (value?.length ?? 0) >= 6
+                              ? null
+                              : 'staff_password_minimum'.tr,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      _formSectionHeading(
+                        title: 'staff_section_limit'.tr,
+                        subtitle: 'staff_section_limit_help'.tr,
+                        icon: Icons.warning_amber_rounded,
+                      ),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _dailyExpenseLimitController,
                         keyboardType: TextInputType.number,
@@ -2315,20 +2331,13 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                               : null;
                         },
                       ),
-                      if (!_isEditing) ...[
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: 'staff_password'.tr,
-                            prefixIcon: const Icon(Icons.lock_outline),
-                          ),
-                          validator: (value) => (value?.length ?? 0) >= 6
-                              ? null
-                              : 'staff_password_minimum'.tr,
-                        ),
-                      ],
+                      const SizedBox(height: 16),
+                      _formSectionHeading(
+                        title: 'staff_section_access'.tr,
+                        subtitle: 'staff_section_access_help'.tr,
+                        icon: Icons.admin_panel_settings_outlined,
+                      ),
+                      const SizedBox(height: 12),
                       Obx(() {
                         if (!BusinessAccessService.barModeEnabled.value) {
                           return const SizedBox.shrink();
@@ -2345,9 +2354,9 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              initialValue: _barRole,
+                            InputDecorator(
                               decoration: InputDecoration(
+                                labelText: 'bar_staff_role'.tr,
                                 prefixIcon: const Icon(
                                   Icons.local_bar_outlined,
                                 ),
@@ -2355,49 +2364,12 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              items: [
-                                DropdownMenuItem(
-                                  value: 'staff',
-                                  child: Text('bar_role_staff'.tr),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'waiter',
-                                  child: Text('bar_role_waiter'.tr),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'bartender',
-                                  child: Text('bar_role_bartender'.tr),
-                                ),
-                                if (BusinessAccessService.isOwner.value)
-                                  DropdownMenuItem(
-                                    value: 'manager',
-                                    child: Text('bar_role_manager'.tr),
-                                  ),
-                              ],
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    final leavingBarRole =
-                                        (_barRole == 'waiter' ||
-                                            _barRole == 'bartender') &&
-                                        value != 'waiter' &&
-                                        value != 'bartender';
-                                    _barRole = value;
-                                    _permissions['staff']!['manage'] =
-                                        value == 'manager';
-                                    if (value == 'waiter' ||
-                                        value == 'bartender') {
-                                      _permissions['invoices']!['create'] =
-                                          true;
-                                      _permissions['stock']!['view'] = true;
-                                    } else if (leavingBarRole) {
-                                      _permissions['invoices']!['create'] =
-                                          false;
-                                      _permissions['stock']!['view'] = false;
-                                    }
-                                  });
-                                }
-                              },
+                              child: Text(switch (_barRole) {
+                                'waiter' => 'bar_role_waiter'.tr,
+                                'bartender' => 'bar_role_bartender'.tr,
+                                'manager' => 'bar_role_manager'.tr,
+                                _ => 'bar_role_staff'.tr,
+                              }),
                             ),
                             const SizedBox(height: 6),
                             Text(
@@ -2455,12 +2427,26 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                       const SizedBox(height: 16),
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(
-                          'staff_permissions'.tr,
-                          style: const TextStyle(
-                            color: StaffManagementPage._ink,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'staff_permissions'.tr,
+                              style: const TextStyle(
+                                color: StaffManagementPage._ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'staff_permissions_help'.tr,
+                              style: const TextStyle(
+                                color: StaffManagementPage._muted,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -2478,14 +2464,16 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
                 color: Color(0xFFF8FAFC),
                 border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 8,
                 children: [
                   TextButton(
                     onPressed: _saving ? null : () => Get.back<bool>(),
                     child: Text('cancel'.tr),
                   ),
-                  const SizedBox(width: 10),
                   FilledButton.icon(
                     onPressed: _saving ? null : _save,
                     icon: _saving
@@ -2516,6 +2504,55 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _formSectionHeading({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: StaffManagementPage._brand.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: StaffManagementPage._brand),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: StaffManagementPage._ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: StaffManagementPage._muted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2608,6 +2645,64 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     );
   }
 
+  String get _selectedStaffPosition => _staffPosition == 'custom'
+      ? '$_customStaffPositionPrefix${_customStaffPositionController.text.trim()}'
+      : _staffPosition;
+
+  String _barRoleForStaffPosition(String position) => switch (position) {
+    'bar_counter_attendant' => 'waiter',
+    'bartender' => 'bartender',
+    'bar_manager' => 'manager',
+    _ => 'staff',
+  };
+
+  void _selectStaffPosition(String position) {
+    final previousRole = _barRole;
+    final nextRole = _barRoleForStaffPosition(position);
+    final isBarServiceRole = nextRole == 'waiter' || nextRole == 'bartender';
+    final wasBarServiceRole =
+        previousRole == 'waiter' || previousRole == 'bartender';
+    setState(() {
+      _staffPosition = position;
+      _barRole = nextRole;
+      if (previousRole != nextRole) {
+        _permissions['staff']!['manage'] = nextRole == 'manager';
+        if (isBarServiceRole) {
+          _permissions['invoices']!['create'] = true;
+          _permissions['stock']!['view'] = true;
+        } else if (wasBarServiceRole) {
+          _permissions['invoices']!['create'] = false;
+          _permissions['stock']!['view'] = false;
+        }
+      }
+    });
+  }
+
+  Future<void> _createShopLocation() async {
+    final result = await Get.dialog<Map<String, String>>(
+      const ShopLocationEditorDialog(),
+      barrierDismissible: false,
+    );
+    if (result == null) return;
+
+    try {
+      final branchId = await BranchService.createBranch(
+        name: result['name']!,
+        location: result['location']!,
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedBranchId = branchId;
+        _shopNicknameController.text = result['name']!;
+        _branches = BranchService.fetchBranches();
+      });
+      Get.snackbar('success'.tr, 'staff_shop_location_saved'.tr);
+    } catch (error) {
+      debugPrint('Could not create shop location from staff dialog: $error');
+      if (mounted) Get.snackbar('error'.tr, '$error');
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final hasSelectedPermission = _permissions.values.any(
@@ -2633,6 +2728,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
         await StaffService.updateStaff(
           employeeUid: widget.employeeUid!,
           name: _nameController.text,
+          staffPosition: _selectedStaffPosition,
           email: _emailController.text,
           phone: _phoneController.text,
           shopNickname: selectedBranch.name,
@@ -2640,11 +2736,12 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           shopId: selectedBranch.id,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
-          barRole: BusinessAccessService.barModeEnabled.value ? _barRole : null,
+          barRole: _barRole,
         );
       } else {
         await StaffService.createStaff(
           name: _nameController.text,
+          staffPosition: _selectedStaffPosition,
           email: _emailController.text,
           phone: _phoneController.text,
           shopNickname: selectedBranch.name,
@@ -2654,9 +2751,7 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
           password: _passwordController.text,
           permissions: _permissions,
           dailyExpenseLimit: dailyExpenseLimit,
-          barRole: BusinessAccessService.barModeEnabled.value
-              ? _barRole
-              : 'staff',
+          barRole: _barRole,
         );
       }
       if (mounted) Get.back<bool>(result: true);
@@ -2819,8 +2914,9 @@ class _StaffInvitationDialogState extends State<_StaffInvitationDialog> {
                     dense: true,
                     title: Text(entry.value.tr),
                     children: [
-                      for (final action
-                          in BusinessAccessService.actionsFor(entry.key))
+                      for (final action in BusinessAccessService.actionsFor(
+                        entry.key,
+                      ))
                         SwitchListTile.adaptive(
                           dense: true,
                           title: Text(action.value.tr),

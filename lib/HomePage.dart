@@ -33,7 +33,10 @@ import 'package:tra_list/services/staff_service.dart';
 import 'package:tra_list/services/super_admin_subscription_service.dart';
 import 'package:tra_list/stock/products_pages.dart';
 import 'package:tra_list/stock/bar_orders_page.dart';
+import 'package:tra_list/stock/pos_page.dart';
+import 'package:tra_list/stock/stock_media.dart';
 import 'package:tra_list/stock/stock_service.dart';
+import 'package:tra_list/stock/stock_ui.dart';
 import 'package:tra_list/tasks/task_banner.dart';
 import 'package:tra_list/tasks/task_service.dart';
 import 'package:tra_list/services/push_service.dart';
@@ -1881,6 +1884,41 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildAssignedStaffRoleBadge() => Obx(() {
+    if (BusinessAccessService.isOwner.value) {
+      return const SizedBox.shrink();
+    }
+
+    final roleKey = switch (BusinessAccessService.barRole.value) {
+      'manager' => 'bar_role_manager',
+      'bartender' => 'bar_role_bartender',
+      'waiter' => 'bar_role_waiter',
+      _ => 'bar_role_staff',
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 7),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 130),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          roleKey.tr,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF315B9B),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  });
+
   Widget _buildMobileBusinessDashboard() {
     final user = FirebaseAuth.instance.currentUser;
     final greetingName = ownerName.isNotEmpty
@@ -1898,15 +1936,6 @@ class _HomePageState extends State<HomePage> {
         : activeShopNickname.isNotEmpty
         ? activeShopNickname
         : storeName;
-    final staffRoleKey = switch (BusinessAccessService.barRole.value) {
-      'manager' => 'bar_role_manager',
-      'bartender' => 'bar_role_bartender',
-      'waiter' => 'bar_role_waiter',
-      _ => 'bar_role_staff',
-    };
-    final staffPosition = BusinessAccessService.isOwner.value
-        ? null
-        : staffRoleKey.tr;
     final canViewFinance =
         BusinessAccessService.can('transactions', 'view') ||
         BusinessAccessService.can('analytics', 'view');
@@ -1957,30 +1986,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                    if (staffPosition != null) ...[
-                      const SizedBox(width: 7),
-                      Container(
-                        constraints: const BoxConstraints(maxWidth: 130),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF2FF),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          staffPosition,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF315B9B),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+                    _buildAssignedStaffRoleBadge(),
                     if (_canSelectDashboardShop)
                       const Padding(
                         padding: EdgeInsets.only(left: 5),
@@ -2397,18 +2403,19 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.point_of_sale_rounded,
           onTap: () => _openRestrictedRoute(AppRoutes.pos),
         ),
+      if (BusinessAccessService.isOwner.value)
+        (
+          label: 'staff_shop_location_add'.tr,
+          icon: Icons.add_business_outlined,
+          onTap: () => Get.toNamed(AppRoutes.shops),
+        ),
       if (BusinessAccessService.can('stock', 'view'))
         (
           label: 'stk_title'.tr,
           icon: Icons.inventory_2_outlined,
           onTap: () => _openRestrictedRoute(AppRoutes.stock),
         ),
-      if (BusinessAccessService.can('invoices', 'view'))
-        (
-          label: 'home_view_invoices'.tr,
-          icon: Icons.receipt_long_outlined,
-          onTap: () => _openRestrictedRoute(AppRoutes.invoicesList),
-        ),
+
       if (BusinessAccessService.can('categories', 'view'))
         (
           label: 'home_manage_categories'.tr,
@@ -2746,10 +2753,10 @@ class _HomePageState extends State<HomePage> {
       canOpenReports:
           _isPersonalMode || BusinessAccessService.can('analytics', 'view'),
       canOpenChat: !_isPersonalMode && BusinessAccessService.hasBusinessAccess,
+      canSell: !_isPersonalMode && BusinessAccessService.canUseBarPos,
       lightStyle:
           !_isPersonalMode && _activeDestination == _HomeDestination.dashboard,
       activeDestination: _activeDestination,
-      quickActionsOpen: _quickActionsOpen,
       onSelectDestination: _selectDestination,
       onOpenMarket: _openMarket,
       onOpenChat: _openChat,
@@ -2760,7 +2767,23 @@ class _HomePageState extends State<HomePage> {
               destination: _HomeDestination.reports,
             ),
       onShowQuickActions: _showQuickActions,
+      onScanSell: _scanSellProduct,
     );
+  }
+
+  Future<void> _scanSellProduct() async {
+    if (!BusinessAccessService.canAccessRoute(AppRoutes.pos)) {
+      Get.snackbar('error'.tr, 'staff_no_permission'.tr);
+      return;
+    }
+    final subscriptionAccess = _checkCurrentSubscriptionAccess();
+    final code = await scanCode(context, allowProductSearch: true);
+    if (!mounted || code == null || code.trim().isEmpty) return;
+    if (!await subscriptionAccess) {
+      _showSubscriptionRequiredDialog();
+      return;
+    }
+    await Get.to(() => PosPage(initialProductCode: code.trim()));
   }
 
   Future<void> _showQuickActions() async {
@@ -2798,6 +2821,15 @@ class _HomePageState extends State<HomePage> {
           label: 'tk_my'.tr,
           icon: Icons.task_alt_rounded,
           onTap: () => _openRestrictedRoute(AppRoutes.tasks),
+        ),
+      if (BusinessAccessService.can('analytics', 'view'))
+        (
+          label: 'nav_reports'.tr,
+          icon: Icons.insert_chart_outlined,
+          onTap: () => _openRestrictedRoute(
+            AppRoutes.analytics,
+            destination: _HomeDestination.reports,
+          ),
         ),
     ];
 
@@ -4900,6 +4932,12 @@ class _HomePageState extends State<HomePage> {
         () => _openRestrictedRoute(AppRoutes.tasks),
         accent: _AppColors.positive,
       ),
+      if (BusinessAccessService.isOwner.value)
+        _quickAction(
+          'staff_shop_location_add'.tr,
+          Icons.add_business_outlined,
+          () => Get.toNamed(AppRoutes.shops),
+        ),
       if (BusinessAccessService.isOwner.value)
         _quickAction(
           'home_manage_staff'.tr,

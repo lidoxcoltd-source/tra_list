@@ -293,10 +293,11 @@ class _IsherPackagesPageState extends State<IsherPackagesPage> {
     } catch (error, stack) {
       debugPrint('Test payment failed: $error');
       debugPrintStack(stackTrace: stack);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('isher_test_error'.tr)));
+      }
     } finally {
       if (mounted) setState(() => _paying = false);
     }

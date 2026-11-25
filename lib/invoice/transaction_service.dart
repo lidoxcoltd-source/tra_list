@@ -134,6 +134,7 @@ class TransactionService {
     DateTime? endDate,
     String? shopNickname,
     String? category,
+    String? uid,
   }) {
     final effectiveShopNickname = _shopFilter(shopNickname);
     Query<TransactionModel> query = getCollectionRef().orderBy(
@@ -151,6 +152,9 @@ class TransactionService {
     }
     if (category != null && category.isNotEmpty) {
       query = query.where('category', isEqualTo: category);
+    }
+    if (uid != null && uid.isNotEmpty) {
+      query = query.where('uid', isEqualTo: uid);
     }
     if (startAfter != null) query = query.startAfterDocument(startAfter);
     return query.limit(limit).get();

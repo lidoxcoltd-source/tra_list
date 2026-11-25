@@ -70,7 +70,7 @@ void stockToast(
 
 void stockGoBack(BuildContext context) {
   if (Navigator.of(context).canPop()) {
-    Get.back();
+    Navigator.of(context).pop();
   } else {
     Get.offAllNamed(AppRoutes.home);
   }
@@ -124,6 +124,7 @@ class StockScaffold extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
+            color: Colors.white,
             fontSize: wide ? 20 : 18,
             fontWeight: FontWeight.w700,
             letterSpacing: -.3,

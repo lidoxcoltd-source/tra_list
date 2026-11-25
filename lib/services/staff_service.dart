@@ -182,6 +182,7 @@ class StaffService {
 
   static Future<String> createStaff({
     required String name,
+    required String staffPosition,
     required String email,
     required String phone,
     required String shopNickname,
@@ -282,6 +283,7 @@ class StaffService {
         'username': assignedUsername,
         'usernameKey': usernameKey,
         'name': name.trim(),
+        'staffPosition': staffPosition.trim(),
         'photoUrl': '',
         'email': email.trim(),
         'phone': phone.trim(),
@@ -316,6 +318,7 @@ class StaffService {
   static Future<void> updateStaff({
     required String employeeUid,
     required String name,
+    required String staffPosition,
     required String email,
     required String phone,
     required String shopNickname,
@@ -329,6 +332,7 @@ class StaffService {
     final staffDocument = await _getManagedStaffDocument(employeeUid);
     final updates = <String, dynamic>{
       'name': name.trim(),
+      'staffPosition': staffPosition.trim(),
       'email': email.trim(),
       'phone': phone.trim(),
       'shopNickname': shopNickname.trim(),

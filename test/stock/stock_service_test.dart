@@ -79,6 +79,57 @@ void main() {
     });
   });
 
+  test('my product sales match the invoice cashierUid', () async {
+    final db = FakeFirebaseFirestore();
+    final s = svc(db);
+    final invoices = db.collection('users').doc('biz1').collection('invoices');
+    final createdAt = Timestamp.fromDate(DateTime(2026, 11, 22));
+    await invoices.doc('mine').set({
+      'kind': 'invoice',
+      'cashierUid': 'u1',
+      'createdAt': createdAt,
+      'invoice': {'number': 'POS-001'},
+      'items': [
+        {
+          'productId': 'product-1',
+          'description': 'Tea',
+          'qty': 2,
+          'unit': 500,
+          'amount': 1000,
+        },
+      ],
+    });
+    await invoices.doc('someone-else').set({
+      'kind': 'invoice',
+      'cashierUid': 'u2',
+      'createdBy': 'u1',
+      'createdAt': createdAt,
+      'items': [
+        {'productId': 'product-2', 'qty': 1, 'unit': 700},
+      ],
+    });
+    await invoices.doc('next-day').set({
+      'kind': 'invoice',
+      'cashierUid': 'u1',
+      'createdAt': Timestamp.fromDate(DateTime(2026, 11, 23)),
+      'items': [
+        {'productId': 'product-3', 'qty': 1, 'unit': 800},
+      ],
+    });
+
+    final records = await s
+        .watchMyProductSalesSince(
+          DateTime(2026, 11, 22),
+          untilExclusive: DateTime(2026, 11, 23),
+        )
+        .first;
+
+    expect(records, hasLength(1));
+    expect(records.single.invoiceId, 'mine');
+    expect(records.single.productName, 'Tea');
+    expect(records.single.amount, 1000);
+  });
+
   group('products', () {
     late FakeFirebaseFirestore db;
     late StockService s;
@@ -169,6 +220,26 @@ void main() {
       expect((await s.findProductByCode('222'))?.id, id);
       expect((await s.findProductByCode('111'))?.id, id);
     });
+
+    test(
+      'legacy product fields resolve when code indexes are missing',
+      () async {
+        await db
+            .collection('users')
+            .doc('biz1')
+            .collection('products')
+            .doc('legacy-product')
+            .set({
+              'name': 'Legacy item',
+              'sku': 'LEGACY-SKU',
+              'barcode': '001234',
+              'sellPrice': 100,
+            });
+
+        expect((await s.findProductByCode('LEGACY-SKU'))?.id, 'legacy-product');
+        expect((await s.findProductByCode('001234'))?.id, 'legacy-product');
+      },
+    );
 
     test('alternate barcode cannot point at two products', () async {
       final a = await addProduct(s, sku: 'WATER-A');
@@ -510,26 +581,34 @@ void main() {
       expect((await product(db, svcItem))['quantity'], 0);
     });
 
-    test('guided invoice rejects a product that stopped tracking stock', () async {
-      final item = await addProduct(s, sku: 'UNTRACKED', qty: 0, tracked: false);
-      await expectLater(
-        s.finalizeSale(
-          saleRef: sale('guided'),
-          saleData: {'total': 150},
-          lines: [SaleLine(productId: item, quantity: 1)],
-          requireTracked: true,
-        ),
-        throwsA(
-          isA<StockException>().having(
-            (e) => e.messageKey,
-            'key',
-            'stk_err_not_tracked',
+    test(
+      'guided invoice rejects a product that stopped tracking stock',
+      () async {
+        final item = await addProduct(
+          s,
+          sku: 'UNTRACKED',
+          qty: 0,
+          tracked: false,
+        );
+        await expectLater(
+          s.finalizeSale(
+            saleRef: sale('guided'),
+            saleData: {'total': 150},
+            lines: [SaleLine(productId: item, quantity: 1)],
+            requireTracked: true,
           ),
-        ),
-      );
-      expect((await sale('guided').get()).exists, isFalse);
-      expect((await product(db, item))['quantity'], 0);
-    });
+          throwsA(
+            isA<StockException>().having(
+              (e) => e.messageKey,
+              'key',
+              'stk_err_not_tracked',
+            ),
+          ),
+        );
+        expect((await sale('guided').get()).exists, isFalse);
+        expect((await product(db, item))['quantity'], 0);
+      },
+    );
 
     test('negative stock only when explicitly allowed', () async {
       final id = await s.createProduct(

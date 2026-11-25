@@ -11,11 +11,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'package:tra_list/services/profile_service.dart';
+import 'package:tra_list/services/mobile_money_account.dart';
 import 'package:tra_list/services/business_access_service.dart';
+import 'package:tra_list/stock/stock_media.dart';
 import 'package:tra_list/market/market_service.dart';
 import 'package:tra_list/routes.dart';
 import 'package:tra_list/services/push_service.dart';
 import 'package:tra_list/theme/app_theme.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:get/get.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -52,6 +55,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final accountC = TextEditingController();
   final swiftC = TextEditingController();
   final paymentMethodC = TextEditingController();
+  List<MobileMoneyAccount> _mobileMoneyAccounts = [];
 
   // Colors stored as Color objects for easier handling
   Color brandColor = const Color(0xFFF15A24);
@@ -77,11 +81,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _boot() async {
+    var initStage = 'checking sign-in';
     try {
       if (FirebaseAuth.instance.currentUser == null && !_staffProfile) {
         await FirebaseAuth.instance.signInAnonymously();
       }
       if (_staffProfile) {
+        initStage = 'loading personal profile';
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) throw StateError('Sign in to open your profile.');
         final snapshot = await FirebaseFirestore.instance
@@ -103,7 +109,24 @@ class _ProfilePageState extends State<ProfilePage> {
         });
         return;
       }
+      initStage = 'loading business profile';
       final data = await ProfileService.loadOrCreate();
+      var mobileMoneyAccounts = MobileMoneyAccount.fromList(
+        data['mobileMoneyAccounts'],
+      );
+      if (mobileMoneyAccounts.isEmpty) {
+        initStage = 'loading legacy mobile-money accounts';
+        mobileMoneyAccounts =
+            await ProfileService.loadLegacyMobileMoneyAccounts();
+        if (mobileMoneyAccounts.isNotEmpty) {
+          initStage = 'migrating mobile-money accounts';
+          await ProfileService.save({
+            'mobileMoneyAccounts': [
+              for (final account in mobileMoneyAccounts) account.toMap(),
+            ],
+          });
+        }
+      }
       if (!mounted) return;
       nameC.text = data['name']?.toString() ?? '';
       businessTypeC.text = data['businessType']?.toString() ?? '';
@@ -124,6 +147,7 @@ class _ProfilePageState extends State<ProfilePage> {
       accountC.text = data['account']?.toString() ?? '';
       swiftC.text = data['swift']?.toString() ?? '';
       paymentMethodC.text = data['paymentMethod']?.toString() ?? '';
+      _mobileMoneyAccounts = mobileMoneyAccounts;
 
       final savedLogoUrl = data['logoUrl']?.toString().trim() ?? '';
       final savedLogoUri = Uri.tryParse(savedLogoUrl);
@@ -155,10 +179,11 @@ class _ProfilePageState extends State<ProfilePage> {
         }
       });
     } catch (e) {
+      debugPrint('ProfilePage initialization failed at "$initStage": $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Init error: $e')));
+        ).showSnackBar(SnackBar(content: Text('Init error ($initStage): $e')));
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -815,8 +840,157 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _buildFormCard(
+          title: 'pos_mobile_accounts_title'.tr,
+          icon: Icons.phone_android_outlined,
+          children: [
+            Text(
+              'pos_mobile_accounts_help'.tr,
+              style: const TextStyle(color: MjasiColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            if (_mobileMoneyAccounts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('pos_mobile_accounts_empty'.tr),
+              ),
+            for (var index = 0; index < _mobileMoneyAccounts.length; index++)
+              _buildMobileMoneyAccountTile(_mobileMoneyAccounts[index], index),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : () => _editMobileMoneyAccount(),
+                icon: const Icon(Icons.add_rounded),
+                label: Text('pos_mobile_add_account'.tr),
+              ),
+            ),
+          ],
+        ),
       ],
     );
+  }
+
+  Widget _buildMobileMoneyAccountTile(MobileMoneyAccount account, int index) {
+    final providerColor = Color(account.networkColorValue);
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      child: ListTile(
+        leading: Container(
+          width: 48,
+          height: 48,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: providerColor.withValues(alpha: .1),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: providerColor.withValues(alpha: .65)),
+          ),
+          child: QrImageView(
+            data: account.qrData,
+            size: 40,
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        title: Text(
+          account.network,
+          style: TextStyle(color: providerColor, fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text('${account.payeeName} · ${account.payNumber}'),
+        isThreeLine: false,
+        trailing: PopupMenuButton<String>(
+          onSelected: (action) {
+            if (action == 'edit') {
+              _editMobileMoneyAccount(index: index, initial: account);
+            } else if (action == 'delete') {
+              _removeMobileMoneyAccount(index);
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'edit',
+              child: Text('pos_mobile_edit_account'.tr),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('pos_mobile_remove_account'.tr),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editMobileMoneyAccount({
+    int? index,
+    MobileMoneyAccount? initial,
+  }) async {
+    final account = await showDialog<MobileMoneyAccount>(
+      context: context,
+      builder: (context) => _MobileMoneyAccountEditor(initialAccount: initial),
+    );
+    if (account == null || !mounted) return;
+    final accounts = [..._mobileMoneyAccounts];
+    if (index == null) {
+      accounts.add(account);
+    } else {
+      accounts[index] = account;
+    }
+    await _saveMobileMoneyAccounts(accounts);
+  }
+
+  Future<void> _removeMobileMoneyAccount(int index) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('pos_mobile_remove_account'.tr),
+        content: Text('pos_mobile_remove_account_confirm'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('stk_cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('stk_delete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      final accounts = [..._mobileMoneyAccounts]..removeAt(index);
+      await _saveMobileMoneyAccounts(accounts);
+    }
+  }
+
+  Future<void> _saveMobileMoneyAccounts(
+    List<MobileMoneyAccount> accounts,
+  ) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      await ProfileService.save({
+        'mobileMoneyAccounts': [
+          for (final account in accounts) account.toMap(),
+        ],
+      });
+      if (!mounted) return;
+      setState(() => _mobileMoneyAccounts = accounts);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Saved ✅')));
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${error.message ?? error.code}')),
+      );
+    } on StateError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $error')));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Widget _buildBrandingTab() {
@@ -1573,6 +1747,9 @@ class _ProfilePageState extends State<ProfilePage> {
         'account': accountC.text.trim(),
         'swift': swiftC.text.trim(),
         'paymentMethod': paymentMethodC.text.trim(),
+        'mobileMoneyAccounts': [
+          for (final account in _mobileMoneyAccounts) account.toMap(),
+        ],
         'colors': {
           'brand': brandColor.value & 0xFFFFFFFF,
           'accent': accentColor.value & 0xFFFFFFFF,
@@ -1696,5 +1873,230 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       debugPrint('Cancel upload error: $e');
     }
+  }
+}
+
+class _MobileMoneyAccountEditor extends StatefulWidget {
+  const _MobileMoneyAccountEditor({this.initialAccount});
+
+  final MobileMoneyAccount? initialAccount;
+
+  @override
+  State<_MobileMoneyAccountEditor> createState() =>
+      _MobileMoneyAccountEditorState();
+}
+
+class _MobileMoneyAccountEditorState extends State<_MobileMoneyAccountEditor> {
+  final _formKey = GlobalKey<FormState>();
+  String? _network;
+  late final _payee = TextEditingController(
+    text: widget.initialAccount?.payeeName ?? '',
+  );
+  late final _number = TextEditingController(
+    text: widget.initialAccount?.payNumber ?? '',
+  );
+  late final _qrData = TextEditingController(
+    text: widget.initialAccount?.qrData ?? '',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final existingNetwork = widget.initialAccount?.network.trim();
+    _network =
+        MobileMoneyNetwork.canonicalName(existingNetwork ?? '') ??
+        (existingNetwork?.isNotEmpty == true
+            ? existingNetwork
+            : MobileMoneyNetwork.supported.first.name);
+  }
+
+  @override
+  void dispose() {
+    _payee.dispose();
+    _number.dispose();
+    _qrData.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanQr({bool fromGallery = false}) async {
+    final code = fromGallery
+        ? await scanFromImage(context, ImageSource.gallery)
+        : await scanCode(context);
+    if (code != null && mounted) {
+      setState(() => _qrData.text = code);
+    }
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      MobileMoneyAccount(
+        network: _network!,
+        payeeName: _payee.text.trim(),
+        payNumber: _number.text.trim(),
+        qrData: _qrData.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.initialAccount == null
+            ? 'pos_mobile_add_account'.tr
+            : 'pos_mobile_edit_account'.tr,
+      ),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'pos_mobile_tanzania_networks'.tr,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _network,
+                  decoration: InputDecoration(
+                    labelText: 'pos_mobile_network'.tr,
+                    prefixIcon: const Icon(Icons.cell_tower_outlined),
+                  ),
+                  items: [
+                    if (!MobileMoneyNetwork.supported.any(
+                      (provider) => provider.name == _network,
+                    ))
+                      DropdownMenuItem(
+                        value: _network,
+                        child: Text(_network ?? ''),
+                      ),
+                    for (final provider in MobileMoneyNetwork.supported)
+                      DropdownMenuItem(
+                        value: provider.name,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Color(provider.colorValue),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(provider.name),
+                          ],
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _network = value),
+                  validator: (value) =>
+                      value == null ? 'pos_required_field'.tr : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _payee,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'pos_mobile_payee'.tr,
+                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) => value?.trim().isEmpty == true
+                      ? 'pos_required_field'.tr
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _number,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'pos_mobile_pay_number'.tr,
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                  ),
+                  validator: (value) => value?.trim().isEmpty == true
+                      ? 'pos_required_field'.tr
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'pos_mobile_qr_instructions'.tr,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: () => _scanQr(),
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: Text('pos_mobile_scan_qr'.tr),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _scanQr(fromGallery: true),
+                      icon: const Icon(Icons.image_outlined),
+                      label: Text('pos_mobile_upload_qr'.tr),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _qrData,
+                  maxLines: 3,
+                  maxLength: 2000,
+                  decoration: InputDecoration(
+                    labelText: 'pos_mobile_qr_content'.tr,
+                    alignLabelWithHint: true,
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(bottom: 42),
+                      child: Icon(Icons.qr_code_2_rounded),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (value) => value?.trim().isEmpty == true
+                      ? 'pos_mobile_qr_required'.tr
+                      : null,
+                ),
+                if (_qrData.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: QrImageView(
+                        data: _qrData.text,
+                        size: 160,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('stk_cancel'.tr),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Text('pos_mobile_save_account'.tr),
+        ),
+      ],
+    );
   }
 }

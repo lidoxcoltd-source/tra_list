@@ -252,10 +252,11 @@ class _CreativeDesignEditorPageState extends State<CreativeDesignEditorPage> {
     _checkpoint();
     setState(() {
       final index = _layers.indexWhere((item) => item.id == result.id);
-      if (index < 0)
+      if (index < 0) {
         _layers.add(result);
-      else
+      } else {
         _layers[index] = result;
+      }
     });
   }
 
@@ -659,15 +660,17 @@ class _CreativeDesignEditorPageState extends State<CreativeDesignEditorPage> {
           layers: _layers,
         ),
       );
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Project saved.')));
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not save project: $error')),
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -748,14 +751,16 @@ class _CreativeDesignEditorPageState extends State<CreativeDesignEditorPage> {
                   child: FutureBuilder<String>(
                     future: _backgroundUrl,
                     builder: (context, snapshot) {
-                      if (snapshot.hasError)
+                      if (snapshot.hasError) {
                         return const Center(
                           child: Text(
                             'Could not load this project background.',
                           ),
                         );
-                      if (!snapshot.hasData)
+                      }
+                      if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
+                      }
                       return Stack(
                         fit: StackFit.expand,
                         children: [

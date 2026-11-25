@@ -151,15 +151,20 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
     return 'square';
   }
 
-  String _formatCm(double value) =>
-      value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+  String _formatCm(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(1);
 
   bool _customSizeIsValid() {
     if (_selectedSize != 'Custom size') return true;
     final width = _customWidthCm;
     final height = _customHeightCm;
-    return width != null && height != null &&
-        width >= 1 && height >= 1 && width <= 1000 && height <= 1000;
+    return width != null &&
+        height != null &&
+        width >= 1 &&
+        height >= 1 &&
+        width <= 1000 &&
+        height <= 1000;
   }
 
   void _showComingSoon() {
@@ -175,9 +180,11 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
     if (!_customSizeIsValid()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_selectedLanguage == 'sw'
-              ? 'Weka upana na urefu kati ya 1 na 1000 cm.'
-              : 'Enter a width and height between 1 and 1000 cm.'),
+          content: Text(
+            _selectedLanguage == 'sw'
+                ? 'Weka upana na urefu kati ya 1 na 1000 cm.'
+                : 'Enter a width and height between 1 and 1000 cm.',
+          ),
         ),
       );
       return;
@@ -341,18 +348,21 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                 child: StreamBuilder<List<CreativeDesignProject>>(
                   stream: watchCreativeProjects(),
                   builder: (context, snapshot) {
-                    if (snapshot.hasError)
+                    if (snapshot.hasError) {
                       return Center(
                         child: Text(
                           'Could not load projects: ${snapshot.error}',
                         ),
                       );
-                    if (!snapshot.hasData)
+                    }
+                    if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
-                    if (snapshot.data!.isEmpty)
+                    }
+                    if (snapshot.data!.isEmpty) {
                       return const Center(
                         child: Text('Saved projects will appear here.'),
                       );
+                    }
                     return ListView(
                       children: [
                         for (final project in snapshot.data!)
@@ -369,7 +379,7 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                                 try {
                                   await deleteCreativeProject(project.id);
                                 } catch (error) {
-                                  if (context.mounted)
+                                  if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(
@@ -377,6 +387,7 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                                         ),
                                       ),
                                     );
+                                  }
                                 }
                               },
                             ),
@@ -408,9 +419,11 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
     if (!_customSizeIsValid()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_selectedLanguage == 'sw'
-              ? 'Weka upana na urefu sahihi kabla ya kutengeneza design.'
-              : 'Enter valid width and height before generating the design.'),
+          content: Text(
+            _selectedLanguage == 'sw'
+                ? 'Weka upana na urefu sahihi kabla ya kutengeneza design.'
+                : 'Enter valid width and height before generating the design.',
+          ),
         ),
       );
       return;
@@ -470,7 +483,8 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
       }
     } catch (error) {
       if (!mounted) return;
-      final quotaReached = error is FirebaseFunctionsException &&
+      final quotaReached =
+          error is FirebaseFunctionsException &&
           error.code == 'resource-exhausted' &&
           error.message?.contains('Daily visual concept limit reached') == true;
       final message = quotaReached
@@ -478,9 +492,9 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
           : _selectedLanguage == 'sw'
           ? 'Picha ya poster haikuweza kutengenezwa sasa. Jaribu tena baadaye.'
           : 'The poster image could not be generated right now. Please try again later.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _generating = false);
     }
@@ -533,8 +547,7 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
       final imageBytes = await photo.readAsBytes();
       final name = photo.name;
       final extension = name.split('.').last.toLowerCase();
-      if (imageBytes == null ||
-          !{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+      if (!{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
         throw ArgumentError('Choose a JPG, PNG or WebP image.');
       }
       if (imageBytes.length > 8 * 1024 * 1024) {
@@ -913,10 +926,9 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
       _briefController.value = TextEditingValue(
         text: _selectedLanguage == 'sw' ? sample.swahiliPrompt : sample.prompt,
         selection: TextSelection.collapsed(
-          offset: (_selectedLanguage == 'sw'
-                  ? sample.swahiliPrompt
-                  : sample.prompt)
-              .length,
+          offset:
+              (_selectedLanguage == 'sw' ? sample.swahiliPrompt : sample.prompt)
+                  .length,
         ),
       );
       _plan = null;
@@ -1098,12 +1110,15 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
           maxLines: 5,
           maxLength: 1100,
           onChanged: (_) {
-            if (_plan != null || _concept != null || _referenceAnalysis != null)
+            if (_plan != null ||
+                _concept != null ||
+                _referenceAnalysis != null) {
               setState(() {
                 _plan = null;
                 _concept = null;
                 _referenceAnalysis = null;
               });
+            }
           },
           decoration: InputDecoration(
             hintText: _selectedLanguage == 'sw'
@@ -1327,9 +1342,11 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                     SizedBox(
                       width: 82,
                       child: DropdownButtonFormField<String>(
-                        value: _customUnit,
+                        initialValue: _customUnit,
                         decoration: InputDecoration(
-                          labelText: _selectedLanguage == 'sw' ? 'Kipimo' : 'Unit',
+                          labelText: _selectedLanguage == 'sw'
+                              ? 'Kipimo'
+                              : 'Unit',
                           filled: true,
                           fillColor: const Color(0xFF0B1322),
                           contentPadding: const EdgeInsets.symmetric(
@@ -1353,8 +1370,9 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                               _customWidthController,
                               _customHeightController,
                             ]) {
-                              final current =
-                                  double.tryParse(controller.text.trim());
+                              final current = double.tryParse(
+                                controller.text.trim(),
+                              );
                               if (current != null) {
                                 final converted = current * factor;
                                 controller.value = TextEditingValue(
@@ -1377,7 +1395,11 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
                 const SizedBox(height: 6),
                 Text(
                   _selectedLanguage == 'sw'
-                      ? 'Uwiano wa muundo: ${_effectiveAspect == 'square' ? 'mraba' : _effectiveAspect == 'portrait' ? 'wima' : 'mlalo'}. Vipimo vinaongoza muundo; resolution ya picha huamuliwa na AI.'
+                      ? 'Uwiano wa muundo: ${_effectiveAspect == 'square'
+                            ? 'mraba'
+                            : _effectiveAspect == 'portrait'
+                            ? 'wima'
+                            : 'mlalo'}. Vipimo vinaongoza muundo; resolution ya picha huamuliwa na AI.'
                       : 'Design orientation: $_effectiveAspect. Dimensions guide the layout; the AI model sets image resolution.',
                   style: const TextStyle(
                     color: _muted,
@@ -1433,29 +1455,26 @@ class _CreativeStudioPageState extends State<CreativeStudioPage> {
     ),
   );
 
-  Widget _customDimensionField(String label, TextEditingController controller) =>
-      TextField(
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-        ],
-        style: const TextStyle(color: _ink, fontSize: 13),
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: const Color(0xFF0B1322),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 12,
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onChanged: (_) => setState(() {
-          _plan = null;
-          _concept = null;
-        }),
-      );
+  Widget _customDimensionField(
+    String label,
+    TextEditingController controller,
+  ) => TextField(
+    controller: controller,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+    style: const TextStyle(color: _ink, fontSize: 13),
+    decoration: InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: const Color(0xFF0B1322),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    onChanged: (_) => setState(() {
+      _plan = null;
+      _concept = null;
+    }),
+  );
 
   Widget _selector(
     String label,
@@ -2063,7 +2082,7 @@ class _BrandPickerSheet extends StatelessWidget {
     if (result == null || !context.mounted) return;
     try {
       final id = await saveCreativeBrand(result);
-      if (context.mounted)
+      if (context.mounted) {
         Navigator.pop(
           context,
           CreativeBrandProfile(
@@ -2076,11 +2095,13 @@ class _BrandPickerSheet extends StatelessWidget {
             logoUrl: result.logoUrl,
           ),
         );
+      }
     } catch (error) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Could not save brand: $error')));
+      }
     }
   }
 
@@ -2116,19 +2137,22 @@ class _BrandPickerSheet extends StatelessWidget {
               child: StreamBuilder<List<CreativeBrandProfile>>(
                 stream: watchCreativeBrands(),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError)
+                  if (snapshot.hasError) {
                     return Center(
                       child: Text(
                         'Could not load brand profiles: ${snapshot.error}',
                       ),
                     );
-                  if (!snapshot.hasData)
+                  }
+                  if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
+                  }
                   final brands = snapshot.data!;
-                  if (brands.isEmpty)
+                  if (brands.isEmpty) {
                     return const Center(
                       child: Text('No saved brands yet. Create one to start.'),
                     );
+                  }
                   return ListView.builder(
                     itemCount: brands.length,
                     itemBuilder: (context, index) {
@@ -2170,7 +2194,7 @@ class _BrandPickerSheet extends StatelessWidget {
                                 try {
                                   await deleteCreativeBrand(brand.id);
                                 } catch (error) {
-                                  if (context.mounted)
+                                  if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(
@@ -2178,6 +2202,7 @@ class _BrandPickerSheet extends StatelessWidget {
                                         ),
                                       ),
                                     );
+                                  }
                                 }
                               },
                             ),
@@ -2234,8 +2259,10 @@ class _CreativePosterCarouselState extends State<_CreativePosterCarousel> {
       icon: Icons.coffee_rounded,
       colors: [Color(0xFF4B291E), Color(0xFFE4A449)],
       category: 'Poster',
-      swahiliPrompt: 'Tengeneza poster ya kahawa ya asili kwa biashara ya Tanzania iitwayo Kahawa ya Asili. Tumia rangi za kahawia na dhahabu, onyesha kikombe cha kahawa ya kienyeji yenye mvuke, weka kichwa kinachoonekana vizuri, maelezo mafupi na mwito wa kuagiza. Acha nafasi safi ya kuweka namba ya simu; usibuni namba.',
-      prompt: 'Create a premium Kiswahili coffee poster for Kahawa ya Asili. Use a rich brown and warm gold palette, show a steaming cup of locally roasted coffee, bold readable headline, short supporting copy, and a clear order call to action. Leave clean space for a phone number; do not invent one.',
+      swahiliPrompt:
+          'Tengeneza poster ya kahawa ya asili kwa biashara ya Tanzania iitwayo Kahawa ya Asili. Tumia rangi za kahawia na dhahabu, onyesha kikombe cha kahawa ya kienyeji yenye mvuke, weka kichwa kinachoonekana vizuri, maelezo mafupi na mwito wa kuagiza. Acha nafasi safi ya kuweka namba ya simu; usibuni namba.',
+      prompt:
+          'Create a premium Kiswahili coffee poster for Kahawa ya Asili. Use a rich brown and warm gold palette, show a steaming cup of locally roasted coffee, bold readable headline, short supporting copy, and a clear order call to action. Leave clean space for a phone number; do not invent one.',
     ),
     _PosterSample(
       title: 'Furaha ya Ladha',
@@ -2243,8 +2270,10 @@ class _CreativePosterCarouselState extends State<_CreativePosterCarousel> {
       icon: Icons.local_pizza_rounded,
       colors: [Color(0xFF7E2340), Color(0xFFFF9B63)],
       category: 'Poster',
-      swahiliPrompt: 'Tengeneza poster ya ofa ya chakula kwa Furaha ya Ladha. Onyesha pizza mpya na viungo vyake kwa muonekano unaovutia, tumia rangi nyekundu na machungwa, kichwa kifupi kinachoonekana, maelezo mafupi ya ofa na mwito wa kuagiza. Usibuni bei wala mawasiliano.',
-      prompt: 'Design a vibrant food promotion poster for Furaha ya Ladha. Feature fresh pizza and appetizing ingredients, warm red and orange colors, strong headline, concise offer details, and a clear order call to action. Do not invent prices or contact details.',
+      swahiliPrompt:
+          'Tengeneza poster ya ofa ya chakula kwa Furaha ya Ladha. Onyesha pizza mpya na viungo vyake kwa muonekano unaovutia, tumia rangi nyekundu na machungwa, kichwa kifupi kinachoonekana, maelezo mafupi ya ofa na mwito wa kuagiza. Usibuni bei wala mawasiliano.',
+      prompt:
+          'Design a vibrant food promotion poster for Furaha ya Ladha. Feature fresh pizza and appetizing ingredients, warm red and orange colors, strong headline, concise offer details, and a clear order call to action. Do not invent prices or contact details.',
     ),
     _PosterSample(
       title: 'Ubunifu wa Soko',
@@ -2252,8 +2281,10 @@ class _CreativePosterCarouselState extends State<_CreativePosterCarousel> {
       icon: Icons.shopping_bag_rounded,
       colors: [Color(0xFF174D5C), Color(0xFF4CC9B0)],
       category: 'Social',
-      swahiliPrompt: 'Tengeneza chapisho safi la mitandao ya kijamii kwa duka la Tanzania liitwalo Ubunifu wa Soko. Onyesha bidhaa mpya zilizopangwa vizuri, tumia rangi za kijani bahari na krimu, weka kichwa kinachoeleweka kwa Kiswahili, maelezo mafupi na mwito wa kutembelea duka. Usibuni anwani wala bei.',
-      prompt: 'Create a clean, modern social poster for a Tanzanian market shop called Ubunifu wa Soko. Feature a neat arrangement of fresh everyday products, teal and cream colors, readable Swahili headline, brief supporting line, and a visit-us call to action. Do not invent an address or prices.',
+      swahiliPrompt:
+          'Tengeneza chapisho safi la mitandao ya kijamii kwa duka la Tanzania liitwalo Ubunifu wa Soko. Onyesha bidhaa mpya zilizopangwa vizuri, tumia rangi za kijani bahari na krimu, weka kichwa kinachoeleweka kwa Kiswahili, maelezo mafupi na mwito wa kutembelea duka. Usibuni anwani wala bei.',
+      prompt:
+          'Create a clean, modern social poster for a Tanzanian market shop called Ubunifu wa Soko. Feature a neat arrangement of fresh everyday products, teal and cream colors, readable Swahili headline, brief supporting line, and a visit-us call to action. Do not invent an address or prices.',
     ),
   ];
 

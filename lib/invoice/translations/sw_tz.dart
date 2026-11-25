@@ -308,10 +308,13 @@ const Map<String, String> swTzTranslations = {
   'isher_test_retry': 'Kagua au rudia malipo ya majaribio yaliyopita',
   'bi_chat_empty':
       'Uliza Isher kuhusu biashara yako, au chagua swali hapa chini.',
-  'bi_question_debts': 'Nani ananidai na madeni gani yanakaribia tarehe ya mwisho?',
+  'bi_question_debts':
+      'Nani ananidai na madeni gani yanakaribia tarehe ya mwisho?',
   'bi_debt_ai_review_title': 'Kagua taarifa za madeni kwa AI',
-  'bi_debt_ai_review_notice': 'Majina ya wadaiwa, salio na tarehe za mwisho zitatumwa kwa AI uliyochagua ili kujibu swali lako. Namba za simu hazitatumwa. Uendelee?',
-  'bi_debt_ai_review_limited': 'Inaonyesha hadi madeni 50 ambayo hayajalipwa kati ya rekodi 100 za karibuni.',
+  'bi_debt_ai_review_notice':
+      'Majina ya wadaiwa, salio na tarehe za mwisho zitatumwa kwa AI uliyochagua ili kujibu swali lako. Namba za simu hazitatumwa. Uendelee?',
+  'bi_debt_ai_review_limited':
+      'Inaonyesha hadi madeni 50 ambayo hayajalipwa kati ya rekodi 100 za karibuni.',
   'bi_chat_emoji': 'Ongeza emoji',
   'bi_chat_design_poster': 'Tengeneza muundo',
   'bi_chat_design_poster_hint': 'Anza poster, kipeperushi au chapisho kwa AI',
@@ -350,9 +353,11 @@ const Map<String, String> swTzTranslations = {
   'bi_voice_transaction_review': 'Kagua rasimu ya muamala',
   'bi_debt_reminder_review_title': 'Kagua kikumbusho cha WhatsApp',
   'bi_debt_reminder_message': 'Ujumbe wa kikumbusho',
-  'bi_debt_reminder_whatsapp_notice': 'Ukithibitisha, WhatsApp itafunguka na ujumbe huu. Bado utahitaji kubonyeza Tuma ndani ya WhatsApp.',
+  'bi_debt_reminder_whatsapp_notice':
+      'Ukithibitisha, WhatsApp itafunguka na ujumbe huu. Bado utahitaji kubonyeza Tuma ndani ya WhatsApp.',
   'bi_debt_reminder_open_whatsapp': 'Thibitisha na fungua WhatsApp',
-  'bi_debt_reminder_opened_notice': 'WhatsApp imefunguka na rasimu yako. Ikague kisha ubonyeze Tuma humo.',
+  'bi_debt_reminder_opened_notice':
+      'WhatsApp imefunguka na rasimu yako. Ikague kisha ubonyeze Tuma humo.',
   'bi_voice_transaction_not_saved':
       'Muamala bado haujahifadhiwa. Ukithibitisha, utatumwa kwenye chat ili kuhifadhiwa. Kundi lazima liwe tayari kwenye biashara; angalia chat kwa matokeo.',
   'bi_voice_transaction_type': 'Aina',
@@ -855,7 +860,7 @@ const Map<String, String> swTzTranslations = {
   'home_generate_invoice_sub': 'Tengeneza na uchapishe Invoice',
   'home_finance_tracker': 'Mapato na matumizi',
   'home_finance_tracker_sub': 'Fuatilia fedha za biashara yako',
-  'home_manage_categories': 'Simamia aina',
+  'home_manage_categories': 'Cartegories',
   'home_manage_categories_sub': 'Ongeza au hariri aina za mapato na matumizi',
   'home_analytics': 'Ripoti za biashara',
   'home_analytics_sub': 'Angalia chati na ripoti za fedha',
@@ -1164,6 +1169,38 @@ const Map<String, String> swTzTranslations = {
   'staff_empty':
       'Bado hakuna akaunti za wafanyakazi. Ongeza mfanyakazi ili uanze.',
   'staff_name': 'Jina kamili',
+  'staff_position': 'Nafasi ya mfanyakazi',
+  'staff_bar_role_follows_position':
+      'Jukumu la Bar Mode linafuata nafasi uliyochagua.',
+  'staff_required_fields_note': 'Sehemu zenye * zinahitajika.',
+  'staff_section_personal': 'Taarifa za mfanyakazi',
+  'staff_section_personal_help': 'Jina, nafasi na mawasiliano.',
+  'staff_section_workplace': 'Mahali pa kazi',
+  'staff_section_workplace_help':
+      'Chagua duka au eneo ambalo mfanyakazi atafanyia kazi.',
+  'staff_section_login': 'Taarifa za kuingia',
+  'staff_section_login_help':
+      'Username na nenosiri la mfanyakazi kuingia kwenye akaunti.',
+  'staff_section_limit': 'Kikomo cha matumizi',
+  'staff_section_limit_help':
+      'Acha wazi kama hutaki kuweka kikomo cha matumizi ya siku.',
+  'staff_section_access': 'Majukumu na ruhusa',
+  'staff_section_access_help':
+      'Nafasi huchagua jukumu la Bar Mode. Chagua ruhusa zaidi hapa chini.',
+  'staff_permissions_help':
+      'Gusa kila sehemu kuona ruhusa, kisha washa zile anazohitaji.',
+  'staff_position_cashier': 'Mweka fedha',
+  'staff_position_waiter': 'Mhudumu',
+  'staff_position_bar_counter_attendant': 'Mhudumu wa kaunta ya baa',
+  'staff_position_bartender': 'Mhudumu wa baa',
+  'staff_position_bar_manager': 'Msimamizi wa baa',
+  'staff_position_shop_attendant': 'Mhudumu wa duka',
+  'staff_position_store_manager': 'Msimamizi wa duka',
+  'staff_position_accountant': 'Mhasibu',
+  'staff_position_security_guard': 'Mlinzi',
+  'staff_position_custom': 'Nafasi maalum',
+  'staff_position_custom_name': 'Andika jina la nafasi',
+  'staff_position_custom_required': 'Andika jina la nafasi (hadi herufi 50).',
   'staff_email': 'Barua pepe',
   'staff_email_optional': 'Barua pepe (si lazima)',
   'staff_email_not_added': 'Hakuna barua pepe ya mawasiliano',
@@ -1741,6 +1778,7 @@ const Map<String, String> swTzTranslations = {
   'nav_transactions': 'Mauzo',
   'nav_reports': 'Ripoti',
   'nav_add': 'Ongeza',
+  'nav_scan': 'Scan',
   'home_month_to_date': 'Mwezi huu',
   'home_finance_period': 'Chagua kipindi',
   'home_quick_access': 'Huduma za haraka',
@@ -2036,7 +2074,7 @@ const Map<String, String> swTzTranslations = {
       'Muamala umehifadhiwa bila intaneti. Utatumwa intaneti ikirudi.',
 
   // Categories Page
-  'categories_title': 'Simamia aina',
+  'categories_title': 'Cartegories',
   'categories_no_categories': 'Bado hakuna aina. Gusa + kuongeza.',
   'categories_delete_confirm': 'Una uhakika unataka kufuta "{name}"?',
 
@@ -2137,15 +2175,19 @@ const Map<String, String> swTzTranslations = {
   'jobs_add_new': 'Sajili Kazi Mpya',
 
   'debts_title': 'Madeni',
-  'debt_page_subtitle': 'Fuatilia salio, wakumbushe wateja, na simamia akaunti zote kwa urahisi.',
+  'debt_page_subtitle':
+      'Fuatilia salio, wakumbushe wateja, na simamia akaunti zote kwa urahisi.',
   'debt_type': 'Aina',
   'debt_status': 'Hali',
   'debt_actions': 'Vitendo',
   'debt_whatsapp_reminder': 'Tuma kikumbusho WhatsApp',
-  'debt_whatsapp_invalid': 'Weka namba sahihi yenye msimbo wa nchi kwa WhatsApp.',
-  'debt_whatsapp_open_error': 'Imeshindwa kufungua WhatsApp. Hakiki namba kisha ujaribu tena.',
+  'debt_whatsapp_invalid':
+      'Weka namba sahihi yenye msimbo wa nchi kwa WhatsApp.',
+  'debt_whatsapp_open_error':
+      'Imeshindwa kufungua WhatsApp. Hakiki namba kisha ujaribu tena.',
   'debt_due_date_unspecified': 'hakuna tarehe ya mwisho',
-  'debt_whatsapp_reminder_message': 'Habari @name, tunakukumbusha kwa upole kuhusu salio lako la @balance. Tarehe ya mwisho: @due_date. Tafadhali wasiliana nasi ikiwa tayari umelipa. Asante.',
+  'debt_whatsapp_reminder_message':
+      'Habari @name, tunakukumbusha kwa upole kuhusu salio lako la @balance. Tarehe ya mwisho: @due_date. Tafadhali wasiliana nasi ikiwa tayari umelipa. Asante.',
   'debt_add_title': 'Sajili deni',
   'debt_edit_title': 'Hariri deni',
   'debt_draft_restored_title': 'Rasimu imerejeshwa',
@@ -2185,7 +2227,8 @@ const Map<String, String> swTzTranslations = {
   'debt_remove_due_date': 'Ondoa tarehe ya mwisho',
   'debt_notes_optional': 'Maelezo (si lazima)',
   'debt_evidence_title': 'Ushahidi',
-  'debt_evidence_hint': 'Piga picha au ambatisha PDF/picha ya uthibitisho. Kila faili hadi MB 10.',
+  'debt_evidence_hint':
+      'Piga picha au ambatisha PDF/picha ya uthibitisho. Kila faili hadi MB 10.',
   'debt_evidence_take_photo': 'Piga picha',
   'debt_evidence_choose_document': 'Chagua hati',
   'debt_evidence_existing': 'Faili za ushahidi: @count',
@@ -2249,7 +2292,8 @@ const Map<String, String> swTzTranslations = {
   'debt_added': 'Deni limehifadhiwa.',
   'debt_updated': 'Taarifa za deni zimebadilishwa.',
   'debt_delete_title': 'Futa deni',
-  'debt_delete_confirm': 'Ufute deni la "@name" pamoja na historia ya malipo? Huwezi kutendua hatua hii.',
+  'debt_delete_confirm':
+      'Ufute deni la "@name" pamoja na historia ya malipo? Huwezi kutendua hatua hii.',
   'debt_deleted': 'Deni na historia ya malipo vimefutwa.',
   'debt_delete_error': 'Imeshindwa kufuta deni: @error',
   'debt_payment_saved': 'Malipo yamerekodiwa.',

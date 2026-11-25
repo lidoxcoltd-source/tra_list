@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:tra_list/theme/app_theme.dart';
 
 import 'stock_models.dart';
 import 'stock_service.dart';

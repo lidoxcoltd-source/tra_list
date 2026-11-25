@@ -670,7 +670,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       if (_editing) {
         await _service.updateProduct(old!.id!, p);
         stockToast('stk_saved'.tr, p.name);
-        Get.back();
+        if (mounted) stockGoBack(context);
       } else {
         final id = await _service.createProduct(
           p,
@@ -1299,7 +1299,7 @@ class ProductDetailsPage extends StatelessWidget {
                       targetId: target.id!,
                     );
                     stockToast('stk_saved'.tr, target.name);
-                    Get.back();
+                    if (context.mounted) stockGoBack(context);
                   } catch (e) {
                     stockToast('stk_error'.tr, stockErrorText(e), error: true);
                   }

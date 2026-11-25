@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save sales receipt images to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Save sales receipt images to the Mjasi POS album.</string>
 </dict>
 </plist>

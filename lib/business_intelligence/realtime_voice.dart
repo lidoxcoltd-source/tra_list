@@ -299,8 +299,9 @@ String voiceSummaryText(
       ('payable', 'Business debts', 'Madeni ya biashara'),
     ]) {
       final value = amount(debts[key]);
-      if (value.isNotEmpty)
+      if (value.isNotEmpty) {
         lines.add('${label(en, swahili)}: $currency $value');
+      }
     }
   }
   final purchases = context['purchases'];
@@ -1133,8 +1134,14 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
   }
 
   Future<bool> _reviewVoiceDebtReminder(Debt debt, String message) async {
-    if (!mounted || !_active || !_foreground || !widget.isCurrent() ||
-        debt.isSettled || debt.phone.trim().isEmpty) return false;
+    if (!mounted ||
+        !_active ||
+        !_foreground ||
+        !widget.isCurrent() ||
+        debt.isSettled ||
+        debt.phone.trim().isEmpty) {
+      return false;
+    }
     final generation = _generation;
     final session = _session;
     final controller = TextEditingController(text: message);
@@ -1151,7 +1158,9 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS'),
+                Text(
+                  '${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS',
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: controller,
@@ -1162,12 +1171,18 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                     border: const OutlineInputBorder(),
                   ),
                 ),
-                Text('bi_debt_reminder_whatsapp_notice'.tr, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'bi_debt_reminder_whatsapp_notice'.tr,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('cancel'.tr),
+            ),
             FilledButton.icon(
               onPressed: () {
                 if (controller.text.trim().isEmpty) return;
@@ -1183,8 +1198,13 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     } finally {
       controller.dispose();
     }
-    if (approved != true || !mounted || !widget.visible || !_foreground ||
-        !widget.isCurrent() || generation != _generation || _session != session) {
+    if (approved != true ||
+        !mounted ||
+        !widget.visible ||
+        !_foreground ||
+        !widget.isCurrent() ||
+        generation != _generation ||
+        _session != session) {
       return false;
     }
     var phone = debt.phone.replaceAll(RegExp(r'\D'), '');
@@ -1192,7 +1212,9 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     if (phone.startsWith('0')) phone = '255${phone.substring(1)}';
     if (phone.length == 9) phone = '255$phone';
     if (phone.length < 8 || phone.length > 15) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
       return false;
     }
     final finalMessage = approvedMessage;
@@ -1202,7 +1224,9 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
     if (!mounted || !widget.isCurrent()) return false;
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)),
+      );
     }
     return opened;
   }
@@ -2176,9 +2200,7 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                             animation: _orbAnimation,
                             active: _active && !_muted,
                             busy: _busy,
-                            level: _active && !_muted
-                                ? _microphoneLevel
-                                : 0,
+                            level: _active && !_muted ? _microphoneLevel : 0,
                             speaking: _aiSpeaking,
                           ),
                         ),
@@ -2226,7 +2248,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                       ),
                     const SizedBox(height: 14),
                   ],
-                  if (!_active && !_paused && !_busy && _engines.length > 1) ...[
+                  if (!_active &&
+                      !_paused &&
+                      !_busy &&
+                      _engines.length > 1) ...[
                     Text(
                       'bi_voice_model_selection'.tr,
                       style: const TextStyle(
@@ -2273,7 +2298,10 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                     Text(
                       'bi_voice_level_unavailable'.tr,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                   AnimatedSize(
                     duration: const Duration(milliseconds: 360),
@@ -2286,14 +2314,15 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                   if (!_textPromptOpen)
                     Semantics(
                       button: true,
-                      label: (_active
-                              ? (_muted
-                                    ? 'bi_voice_unmute'
-                                    : 'bi_voice_mute')
-                              : (_paused
-                                    ? 'bi_voice_resume'
-                                    : 'bi_voice_start'))
-                          .tr,
+                      label:
+                          (_active
+                                  ? (_muted
+                                        ? 'bi_voice_unmute'
+                                        : 'bi_voice_mute')
+                                  : (_paused
+                                        ? 'bi_voice_resume'
+                                        : 'bi_voice_start'))
+                              .tr,
                       child: Material(
                         color: const Color(0xFF625C7A),
                         shape: const CircleBorder(),
@@ -2330,15 +2359,16 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                   if (!_textPromptOpen)
                     Text(
                       (_active
-                              ? (_muted
-                                    ? 'bi_voice_unmute'
-                                    : 'bi_voice_mute')
+                              ? (_muted ? 'bi_voice_unmute' : 'bi_voice_mute')
                               : (_paused
                                     ? 'bi_voice_resume'
                                     : 'bi_voice_start'))
                           .tr,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                   SizedBox(height: _textPromptOpen ? 8 : 24),
                   if (!_textPromptOpen)
@@ -2349,7 +2379,8 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                           icon: _muted
                               ? Icons.mic_off_rounded
                               : Icons.mic_rounded,
-                          label: (_muted ? 'bi_voice_unmute' : 'bi_voice_mute').tr,
+                          label:
+                              (_muted ? 'bi_voice_unmute' : 'bi_voice_mute').tr,
                           onPressed: _active && !_busy ? _toggleMute : null,
                         ),
                         const SizedBox(width: 24),
@@ -2379,12 +2410,12 @@ class _BusinessRealtimeVoiceState extends State<BusinessRealtimeVoice>
                         const SizedBox(width: 24),
                         _VoiceControl(
                           icon: Icons.call_end_rounded,
-                          label: (_session is GeminiVoiceSession
-                                  ? 'bi_voice_pause'
-                                  : 'bi_voice_end')
-                              .tr,
-                          onPressed:
-                              _active && !_busy ? _pauseOrStop : null,
+                          label:
+                              (_session is GeminiVoiceSession
+                                      ? 'bi_voice_pause'
+                                      : 'bi_voice_end')
+                                  .tr,
+                          onPressed: _active && !_busy ? _pauseOrStop : null,
                         ),
                       ],
                     ),
@@ -2517,7 +2548,9 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
               : 'Tell me your business name, product or service, offer, preferred colors, and target customer.',
         );
       } catch (error) {
-        debugPrint('Voice design guide audio unavailable: ${error.runtimeType}');
+        debugPrint(
+          'Voice design guide audio unavailable: ${error.runtimeType}',
+        );
       }
       setState(() {
         _error = null;
@@ -2574,7 +2607,8 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
         _referencePath = null;
         _concept = null;
       });
-      if (previousPath != null) unawaited(deleteCreativeReference(previousPath));
+      if (previousPath != null)
+        unawaited(deleteCreativeReference(previousPath));
     } catch (error) {
       if (source == ImageSource.camera &&
           error is PlatformException &&
@@ -2801,7 +2835,8 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                     onChanged: _generating
                         ? null
                         : (value) {
-                            if (value != null) setState(() => _category = value);
+                            if (value != null)
+                              setState(() => _category = value);
                           },
                   ),
                   const SizedBox(height: 10),
@@ -2847,7 +2882,9 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                       IconButton.filledTonal(
                         tooltip: _listening
                             ? (_swahili ? 'Simamisha' : 'Stop listening')
-                            : (_swahili ? 'Eleza kwa sauti' : 'Speak your brief'),
+                            : (_swahili
+                                  ? 'Eleza kwa sauti'
+                                  : 'Speak your brief'),
                         onPressed: _generating ? null : _listenForBrief,
                         icon: Icon(
                           _listening ? Icons.stop_rounded : Icons.mic_rounded,
@@ -2888,15 +2925,21 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                     const SizedBox(height: 14),
                     _progressStep(
                       0,
-                      _swahili ? 'Kuchambua picha na kupanga design' : 'Reading the brief and planning the design',
+                      _swahili
+                          ? 'Kuchambua picha na kupanga design'
+                          : 'Reading the brief and planning the design',
                     ),
                     _progressStep(
                       1,
-                      _swahili ? 'Kuandika maneno ya poster' : 'Writing poster copy',
+                      _swahili
+                          ? 'Kuandika maneno ya poster'
+                          : 'Writing poster copy',
                     ),
                     _progressStep(
                       2,
-                      _swahili ? 'Kutengeneza picha ya preview' : 'Generating the poster image',
+                      _swahili
+                          ? 'Kutengeneza picha ya preview'
+                          : 'Generating the poster image',
                     ),
                   ],
                   if (_concept case final concept?) ...[
@@ -2910,10 +2953,10 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                           fit: BoxFit.contain,
                           loadingBuilder: (context, child, progress) =>
                               progress == null
-                                  ? child
-                                  : const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
+                              ? child
+                              : const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
                           errorBuilder: (_, _, _) => Center(
                             child: Text(
                               _swahili
@@ -2930,7 +2973,9 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                     OutlinedButton.icon(
                       onPressed: _openEditor,
                       icon: const Icon(Icons.edit_rounded),
-                      label: Text(_swahili ? 'Hariri na hifadhi' : 'Edit and save'),
+                      label: Text(
+                        _swahili ? 'Hariri na hifadhi' : 'Edit and save',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -2948,10 +2993,16 @@ class _VoicePosterDesignDialogState extends State<_VoicePosterDesignDialog> {
                           ),
                     label: Text(
                       _generating
-                          ? (_swahili ? 'Tengeneza poster…' : 'Creating poster…')
+                          ? (_swahili
+                                ? 'Tengeneza poster…'
+                                : 'Creating poster…')
                           : _concept == null
-                          ? (_swahili ? 'Tengeneza preview' : 'Generate preview')
-                          : (_swahili ? 'Tengeneza toleo jingine' : 'Generate another version'),
+                          ? (_swahili
+                                ? 'Tengeneza preview'
+                                : 'Generate preview')
+                          : (_swahili
+                                ? 'Tengeneza toleo jingine'
+                                : 'Generate another version'),
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF536EFF),

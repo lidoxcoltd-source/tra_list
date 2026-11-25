@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../utils/image_utils.dart';
 import 'package:tra_list/invoice/language_controller.dart';
 import 'business_access_service.dart';
+import 'mobile_money_account.dart';
 
 class ProfileService {
   static final _db = FirebaseFirestore.instance;
@@ -60,6 +61,7 @@ class ProfileService {
       'account': '',
       'swift': '',
       'paymentMethod': 'Bank Transfer',
+      'mobileMoneyAccounts': <Map<String, String>>[],
       'colors': {
         'brand': 0xFFF15A24,
         'footer': 0xFF424242,
@@ -126,6 +128,7 @@ class ProfileService {
         'account': d['account']?.toString() ?? '',
         'swift': d['swift']?.toString() ?? '',
         'paymentMethod': d['paymentMethod']?.toString() ?? '',
+        'mobileMoneyAccounts': d['mobileMoneyAccounts'] ?? const [],
         'documentTermsVersions':
             (d['documentTermsVersions'] as List? ?? const [])
                 .whereType<Map>()
@@ -173,6 +176,7 @@ class ProfileService {
       'account': '',
       'swift': '',
       'paymentMethod': 'Bank Transfer',
+      'mobileMoneyAccounts': <Map<String, String>>[],
       'documentTermsVersions': <Map<String, dynamic>>[],
       'selectedDocumentTerms': <String, String>{},
       'documentDesigns': <String, dynamic>{},
@@ -188,6 +192,17 @@ class ProfileService {
       await ref.set(init);
     }
     return init;
+  }
+
+  static Future<List<MobileMoneyAccount>>
+  loadLegacyMobileMoneyAccounts() async {
+    final snapshot = await _db
+        .collection('users')
+        .doc(BusinessAccessService.businessId)
+        .collection('mobileMoneyAccounts')
+        .doc('settings')
+        .get();
+    return MobileMoneyAccount.fromList(snapshot.data()?['accounts']);
   }
 
   static Future<void> save(Map<String, dynamic> data) async {

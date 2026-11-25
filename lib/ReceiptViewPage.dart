@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:tra_list/ReceiptPage.dart';
 import 'package:tra_list/LocalStorageService.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:tra_list/QRCodeService.dart';
 import 'package:tra_list/services/business_access_service.dart';

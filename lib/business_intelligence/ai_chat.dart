@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -375,7 +374,8 @@ class BusinessAiChatState extends State<BusinessAiChat> {
   }
 
   Future<void> _openCreativeStudio({ImageSource? source}) async {
-    if (!widget.isCurrent() || _busy || _guidingInvoice || _openingDraft) return;
+    if (!widget.isCurrent() || _busy || _guidingInvoice || _openingDraft)
+      return;
     Uint8List? imageBytes;
     var imageName = '';
     if (source != null) {
@@ -507,56 +507,55 @@ class BusinessAiChatState extends State<BusinessAiChat> {
     required String title,
     String? subtitle,
     required VoidCallback onTap,
-  }) =>
-      Material(
-        color: const Color(0xFF202C43),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
+  }) => Material(
+    color: const Color(0xFF202C43),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          border: Border.all(color: const Color(0xFF3A4C69)),
+        ),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF3A4C69)),
+              color: const Color(0xFF384A70),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF384A70),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: const Color(0xFFB9D8FF), size: 21),
-              ),
-              title: Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: subtitle == null
-                  ? null
-                  : Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFFB3C0D5),
-                        fontSize: 12,
-                      ),
-                    ),
-              trailing: const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF9CB0D1),
-              ),
+            child: Icon(icon, color: const Color(0xFFB9D8FF), size: 21),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
           ),
+          subtitle: subtitle == null
+              ? null
+              : Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFFB3C0D5),
+                    fontSize: 12,
+                  ),
+                ),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFF9CB0D1),
+          ),
         ),
-      );
+      ),
+    ),
+  );
 
   @override
   void dispose() {
@@ -730,12 +729,16 @@ class BusinessAiChatState extends State<BusinessAiChat> {
 
   Debt? _matchReminderTarget(String prompt, List<Debt> debts) {
     final text = prompt.toLowerCase();
-    final matches = debts.where((debt) =>
-      !debt.isSettled && debt.phone.trim().isNotEmpty &&
-      debt.direction == DebtDirection.customerOwesShop &&
-      debt.debtorName.trim().length >= 2 &&
-      text.contains(debt.debtorName.trim().toLowerCase())
-    ).toList();
+    final matches = debts
+        .where(
+          (debt) =>
+              !debt.isSettled &&
+              debt.phone.trim().isNotEmpty &&
+              debt.direction == DebtDirection.customerOwesShop &&
+              debt.debtorName.trim().length >= 2 &&
+              text.contains(debt.debtorName.trim().toLowerCase()),
+        )
+        .toList();
     if (matches.isEmpty) return null;
     matches.sort((a, b) => b.debtorName.length.compareTo(a.debtorName.length));
     if (matches.length > 1 &&
@@ -753,21 +756,28 @@ class BusinessAiChatState extends State<BusinessAiChat> {
         return a.dueDate!.compareTo(b.dueDate!);
       });
     final language = supportedAiLanguage(Get.locale?.languageCode);
-    final lines = open.take(50).map((debt) => [
-      debt.debtorName,
-      debt.direction == DebtDirection.customerOwesShop
-          ? 'customer owes business' : 'business owes supplier',
-      'balance ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS',
-      'due ${debt.dueDate == null ? 'not set' : DateFormat('yyyy-MM-dd').format(debt.dueDate!)}',
-      if (debt.isOverdue) 'overdue',
-    ].join(' | ')).toList();
+    final lines = open
+        .take(50)
+        .map(
+          (debt) => [
+            debt.debtorName,
+            debt.direction == DebtDirection.customerOwesShop
+                ? 'customer owes business'
+                : 'business owes supplier',
+            'balance ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS',
+            'due ${debt.dueDate == null ? 'not set' : DateFormat('yyyy-MM-dd').format(debt.dueDate!)}',
+            if (debt.isOverdue) 'overdue',
+          ].join(' | '),
+        )
+        .toList();
     final isReminder = _isDebtReminderRequest(prompt);
     final facts = lines.isEmpty ? 'No open debts.' : lines.join('\n');
     return '${language == 'sw' ? 'Taarifa mpya za madeni zilizopatikana kwa ruhusa ya kazi zilizopo. Tumia majina, salio na tarehe hizi pekee.' : 'Fresh debt records retrieved under the existing jobs view permission. Use only these names, balances and dates.'}\n$facts${isReminder ? '\n${language == 'sw' ? 'Andaa ujumbe mfupi wa WhatsApp kwa mtu aliyetajwa tu. Tumia salio na tarehe zilizothibitishwa. Rudisha ujumbe pekee bila maelezo.' : 'Draft a brief WhatsApp reminder only for the named person. Use the verified balance and due date. Return only the message, no explanation.'}' : ''}';
   }
 
   Future<bool> _reviewChatDebtReminder(Debt debt, String draft) async {
-    if (!BusinessAccessService.can('jobs', 'view') || !widget.isCurrent()) return false;
+    if (!BusinessAccessService.can('jobs', 'view') || !widget.isCurrent())
+      return false;
     final editor = TextEditingController(text: draft.trim());
     String? approvedMessage;
     try {
@@ -781,7 +791,9 @@ class BusinessAiChatState extends State<BusinessAiChat> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS'),
+                Text(
+                  '${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS',
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: editor,
@@ -792,12 +804,18 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                     border: const OutlineInputBorder(),
                   ),
                 ),
-                Text('bi_debt_reminder_whatsapp_notice'.tr, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'bi_debt_reminder_whatsapp_notice'.tr,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('cancel'.tr),
+            ),
             FilledButton.icon(
               onPressed: () {
                 if (editor.text.trim().isEmpty) return;
@@ -810,24 +828,33 @@ class BusinessAiChatState extends State<BusinessAiChat> {
           ],
         ),
       );
-      if (approved != true || approvedMessage == null || !widget.isCurrent()) return false;
+      if (approved != true || approvedMessage == null || !widget.isCurrent())
+        return false;
     } finally {
       editor.dispose();
     }
     final current = await DebtService.loadAssistantDebt(debt.id);
-    if (!widget.isCurrent() || current == null || current.isSettled || current.phone.isEmpty) return false;
+    if (!widget.isCurrent() ||
+        current == null ||
+        current.isSettled ||
+        current.phone.isEmpty)
+      return false;
     var phone = current.phone.replaceAll(RegExp(r'\D'), '');
     if (phone.startsWith('00')) phone = phone.substring(2);
     if (phone.startsWith('0')) phone = '255${phone.substring(1)}';
     if (phone.length == 9) phone = '255$phone';
     if (phone.length < 8 || phone.length > 15) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('debt_whatsapp_invalid'.tr)));
       return false;
     }
     final uri = Uri.https('wa.me', '/$phone', {'text': approvedMessage!});
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('bi_debt_reminder_opened_notice'.tr)),
+      );
     }
     return opened;
   }
@@ -854,15 +881,20 @@ class BusinessAiChatState extends State<BusinessAiChat> {
                       '${debt.debtorName}  -  ${NumberFormat('#,##0', 'en_US').format(debt.balance)} TZS  -  ${debt.dueDate == null ? 'debt_due_date_unspecified'.tr : DateFormat.yMMMd().format(debt.dueDate!)}',
                     ),
                   ),
-                if (debts.length >= 100)
-                  Text('bi_debt_ai_review_limited'.tr),
+                if (debts.length >= 100) Text('bi_debt_ai_review_limited'.tr),
               ],
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('cancel'.tr)),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text('bi_chat_send_confirm'.tr)),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('cancel'.tr),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text('bi_chat_send_confirm'.tr),
+          ),
         ],
       ),
     );
@@ -1049,9 +1081,7 @@ class BusinessAiChatState extends State<BusinessAiChat> {
             ),
         {
           'role': 'user',
-          'content': debtFacts.isEmpty
-              ? prompt
-              : '$prompt\n\n$debtFacts',
+          'content': debtFacts.isEmpty ? prompt : '$prompt\n\n$debtFacts',
         },
       ];
       final userMessage =

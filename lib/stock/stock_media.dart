@@ -120,17 +120,27 @@ bool get _cameraPhotoSupported =>
 
 /// Scans a barcode / QR code. Where the camera is unavailable (Windows) it
 /// asks for the code to be typed or scanned with a USB scanner instead.
-Future<String?> scanCode(BuildContext context) async {
-  if (!cameraScanSupported) return _typeCodeDialog(context);
+Future<String?> scanCode(
+  BuildContext context, {
+  bool allowProductSearch = false,
+}) async {
+  if (!cameraScanSupported) {
+    return _typeCodeDialog(context, allowProductSearch: allowProductSearch);
+  }
   if (kIsWeb) {
     return live_scanner.scanLiveCamera(
       context,
       scanImage: (source) => scanFromImage(context, source),
+      searchProduct: allowProductSearch
+          ? (searchContext) => _showProductNameSearch(searchContext)
+          : null,
     );
   }
-  return Navigator.of(
-    context,
-  ).push<String>(MaterialPageRoute(builder: (_) => const _ScannerPage()));
+  return Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => _ScannerPage(allowProductSearch: allowProductSearch),
+    ),
+  );
 }
 
 /// Decodes a barcode / QR code from a picture. Returns null when none found.
@@ -186,7 +196,10 @@ Future<String?> scanFromImage(BuildContext context, ImageSource source) async {
   }
 }
 
-Future<String?> _typeCodeDialog(BuildContext context) {
+Future<String?> _typeCodeDialog(
+  BuildContext context, {
+  bool allowProductSearch = false,
+}) {
   final c = TextEditingController();
   return showDialog<String>(
     context: context,
@@ -209,6 +222,18 @@ Future<String?> _typeCodeDialog(BuildContext context) {
             ),
             onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
           ),
+          if (allowProductSearch)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.search_rounded),
+                label: Text('stk_search_product'.tr),
+                onPressed: () async {
+                  final code = await _showProductNameSearch(ctx);
+                  if (code != null && ctx.mounted) Navigator.pop(ctx, code);
+                },
+              ),
+            ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
@@ -237,8 +262,185 @@ Future<String?> _typeCodeDialog(BuildContext context) {
   ).whenComplete(c.dispose);
 }
 
+Future<String?> _showProductNameSearch(BuildContext context) =>
+    showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ProductNameSearchSheet(),
+    );
+
+class _ProductNameSearchSheet extends StatefulWidget {
+  const _ProductNameSearchSheet();
+
+  @override
+  State<_ProductNameSearchSheet> createState() =>
+      _ProductNameSearchSheetState();
+}
+
+class _ProductNameSearchSheetState extends State<_ProductNameSearchSheet> {
+  final _queryController = TextEditingController();
+  late final Stream<List<Product>> _products =
+      StockService.current().watchProducts();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        height: size.height * .78,
+        decoration: const BoxDecoration(
+          color: Color(0xFF10263D),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'stk_search_product'.tr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _queryController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'stk_search_product_hint'.tr,
+                    hintStyle: const TextStyle(color: Colors.white54),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Colors.white70,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: .08),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (value) => setState(() => _query = value.trim()),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: StreamBuilder<List<Product>>(
+                  stream: _products,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Text(
+                            stockErrorText(snapshot.error!),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      );
+                    }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFFC629),
+                        ),
+                      );
+                    }
+
+                    final query = _query.toLowerCase();
+                    final products = (snapshot.data ?? const <Product>[])
+                        .where(
+                          (product) =>
+                              product.active &&
+                              product.name.toLowerCase().contains(query),
+                        )
+                        .toList();
+                    if (products.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'stk_search_product_empty'.tr,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: products.length,
+                      separatorBuilder: (_, _) =>
+                          const Divider(color: Colors.white12, height: 1),
+                      itemBuilder: (context, index) {
+                        final product = products[index];
+                        final code = product.sku.trim().isNotEmpty
+                            ? product.sku.trim()
+                            : product.barcode.trim();
+                        return ListTile(
+                          enabled: code.isNotEmpty,
+                          title: Text(
+                            product.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            code.isEmpty ? product.category : code,
+                            style: const TextStyle(color: Colors.white60),
+                          ),
+                          trailing: Text(
+                            'TZS ${product.sellPrice.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              color: Color(0xFFFFD166),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          onTap: code.isEmpty
+                              ? null
+                              : () => Navigator.pop(context, code),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ScannerPage extends StatefulWidget {
-  const _ScannerPage();
+  const _ScannerPage({required this.allowProductSearch});
+
+  final bool allowProductSearch;
 
   @override
   State<_ScannerPage> createState() => _ScannerPageState();
@@ -250,6 +452,16 @@ class _ScannerPageState extends State<_ScannerPage> {
     formats: const [BarcodeFormat.all],
   );
   bool _done = false;
+  bool _searchOpen = false;
+
+  Future<void> _searchByName() async {
+    if (_done || _searchOpen) return;
+    _searchOpen = true;
+    final code = await _showProductNameSearch(context);
+    if (!mounted) return;
+    _searchOpen = false;
+    if (code != null) _finish(code);
+  }
 
   Future<void> _retryCamera() async {
     try {
@@ -318,7 +530,7 @@ class _ScannerPageState extends State<_ScannerPage> {
   }
 
   void _finish(String code) {
-    if (_done || code.trim().isEmpty) return;
+    if (_done || _searchOpen || code.trim().isEmpty) return;
     _done = true;
     Navigator.of(context).pop(code.trim());
   }
@@ -532,6 +744,24 @@ class _ScannerPageState extends State<_ScannerPage> {
                         ),
                       ],
                     ),
+                    if (widget.allowProductSearch) ...[
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: .24),
+                            ),
+                            minimumSize: const Size.fromHeight(42),
+                          ),
+                          icon: const Icon(Icons.search_rounded),
+                          label: Text('stk_search_product'.tr),
+                          onPressed: _searchByName,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: [

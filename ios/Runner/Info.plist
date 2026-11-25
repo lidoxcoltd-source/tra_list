@@ -53,6 +53,8 @@
 	<string>Take product photos to create promotional posters in ISHER Creative Studio.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select photos to share with your business team in chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save sales receipt images to your photo library.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Choose a customer contact when sharing an invoice or business document.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

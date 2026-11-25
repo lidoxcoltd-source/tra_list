@@ -334,10 +334,11 @@ Stream<List<CreativeDesignProject>> watchCreativeProjects() =>
         );
 
 Future<String> saveCreativeProject(CreativeDesignProject project) async {
-  if (!BusinessAccessService.can('profile', 'edit'))
+  if (!BusinessAccessService.can('profile', 'edit')) {
     throw StateError(
       'Your account cannot save design projects for this business.',
     );
+  }
   if (project.title.trim().isEmpty ||
       project.title.length > 120 ||
       project.layers.length > 40) {
@@ -357,10 +358,11 @@ Future<String> saveCreativeProject(CreativeDesignProject project) async {
 }
 
 Future<void> deleteCreativeProject(String id) async {
-  if (!BusinessAccessService.can('profile', 'edit'))
+  if (!BusinessAccessService.can('profile', 'edit')) {
     throw StateError(
       'Your account cannot delete design projects for this business.',
     );
+  }
   await _creativeProjects().doc(id).delete();
 }
 

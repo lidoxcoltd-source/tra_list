@@ -23,6 +23,7 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   flutter_speed_dial: ^7.0.0
   flutter_pos_printer_platform_image_3: ^1.2.4
+  gal: ^2.3.3
   get: ^4.6.6
   get_storage: ^2.1.1
   image_picker: ^1.2.0

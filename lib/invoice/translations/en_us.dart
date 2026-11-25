@@ -309,8 +309,10 @@ const Map<String, String> enUsTranslations = {
   'bi_chat_empty': 'Ask Isher about your business, or choose a question below.',
   'bi_question_debts': 'Who owes me and what debts are due soon?',
   'bi_debt_ai_review_title': 'Review debt details for AI',
-  'bi_debt_ai_review_notice': 'These current debtor names, balances, and due dates will be shared with the selected AI provider to answer your question. Phone numbers are never shared. Continue?',
-  'bi_debt_ai_review_limited': 'Showing up to 50 open debts from the latest 100 records.',
+  'bi_debt_ai_review_notice':
+      'These current debtor names, balances, and due dates will be shared with the selected AI provider to answer your question. Phone numbers are never shared. Continue?',
+  'bi_debt_ai_review_limited':
+      'Showing up to 50 open debts from the latest 100 records.',
   'bi_chat_emoji': 'Add emoji',
   'bi_chat_design_poster': 'Create a design',
   'bi_chat_design_poster_hint': 'Start a poster, flyer or social post with AI',
@@ -350,9 +352,11 @@ const Map<String, String> enUsTranslations = {
   'bi_voice_transaction_review': 'Review transaction draft',
   'bi_debt_reminder_review_title': 'Review WhatsApp reminder',
   'bi_debt_reminder_message': 'Reminder message',
-  'bi_debt_reminder_whatsapp_notice': 'Approving opens WhatsApp with this text. You still need to press Send in WhatsApp.',
+  'bi_debt_reminder_whatsapp_notice':
+      'Approving opens WhatsApp with this text. You still need to press Send in WhatsApp.',
   'bi_debt_reminder_open_whatsapp': 'Approve and open WhatsApp',
-  'bi_debt_reminder_opened_notice': 'WhatsApp opened with your draft. Review it and press Send there.',
+  'bi_debt_reminder_opened_notice':
+      'WhatsApp opened with your draft. Review it and press Send there.',
   'bi_voice_transaction_not_saved':
       'The transaction is not saved yet. Confirm to send it through chat for saving. The category must already exist in the business; check chat for the result.',
   'bi_voice_transaction_type': 'Type',
@@ -1159,6 +1163,39 @@ const Map<String, String> enUsTranslations = {
   'staff_members': 'staff members',
   'staff_empty': 'No staff accounts yet. Add an employee to get started.',
   'staff_name': 'Full name',
+  'staff_position': 'Staff position',
+  'staff_bar_role_follows_position':
+      'The Bar Mode role follows the selected staff position.',
+  'staff_required_fields_note': 'Fields marked * are required.',
+  'staff_section_personal': 'Staff details',
+  'staff_section_personal_help': 'Name, position, and contact details.',
+  'staff_section_workplace': 'Work location',
+  'staff_section_workplace_help':
+      'Choose the shop or location where this employee works.',
+  'staff_section_login': 'Login details',
+  'staff_section_login_help':
+      'Set the username and password the employee will use to sign in.',
+  'staff_section_limit': 'Spending limit',
+  'staff_section_limit_help':
+      'Leave blank if this employee has no daily spending limit.',
+  'staff_section_access': 'Roles and access',
+  'staff_section_access_help':
+      'The position sets the Bar Mode role. Choose any additional access below.',
+  'staff_permissions_help':
+      'Open each section to review access, then turn on what the employee needs.',
+  'staff_position_cashier': 'Cashier',
+  'staff_position_waiter': 'Waiter',
+  'staff_position_bar_counter_attendant': 'Bar Counter Attendant',
+  'staff_position_bartender': 'Bartender',
+  'staff_position_bar_manager': 'Bar Manager',
+  'staff_position_shop_attendant': 'Shop Attendant',
+  'staff_position_store_manager': 'Store Manager',
+  'staff_position_accountant': 'Accountant',
+  'staff_position_security_guard': 'Security Guard',
+  'staff_position_custom': 'Custom position',
+  'staff_position_custom_name': 'Enter position name',
+  'staff_position_custom_required':
+      'Enter a position name (up to 50 characters).',
   'staff_email': 'Email address',
   'staff_email_optional': 'Email address (optional)',
   'staff_email_not_added': 'No contact email added',
@@ -1368,8 +1405,7 @@ const Map<String, String> enUsTranslations = {
   'staff_module_analytics': 'Reports & analytics',
   'staff_module_categories': 'Categories',
   'staff_module_profile': 'Business profile',
-  'staff_module_daily_brief':
-      'Daily brief (income, debts, stock and tasks)',
+  'staff_module_daily_brief': 'Daily brief (income, debts, stock and tasks)',
   'staff_action_view': 'View',
   'staff_action_create': 'Add',
   'staff_action_edit': 'Edit',
@@ -1730,6 +1766,7 @@ const Map<String, String> enUsTranslations = {
   'nav_transactions': 'Sales',
   'nav_reports': 'Reports',
   'nav_add': 'Add',
+  'nav_scan': 'Scan',
   'home_month_to_date': 'This month',
   'home_finance_period': 'Choose date range',
   'home_quick_access': 'Quick access',
@@ -2126,15 +2163,19 @@ const Map<String, String> enUsTranslations = {
   'jobs_add_new': 'Add New Job',
 
   'debts_title': 'Debts',
-  'debt_page_subtitle': 'Track balances, follow up with customers, and keep every account in view.',
+  'debt_page_subtitle':
+      'Track balances, follow up with customers, and keep every account in view.',
   'debt_type': 'Type',
   'debt_status': 'Status',
   'debt_actions': 'Actions',
   'debt_whatsapp_reminder': 'Send WhatsApp reminder',
-  'debt_whatsapp_invalid': 'Enter a valid phone number with country code to use WhatsApp.',
-  'debt_whatsapp_open_error': 'Could not open WhatsApp. Check the number and try again.',
+  'debt_whatsapp_invalid':
+      'Enter a valid phone number with country code to use WhatsApp.',
+  'debt_whatsapp_open_error':
+      'Could not open WhatsApp. Check the number and try again.',
   'debt_due_date_unspecified': 'no due date set',
-  'debt_whatsapp_reminder_message': 'Hello @name, this is a friendly reminder about your outstanding balance of @balance. Due date: @due_date. Please contact us if you have already paid. Thank you.',
+  'debt_whatsapp_reminder_message':
+      'Hello @name, this is a friendly reminder about your outstanding balance of @balance. Due date: @due_date. Please contact us if you have already paid. Thank you.',
   'debt_add_title': 'Add debt',
   'debt_edit_title': 'Edit debt',
   'debt_draft_restored_title': 'Draft restored',
@@ -2172,13 +2213,15 @@ const Map<String, String> enUsTranslations = {
   'debt_remove_due_date': 'Remove due date',
   'debt_notes_optional': 'Notes (optional)',
   'debt_evidence_title': 'Evidence',
-  'debt_evidence_hint': 'Take a photo or attach a PDF/image as proof. Up to 10 MB per file.',
+  'debt_evidence_hint':
+      'Take a photo or attach a PDF/image as proof. Up to 10 MB per file.',
   'debt_evidence_take_photo': 'Take a photo',
   'debt_evidence_choose_document': 'Choose document',
   'debt_evidence_existing': 'Evidence files: @count',
   'debt_evidence_file_too_large': 'Each file must be under 10 MB.',
   'debt_evidence_limit': 'You can add up to 5 evidence files.',
-  'debt_evidence_pick_error': 'Could not get the evidence file. Please try again.',
+  'debt_evidence_pick_error':
+      'Could not get the evidence file. Please try again.',
   'debt_evidence_remove': 'Remove file',
   'debt_proof_title': 'Debt confirmation',
   'debt_proof_created': 'Save or share this confirmation with the other party.',
@@ -2235,7 +2278,8 @@ const Map<String, String> enUsTranslations = {
   'debt_added': 'Debt saved.',
   'debt_updated': 'Debt details updated.',
   'debt_delete_title': 'Delete debt',
-  'debt_delete_confirm': 'Delete the debt for "@name" and its payment history? This cannot be undone.',
+  'debt_delete_confirm':
+      'Delete the debt for "@name" and its payment history? This cannot be undone.',
   'debt_deleted': 'Debt and payment history deleted.',
   'debt_delete_error': 'Could not delete debt: @error',
   'debt_payment_saved': 'Payment recorded.',

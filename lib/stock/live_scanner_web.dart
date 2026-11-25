@@ -26,16 +26,23 @@ int _viewCount = 0;
 Future<String?> scanLiveCamera(
   BuildContext context, {
   required Future<String?> Function(ImageSource source) scanImage,
+  Future<String?> Function(BuildContext context)? searchProduct,
 }) {
   return Navigator.of(context).push<String>(
-    MaterialPageRoute(builder: (_) => _WebCameraScanner(scanImage: scanImage)),
+    MaterialPageRoute(
+      builder: (_) => _WebCameraScanner(
+        scanImage: scanImage,
+        searchProduct: searchProduct,
+      ),
+    ),
   );
 }
 
 class _WebCameraScanner extends StatefulWidget {
-  const _WebCameraScanner({required this.scanImage});
+  const _WebCameraScanner({required this.scanImage, this.searchProduct});
 
   final Future<String?> Function(ImageSource source) scanImage;
+  final Future<String?> Function(BuildContext context)? searchProduct;
 
   @override
   State<_WebCameraScanner> createState() => _WebCameraScannerState();
@@ -49,6 +56,7 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
   Timer? _timer;
   bool _starting = true;
   bool _decoding = false;
+  bool _searchOpen = false;
   bool _backCamera = true;
   String? _error;
   bool _decoderAvailable = true;
@@ -144,7 +152,8 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
 
   Future<void> _detect() async {
     final detector = _detector;
-    if (_decoding ||
+    if (_searchOpen ||
+        _decoding ||
         detector == null ||
         _video.readyState < 2 ||
         _video.videoWidth == 0 ||
@@ -177,6 +186,18 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
   Future<void> _scanImage(ImageSource source) async {
     final code = await widget.scanImage(source);
     if (code != null && code.trim().isNotEmpty && mounted) {
+      Navigator.of(context).pop(code.trim());
+    }
+  }
+
+  Future<void> _searchByName() async {
+    final searchProduct = widget.searchProduct;
+    if (_searchOpen || searchProduct == null) return;
+    _searchOpen = true;
+    final code = await searchProduct(context);
+    if (!mounted) return;
+    _searchOpen = false;
+    if (code != null && code.trim().isNotEmpty) {
       Navigator.of(context).pop(code.trim());
     }
   }
@@ -499,6 +520,22 @@ class _WebCameraScannerState extends State<_WebCameraScanner> {
               icon: const Icon(Icons.cameraswitch_outlined),
               label: Text('stk_camera_switch'.tr),
               onPressed: _switchCamera,
+            ),
+          ),
+        ],
+        if (widget.searchProduct != null) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(42),
+                side: BorderSide(color: Colors.white.withValues(alpha: .24)),
+              ),
+              icon: const Icon(Icons.search_rounded),
+              label: Text('stk_search_product'.tr),
+              onPressed: _searchByName,
             ),
           ),
         ],
